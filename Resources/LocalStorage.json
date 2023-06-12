@@ -5,7 +5,10 @@
             "Location": "",
             "_LocationExamples": "",
             "Type" : "",
-            "_TypeExamples": ["SMB","S3","Local"]
+            "_TypeExamples": ["SMB","S3","Local"],
+            "Parent" : "",
+            "ParentType" : "",
+            "ParentLocation" : ""
         },
 
         "BackupDatabase" : {
