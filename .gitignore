@@ -1,0 +1,4 @@
+.vscode/
+SignedModules/*.psm1
+SignedModules/*.ps1
+SignedModules/*.psd1
