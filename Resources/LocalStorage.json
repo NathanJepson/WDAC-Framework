@@ -15,6 +15,6 @@
             "_TypeExamples": ["SMB","S3","Local"]
         },
         
-        "SqliteAssembly" : ""
+        "SqliteAssembly" : "Path_To_DLL"
     }
 ]
