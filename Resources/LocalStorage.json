@@ -1,0 +1,20 @@
+[
+    {
+        "WorkingDatabase" : {
+            "IsParent": "",
+            "Location": "",
+            "_LocationExamples": "",
+            "Type" : "",
+            "_TypeExamples": ["SMB","S3","Local"]
+        },
+
+        "BackupDatabase" : {
+            "Location": "",
+            "_LocationExamples": "",
+            "Type" : "",
+            "_TypeExamples": ["SMB","S3","Local"]
+        },
+        
+        "SqliteAssembly" : ""
+    }
+]
