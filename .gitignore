@@ -5,4 +5,7 @@ SignedModules/*.psd1
 Resources/LocalStorageTest.json
 Resources/ProjectNotes.txt
 Test-Script.ps1
-trust.db
+*.db
+*.xml
+*.cip
+*.p7
