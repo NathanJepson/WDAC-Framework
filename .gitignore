@@ -3,3 +3,6 @@ SignedModules/*.psm1
 SignedModules/*.ps1
 SignedModules/*.psd1
 Resources/LocalStorageTest.json
+Resources/ProjectNotes.txt
+Test-Script.ps1
+trust.db

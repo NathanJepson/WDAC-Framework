@@ -17,6 +17,28 @@
             "Type" : "",
             "_TypeExamples": ["SMB","S3","Local"]
         },
+
+        "WorkingBasePoliciesDirectory" : {
+            "IsParent": "",
+            "Location": "",
+            "_LocationExamples": "",
+            "Type" : "",
+            "_TypeExamples": ["SMB","S3","Local"],
+            "Parent" : "",
+            "ParentType" : "",
+            "ParentLocation" : ""
+        },
+        
+        "WorkingSupplementalPoliciesDirectory" : {
+            "IsParent": "",
+            "Location": "",
+            "_LocationExamples": "",
+            "Type" : "",
+            "_TypeExamples": ["SMB","S3","Local"],
+            "Parent" : "",
+            "ParentType" : "",
+            "ParentLocation" : ""
+        },
         
         "SqliteAssembly" : "Path_To_DLL"
     }
