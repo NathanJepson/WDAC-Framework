@@ -70,8 +70,9 @@ function Add-WDACTrustDB {
             AppIndex Integer NOT NULL,
             RequestedSigningLevel Text,
             ValidatedSigningLevel Text,
-            FOREIGN KEY (AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
-            FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT
+            FOREIGN KEY(AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
+            FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
+            FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
         );
 
         CREATE TABLE signers (
@@ -105,9 +106,10 @@ function Add-WDACTrustDB {
             Staged Integer DEFAULT 0 NOT NULL,
             Revoked Integer DEFAULT 0 NOT NULL,
             PublisherTBSHash Text NOT NULL,
-            AllowedSupplementalID Text,
+            AllowedPolicyID Text,
             AllowedGroup Text,
             Comment Text,
+            FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
             FOREIGN KEY(PcaCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
             FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
             PRIMARY Key (PcaCertTBSHash,LeafCertCN)
