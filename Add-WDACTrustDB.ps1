@@ -67,12 +67,13 @@ function Add-WDACTrustDB {
             BlockingPolicyID Text NOT NULL,
             AllowedPolicyID Text,
             AllowedGroup Text,
-            AppIndex Integer NOT NULL,
+            AppIndex Integer UNIQUE NOT NULL,
             RequestedSigningLevel Text,
             ValidatedSigningLevel Text,
             FOREIGN KEY(AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
             FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
-            FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
+            FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+            FOREIGN KEY(AppIndex) REFERENCES file_publishers(AppIndex) ON DELETE RESTRICT
         );
 
         CREATE TABLE signers (
@@ -96,7 +97,7 @@ function Add-WDACTrustDB {
             ParentCertTBSHash Text,
             NotValidBefore Text NOT NULL,
             NotValidAfter Text NOT NULL,
-            FOREIGN KEY (ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT
+            FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT
         );
         
         CREATE TABLE publishers (
@@ -109,11 +110,19 @@ function Add-WDACTrustDB {
             AllowedPolicyID Text,
             AllowedGroup Text,
             Comment Text,
+            PublisherIndex Integer UNIQUE NOT NULL,
             FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
             FOREIGN KEY(PcaCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
             FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
-            PRIMARY Key (PcaCertTBSHash,LeafCertCN)
+            PRIMARY KEY(PcaCertTBSHash,LeafCertCN)
         );
+
+        CREATE TABLE file_publishers (
+            PublisherIndex Integer NOT NULL,
+            AppIndex Text NOT NULL,
+            PRIMARY KEY(PublisherIndex,AppIndex),
+            FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE RESTRICT
+        )
         
         CREATE TABLE groups (
             GroupName Text PRIMARY KEY
