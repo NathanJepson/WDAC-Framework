@@ -122,7 +122,7 @@ function Add-WDACTrustDB {
             AppIndex Text NOT NULL,
             PRIMARY KEY(PublisherIndex,AppIndex),
             FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE RESTRICT
-        )
+        );
         
         CREATE TABLE groups (
             GroupName Text PRIMARY KEY
