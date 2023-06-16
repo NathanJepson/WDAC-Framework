@@ -1,5 +1,16 @@
-$StorageFile = Join-Path -Path $PSScriptRoot -ChildPath ".\LocalStorage.json"
-$TestStorageFile = Join-Path -Path $PSScriptRoot -ChildPath ".\LocalStorageTest.json"
+$Signed = $false
+if ((Split-Path ((Get-Item $PSScriptRoot).Parent) -Leaf) -eq "SignedModules") {
+    $Signed = $true
+}
+
+if ($Signed) {
+    $StorageFile = Join-Path -Path $PSScriptRoot -ChildPath "..\..\Resources\LocalStorage.json"
+    $TestStorageFile = Join-Path -Path $PSScriptRoot -ChildPath "..\..\Resources\LocalStorageTest.json"
+} else {
+    $StorageFile = Join-Path -Path $PSScriptRoot -ChildPath ".\LocalStorage.json"
+    $TestStorageFile = Join-Path -Path $PSScriptRoot -ChildPath ".\LocalStorageTest.json"
+}
+
 if (Test-Path $TestStorageFile) {
     $StorageFile = $TestStorageFile
 }
@@ -21,7 +32,11 @@ function Set-LocalStorageJSON {
 }
 
 function Reset-TestStorage {
-    Set-Content $TestStorageFile -Value (Get-Content (Join-Path -Path $PSScriptRoot -ChildPath ".\LocalStorage.json"))
+    if ($Signed) {
+        Set-Content $TestStorageFile -Value (Get-Content (Join-Path -Path $PSScriptRoot -ChildPath "..\..\Resources\LocalStorage.json"))
+    } else {
+        Set-Content $TestStorageFile -Value (Get-Content (Join-Path -Path $PSScriptRoot -ChildPath ".\LocalStorage.json"))
+    }
 }
 
 function Set-ValueLocalStorageJSON {
