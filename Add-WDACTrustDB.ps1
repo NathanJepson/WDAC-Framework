@@ -183,22 +183,22 @@ function Add-WDACTrustDB {
             UpdateDeferring Integer DEFAULT 0,
             DeferredPoliciesIndex Integer,
             FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
-            FOREIGN KEY(DeferredPoliciesIndex) REFERENCES deferred_policies(DeferredPoliciesIndex) ON DELETE RESTRICT,
+            FOREIGN KEY(DeferredPoliciesIndex) REFERENCES deferred_policies(DeferredPoliciesIndex) ON DELETE RESTRICT
         );
 
         CREATE TABLE deferred_policies (
             DeferredPoliciesIndex Integer,
             DeferredDevicePolicyGUID Text,
+            PolicyName Text NOT NULL,
             PolicyID Text,
             PolicyVersion Text NOT NULL,
-            ParentPolicyGUID Text,
             ParentPolicyGUID Text,
             BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
             IsSigned Integer DEFAULT 0 NOT NULL,
             AuditMode Integer DEFAULT 1 NOT NULL,
             OriginLocation Text NOT NULL,
             OriginLocationType Text NOT NULL,
-            PRIMARY KEY(DeferredPoliciesIndex,DeferredDevicePolicyGUID),
+            PRIMARY KEY(DeferredPoliciesIndex)
         );
 '@    
     $Database = Join-Path -Path $Destination -ChildPath $DBName

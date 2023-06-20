@@ -12,7 +12,7 @@ function Set-SignedPowerShellModules {
     NOTE: Not recommended. It is recommended that you sign all scripts and modules at once by not providing this argument.
     FileName for just the Module you want signed (otherwise, all modules will be signed and copied, overwriting the contents of the SignedModules folder).
     If it is in a folder of the module (for example, the Resources folder), you will need to provide that too; e.g., Resources\JSON-LocalStorageTools.psm1
-    The FileName provided must much an element of the $Modules or $Scripts list.
+    The FileName provided must match an element of the $Modules or $Scripts list.
 
     .PARAMETER PSCodeSigningCert
     Provide the cert:\ path for the certificate in your Windows certificate store. (e.g., "Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3")
