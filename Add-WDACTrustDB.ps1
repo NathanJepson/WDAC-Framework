@@ -23,6 +23,9 @@ function Add-WDACTrustDB {
 
     .EXAMPLE
     Add-WDACTrustDB -Destination ".\" -SqliteAssembly "C:\Sqlite\sqlite-netFx46-binary-x64-2015-1.0.118.0\System.Data.SQLite.dll" -DBName "WDAC_Trust.db"
+
+    .EXAMPLE
+    Add-WDACTrustDB -Destination "C:\Users\JohnSmith\Documents\WDAC_Folder\"
     #>
 
     [CmdletBinding()]
@@ -36,170 +39,180 @@ function Add-WDACTrustDB {
         [string]$SqliteAssembly
     )
 
-    #TODO: Grab sqlite assembly path from LocalStorage if already present.
-        #: Throw exception if not provided from storage or parameters.
+    if (-not $SqliteAssembly) {
+        try {
+            $SqliteAssembly = (Get-LocalStorageJSON)."SqliteAssembly"
+            if (-not $SqliteAssembly) {
+                throw "No valid value for Sqlite binary provided from local storage."
+            }
+        } catch {
+            Write-Error $_
+            Write-Warning "Unable to read or process the file path for the Sqlite binary."
+            return
+        }
+    }
 
-        $MakeTables = @'
-        CREATE TABLE apps (
-            SHA256FlatHash TEXT PRIMARY KEY,
-            FileName TEXT NOT NULL,
-            TimeDetected TEXT NOT NULL,
-            FirstDetectedPath TEXT NOT NULL,
-            FirstDetectedUser TEXT,
-            FirstDetectedProcessID Integer,
-            FirstDetectedProcessName TEXT NOT NULL,
-            SHA256AuthenticodeHash TEXT NOT NULL,
-            OriginDevice TEXT NOT NULL,
-            EventType Text,
-            SigningScenario Text,
-            OriginalFileName Text,
-            FileVersion Text,
-            InternalName Text,
-            FileDescription Text,
-            ProductName Text,
-            PackageFamilyName Text,
-            UserWriteable Integer DEFAULT 0 NOT NULL,
-            FailedWHQL Integer DEFAULT 0 NOT NULL,
-            Trusted Integer DEFAULT 0 NOT NULL,
-            Staged Integer DEFAULT 0 NOT NULL,
-            Revoked Integer DEFAULT 0 NOT NULL,
-            Deferred Integer DEFAULT 0 NOT NULL,
-            Blocked Integer DEFAULT 0 NOT NULL,
-            BlockingPolicyID Text NOT NULL,
-            AllowedPolicyID Text,
-            Comment Text,
-            AppIndex Integer UNIQUE NOT NULL,
-            RequestedSigningLevel Text,
-            ValidatedSigningLevel Text,
-            FOREIGN KEY(AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
-            FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
-            FOREIGN KEY(AppIndex) REFERENCES file_publishers(AppIndex) ON DELETE RESTRICT
-        );
+    $MakeTables = @'
+    CREATE TABLE apps (
+        SHA256FlatHash TEXT PRIMARY KEY,
+        FileName TEXT NOT NULL,
+        TimeDetected TEXT NOT NULL,
+        FirstDetectedPath TEXT NOT NULL,
+        FirstDetectedUser TEXT,
+        FirstDetectedProcessID Integer,
+        FirstDetectedProcessName TEXT NOT NULL,
+        SHA256AuthenticodeHash TEXT NOT NULL,
+        OriginDevice TEXT NOT NULL,
+        EventType Text,
+        SigningScenario Text,
+        OriginalFileName Text,
+        FileVersion Text,
+        InternalName Text,
+        FileDescription Text,
+        ProductName Text,
+        PackageFamilyName Text,
+        UserWriteable Integer DEFAULT 0 NOT NULL,
+        FailedWHQL Integer DEFAULT 0 NOT NULL,
+        Trusted Integer DEFAULT 0 NOT NULL,
+        Staged Integer DEFAULT 0 NOT NULL,
+        Revoked Integer DEFAULT 0 NOT NULL,
+        Deferred Integer DEFAULT 0 NOT NULL,
+        Blocked Integer DEFAULT 0 NOT NULL,
+        BlockingPolicyID Text NOT NULL,
+        AllowedPolicyID Text,
+        Comment Text,
+        AppIndex Integer UNIQUE NOT NULL,
+        RequestedSigningLevel Text,
+        ValidatedSigningLevel Text,
+        FOREIGN KEY(AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
+        FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(AppIndex) REFERENCES file_publishers(AppIndex) ON DELETE RESTRICT
+    );
 
-        CREATE TABLE signers (
-            AppIndex TEXT NOT NULL,
-            SignatureIndex TEXT NOT NULL,
-            CertificateTBSHash TEXT NOT NULL,
-            SignatureType TEXT,
-            PageHash Integer DEFAULT 0 NOT NULL,
-            Flags Integer,
-            PolicyBits Integer,
-            ValidatedSigningLevel Text,
-            VerificationError Text,
-            FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
-            PRIMARY KEY(AppIndex,SignatureIndex)
-        );
-        
-        CREATE TABLE certificates (
-            TBSHash Text PRIMARY KEY,
-            CommonName Text NOT NULL,
-            IsLeaf DEFAULT 1 NOT NULL,
-            ParentCertTBSHash Text,
-            NotValidBefore Text NOT NULL,
-            NotValidAfter Text NOT NULL,
-            FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT
-        );
-        
-        CREATE TABLE publishers (
-            LeafCertCN Text NOT NULL,
-            PcaCertTBSHash Text NOT NULL,
-            Trusted Integer DEFAULT 0 NOT NULL,
-            Staged Integer DEFAULT 0 NOT NULL,
-            Revoked Integer DEFAULT 0 NOT NULL,
-            Deferred Integer DEFAULT 0 NOT NULL,
-            Blocked Integer DEFAULT 0 NOT NULL,
-            PublisherTBSHash Text NOT NULL,
-            AllowedPolicyID Text,
-            Comment Text,
-            BlockingPolicyID Text,
-            PublisherIndex Integer UNIQUE NOT NULL,
-            FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
-            FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
-            FOREIGN KEY(PcaCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
-            PRIMARY KEY(PcaCertTBSHash,LeafCertCN)
-        );
+    CREATE TABLE signers (
+        AppIndex TEXT NOT NULL,
+        SignatureIndex TEXT NOT NULL,
+        CertificateTBSHash TEXT NOT NULL,
+        SignatureType TEXT,
+        PageHash Integer DEFAULT 0 NOT NULL,
+        Flags Integer,
+        PolicyBits Integer,
+        ValidatedSigningLevel Text,
+        VerificationError Text,
+        FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
+        PRIMARY KEY(AppIndex,SignatureIndex)
+    );
+    
+    CREATE TABLE certificates (
+        TBSHash Text PRIMARY KEY,
+        CommonName Text NOT NULL,
+        IsLeaf DEFAULT 1 NOT NULL,
+        ParentCertTBSHash Text,
+        NotValidBefore Text NOT NULL,
+        NotValidAfter Text NOT NULL,
+        FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT
+    );
+    
+    CREATE TABLE publishers (
+        LeafCertCN Text NOT NULL,
+        PcaCertTBSHash Text NOT NULL,
+        Trusted Integer DEFAULT 0 NOT NULL,
+        Staged Integer DEFAULT 0 NOT NULL,
+        Revoked Integer DEFAULT 0 NOT NULL,
+        Deferred Integer DEFAULT 0 NOT NULL,
+        Blocked Integer DEFAULT 0 NOT NULL,
+        PublisherTBSHash Text NOT NULL,
+        AllowedPolicyID Text,
+        Comment Text,
+        BlockingPolicyID Text,
+        PublisherIndex Integer UNIQUE NOT NULL,
+        FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(PcaCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
+        PRIMARY KEY(PcaCertTBSHash,LeafCertCN)
+    );
 
-        CREATE TABLE file_publishers (
-            PublisherIndex Integer NOT NULL,
-            AppIndex Text NOT NULL,
-            Trusted Integer DEFAULT 0 NOT NULL,
-            Staged Integer DEFAULT 0 NOT NULL,
-            Revoked Integer DEFAULT 0 NOT NULL,
-            Deferred Integer DEFAULT 0 NOT NULL,
-            Blocked Integer DEFAULT 0 NOT NULL,
-            AllowedPolicyID Text,
-            Comment Text,
-            BlockingPolicyID Text,
-            PRIMARY KEY(PublisherIndex,AppIndex),
-            FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
-            FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
-            FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE RESTRICT
-        );
-        
-        CREATE TABLE groups (
-            GroupName Text PRIMARY KEY
-        );
+    CREATE TABLE file_publishers (
+        PublisherIndex Integer NOT NULL,
+        AppIndex Text NOT NULL,
+        Trusted Integer DEFAULT 0 NOT NULL,
+        Staged Integer DEFAULT 0 NOT NULL,
+        Revoked Integer DEFAULT 0 NOT NULL,
+        Deferred Integer DEFAULT 0 NOT NULL,
+        Blocked Integer DEFAULT 0 NOT NULL,
+        AllowedPolicyID Text,
+        Comment Text,
+        BlockingPolicyID Text,
+        PRIMARY KEY(PublisherIndex,AppIndex),
+        FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE RESTRICT
+    );
+    
+    CREATE TABLE groups (
+        GroupName Text PRIMARY KEY
+    );
 
-        CREATE TABLE group_mirrors (
-            GroupName Text NOT NULL,
-            MirroredGroupName Text NOT NULL,
-            PRIMARY KEY(GroupName,MirroredGroupName),
-            FOREIGN KEY(MirroredGroupName) REFERENCES groups(GroupName) ON DELETE CASCADE,
-            FOREIGN KEY(GroupName) REFERENCES groups(GroupName) ON DELETE CASCADE
-        );
-        
-        CREATE TABLE pillars (
-            PillarName Text NOT NULL PRIMARY KEY,
-            PolicyGUID Text
-        );
+    CREATE TABLE group_mirrors (
+        GroupName Text NOT NULL,
+        MirroredGroupName Text NOT NULL,
+        PRIMARY KEY(GroupName,MirroredGroupName),
+        FOREIGN KEY(MirroredGroupName) REFERENCES groups(GroupName) ON DELETE CASCADE,
+        FOREIGN KEY(GroupName) REFERENCES groups(GroupName) ON DELETE CASCADE
+    );
+    
+    CREATE TABLE pillars (
+        PillarName Text NOT NULL PRIMARY KEY,
+        PolicyGUID Text
+    );
 
-        CREATE TABLE policies (
-            PolicyGUID Text NOT NULL PRIMARY KEY,
-            PolicyID Text,
-            PolicyHash Text NOT NULL,
-            PolicyName Text UNIQUE NOT NULL,
-            PolicyVersion Text NOT NULL,
-            ParentPolicyGUID Text,
-            BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
-            IsSigned Integer DEFAULT 0 NOT NULL,
-            AuditMode Integer DEFAULT 1 NOT NULL,
-            OriginLocation Text NOT NULL,
-            OriginLocationType Text NOT NULL,
-            FOREIGN KEY (PolicyGUID) REFERENCES pillars(PolicyGUID) ON DELETE RESTRICT,
-            FOREIGN KEY (ParentPolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
-        );
+    CREATE TABLE policies (
+        PolicyGUID Text NOT NULL PRIMARY KEY,
+        PolicyID Text,
+        PolicyHash Text NOT NULL,
+        PolicyName Text UNIQUE NOT NULL,
+        PolicyVersion Text NOT NULL,
+        ParentPolicyGUID Text,
+        BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
+        IsSigned Integer DEFAULT 0 NOT NULL,
+        AuditMode Integer DEFAULT 1 NOT NULL,
+        OriginLocation Text NOT NULL,
+        OriginLocationType Text NOT NULL,
+        FOREIGN KEY (PolicyGUID) REFERENCES pillars(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY (ParentPolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
+    );
 
-        CREATE TABLE policy_assignments (
-            GroupName Text NOT NULL,
-            PolicyGUID Text NOT NULL,
-            PRIMARY KEY(GroupName,PolicyGUID),
-            FOREIGN KEY(GroupName) REFERENCES groups(GroupName) ON DELETE RESTRICT,
-            FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
-        );
+    CREATE TABLE policy_assignments (
+        GroupName Text NOT NULL,
+        PolicyGUID Text NOT NULL,
+        PRIMARY KEY(GroupName,PolicyGUID),
+        FOREIGN KEY(GroupName) REFERENCES groups(GroupName) ON DELETE RESTRICT,
+        FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
+    );
 
-        CREATE TABLE devices (
-            DeviceName Text PRIMARY KEY,
-            AllowedGroup Text,
-            UpdateDeferring Integer DEFAULT 0,
-            DeferredPoliciesIndex Integer,
-            FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
-            FOREIGN KEY(DeferredPoliciesIndex) REFERENCES deferred_policies(DeferredPoliciesIndex) ON DELETE RESTRICT
-        );
+    CREATE TABLE devices (
+        DeviceName Text PRIMARY KEY,
+        AllowedGroup Text,
+        UpdateDeferring Integer DEFAULT 0,
+        DeferredPoliciesIndex Integer,
+        FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
+        FOREIGN KEY(DeferredPoliciesIndex) REFERENCES deferred_policies(DeferredPoliciesIndex) ON DELETE RESTRICT
+    );
 
-        CREATE TABLE deferred_policies (
-            DeferredPoliciesIndex Integer,
-            DeferredDevicePolicyGUID Text,
-            PolicyName Text NOT NULL,
-            PolicyID Text,
-            PolicyVersion Text NOT NULL,
-            ParentPolicyGUID Text,
-            BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
-            IsSigned Integer DEFAULT 0 NOT NULL,
-            AuditMode Integer DEFAULT 1 NOT NULL,
-            OriginLocation Text NOT NULL,
-            OriginLocationType Text NOT NULL,
-            PRIMARY KEY(DeferredPoliciesIndex)
-        );
+    CREATE TABLE deferred_policies (
+        DeferredPoliciesIndex Integer,
+        DeferredDevicePolicyGUID Text,
+        PolicyName Text NOT NULL,
+        PolicyID Text,
+        PolicyVersion Text NOT NULL,
+        ParentPolicyGUID Text,
+        BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
+        IsSigned Integer DEFAULT 0 NOT NULL,
+        AuditMode Integer DEFAULT 1 NOT NULL,
+        OriginLocation Text NOT NULL,
+        OriginLocationType Text NOT NULL,
+        PRIMARY KEY(DeferredPoliciesIndex)
+    );
 '@    
     $Database = Join-Path -Path $Destination -ChildPath $DBName
     if (Test-Path $Database) {
