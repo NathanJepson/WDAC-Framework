@@ -140,6 +140,7 @@ function Set-SignedPowerShellModules {
     foreach ($FileSource in $FileSources) {
         foreach ($Module in $FileSource) {
             try {
+                $IsValid = $null
                 if ($SignInPlace -or $Module.Name -eq "WDAC-Framework.psm1" -or $Module.Name -eq "WDAC-Framework.psd1") {
                     $IsValid = Set-AuthenticodeSignature $Module -Certificate (Get-ChildItem $PSCodeSigningCert) -ErrorAction Stop
                 } else {
@@ -149,10 +150,10 @@ function Set-SignedPowerShellModules {
                         $Copied = Copy-Item $Module -Destination $SignedModules -PassThru -Force -ErrorAction Stop 
                     }
                     $IsValid = Set-AuthenticodeSignature $Copied.ResolvedTarget -Certificate (Get-ChildItem $PSCodeSigningCert) -ErrorAction Stop
+                }
 
-                    if ($IsValid.Status -ne "Valid") {
-                        throw "Unable to verify that the resultant file $($Module.Name) has a valid signature. Please make sure that a valid certificate is used to sign the file."
-                    }
+                if ($IsValid.Status -ne "Valid") {
+                    throw "Unable to verify that the resultant file $($Module.Name) has a valid signature. Please make sure that a valid certificate is used to sign the file."
                 }
 
             } catch {

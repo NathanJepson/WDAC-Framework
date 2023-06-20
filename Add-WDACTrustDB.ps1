@@ -63,15 +63,15 @@ function Add-WDACTrustDB {
             Trusted Integer DEFAULT 0 NOT NULL,
             Staged Integer DEFAULT 0 NOT NULL,
             Revoked Integer DEFAULT 0 NOT NULL,
-            Comment Text,
+            Deferred Integer DEFAULT 0 NOT NULL,
+            Blocked Integer DEFAULT 0 NOT NULL,
             BlockingPolicyID Text NOT NULL,
             AllowedPolicyID Text,
-            AllowedGroup Text,
+            Comment Text,
             AppIndex Integer UNIQUE NOT NULL,
             RequestedSigningLevel Text,
             ValidatedSigningLevel Text,
             FOREIGN KEY(AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
-            FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
             FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
             FOREIGN KEY(AppIndex) REFERENCES file_publishers(AppIndex) ON DELETE RESTRICT
         );
@@ -106,21 +106,33 @@ function Add-WDACTrustDB {
             Trusted Integer DEFAULT 0 NOT NULL,
             Staged Integer DEFAULT 0 NOT NULL,
             Revoked Integer DEFAULT 0 NOT NULL,
+            Deferred Integer DEFAULT 0 NOT NULL,
+            Blocked Integer DEFAULT 0 NOT NULL,
             PublisherTBSHash Text NOT NULL,
             AllowedPolicyID Text,
-            AllowedGroup Text,
             Comment Text,
+            BlockingPolicyID Text,
             PublisherIndex Integer UNIQUE NOT NULL,
             FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+            FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
             FOREIGN KEY(PcaCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
-            FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
             PRIMARY KEY(PcaCertTBSHash,LeafCertCN)
         );
 
         CREATE TABLE file_publishers (
             PublisherIndex Integer NOT NULL,
             AppIndex Text NOT NULL,
+            Trusted Integer DEFAULT 0 NOT NULL,
+            Staged Integer DEFAULT 0 NOT NULL,
+            Revoked Integer DEFAULT 0 NOT NULL,
+            Deferred Integer DEFAULT 0 NOT NULL,
+            Blocked Integer DEFAULT 0 NOT NULL,
+            AllowedPolicyID Text,
+            Comment Text,
+            BlockingPolicyID Text,
             PRIMARY KEY(PublisherIndex,AppIndex),
+            FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+            FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
             FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE RESTRICT
         );
         
@@ -170,19 +182,25 @@ function Add-WDACTrustDB {
             AllowedGroup Text,
             UpdateDeferring Integer DEFAULT 0,
             DeferredPoliciesIndex Integer,
-            FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT
+            FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
+            FOREIGN KEY(DeferredPoliciesIndex) REFERENCES deferred_policies(DeferredPoliciesIndex) ON DELETE RESTRICT,
         );
 
         CREATE TABLE deferred_policies (
             DeferredPoliciesIndex Integer,
             DeferredDevicePolicyGUID Text,
+            PolicyID Text,
+            PolicyVersion Text NOT NULL,
+            ParentPolicyGUID Text,
+            ParentPolicyGUID Text,
+            BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
+            IsSigned Integer DEFAULT 0 NOT NULL,
+            AuditMode Integer DEFAULT 1 NOT NULL,
+            OriginLocation Text NOT NULL,
+            OriginLocationType Text NOT NULL,
             PRIMARY KEY(DeferredPoliciesIndex,DeferredDevicePolicyGUID),
-            FOREIGN KEY(DeferredPoliciesIndex) REFERENCES devices(DeferredPoliciesIndex) ON DELETE CASCADE,
-            FOREIGN KEY(DeferredDevicePolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE CASCADE
         );
-'@
-    #TODO: Create a table to store information about deleted policies when PowerShell remoting fails (which policies could not be removed from the device)
-    
+'@    
     $Database = Join-Path -Path $Destination -ChildPath $DBName
     if (Test-Path $Database) {
         Write-Warning "Database already exists.";
