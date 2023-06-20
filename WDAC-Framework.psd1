@@ -43,7 +43,7 @@
     # RequiredModules = @()
     
     # Assemblies that must be loaded prior to importing this module
-    #RequiredAssemblies = 'System.Security'
+    #RequiredAssemblies = ''
     
     # Script files (.ps1) that are run in the caller's environment prior to importing this module.
     # ScriptsToProcess = @()
@@ -56,10 +56,6 @@
     
     # Modules to import as nested modules of the module specified in RootModule/ModuleToProcess
     NestedModules = @()
-
-    #'Add-WDACTrustDB.ps1',
-    #'Resources/JSON-LocalStorageTools.psm1',
-    #'Set-SignedPowerShellModules.ps1'
     
     # Functions to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no functions to export.
     FunctionsToExport = 'Set-ValueLocalStorageJSON',

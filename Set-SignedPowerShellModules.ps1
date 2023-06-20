@@ -6,6 +6,7 @@ function Set-SignedPowerShellModules {
     .DESCRIPTION
     Iterates over each Powershell file .ps1,.psm1,.psd1, as well as imported modules such as WDACTools and then signs them, checks for valid signature, then puts them in directory "SignedModules." 
     This is so they are allowed to run when WDAC policies are implemented (but you will need to make sure to add appropriate signer rules in the WDAC policies.)
+    Signed files by default are put in the "SignedModules" folder EXCEPT for WDAC-Framework.psm1 and WDAC-Framework.psd1.
 
     .PARAMETER FileName
     NOTE: Not recommended. It is recommended that you sign all scripts and modules at once by not providing this argument.
@@ -17,7 +18,7 @@ function Set-SignedPowerShellModules {
     Provide the cert:\ path for the certificate in your Windows certificate store. (e.g., "Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3")
 
     .PARAMETER SignInPlace
-    Sign the modules and scripts without copying them to the SignedModulesFolder
+    Sign the modules and scripts without copying them to the SignedModulesFolder.
 
     .EXAMPLE
     Set-SignedPowerShellModules
@@ -43,6 +44,7 @@ function Set-SignedPowerShellModules {
 
     if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
         $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+        Write-Verbose "The current file is in the SignedModules folder."
     } else {
         $PSModuleRoot = $PSScriptRoot
     }
@@ -102,7 +104,7 @@ function Set-SignedPowerShellModules {
     if ($FileName) {
         try {
 
-            if ($SignInPlace) {
+            if ($SignInPlace -or $FileName -eq "WDAC-Framework.psm1" -or $FileName -eq "WDAC-Framework.psd1") {
                 $IsValid = Set-AuthenticodeSignature (Join-Path $PSModuleRoot -ChildPath $FileName) -Certificate (Get-ChildItem $PSCodeSigningCert)
             } else {
                 $Copied = Copy-Item (Join-Path $PSModuleRoot -ChildPath $FileName) -Destination $SignedModules -PassThru -Force -ErrorAction Stop 
@@ -122,8 +124,9 @@ function Set-SignedPowerShellModules {
 
     #Case 2: Sign all scripts and modules
     try {
-        $ModulesFiles = Get-ChildItem -Path $PSModuleRoot -Include "*.ps1","*.psd1","*.psm1" -Recurse -ErrorAction Stop
-        $ResourceFiles = Get-ChildItem -Path (Join-Path $PSModuleRoot -ChildPath "Resources") -Include "*.ps1","*.psm1" -Recurse -ErrorAction Stop
+        #Appending "\*" to the end of the path is the only way you can use Get-ChildItem without specifying the "Recurse" flag
+        $ModulesFiles = Get-ChildItem -Path ($PSModuleRoot + "\*") -Include ('*.ps1', '*.psm1', '*.psd1') -ErrorAction Stop
+        $ResourceFiles = Get-ChildItem -Path ($PSModuleRoot + "\Resources\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
     } catch {
         throw $_
         return
@@ -137,7 +140,7 @@ function Set-SignedPowerShellModules {
     foreach ($FileSource in $FileSources) {
         foreach ($Module in $FileSource) {
             try {
-                if ($SignInPlace) {
+                if ($SignInPlace -or $Module.Name -eq "WDAC-Framework.psm1" -or $Module.Name -eq "WDAC-Framework.psd1") {
                     $IsValid = Set-AuthenticodeSignature $Module -Certificate (Get-ChildItem $PSCodeSigningCert) -ErrorAction Stop
                 } else {
                     if ($ResourceFiles -contains $Module) {
@@ -151,9 +154,13 @@ function Set-SignedPowerShellModules {
                         throw "Unable to verify that the resultant file $($Module.Name) has a valid signature. Please make sure that a valid certificate is used to sign the file."
                     }
                 }
+
             } catch {
                 Write-Warning $_
             }
         }
     }
+    
+    Write-Host "File signing process has completed. Please reload / reimport the WDAC-Framework module."
+
 }
