@@ -99,6 +99,13 @@ function Set-SignedPowerShellModules {
     if (-not $PSCodeSigningCert) {
         $PSCodeSigningCert = $PSCodeSigningJSON
     }
+    
+    if (-not (Test-Path (Join-Path $SignedModules -ChildPath "Resources"))) {
+        New-Item -ItemType Directory -Name "Resources" -Path $SignedModules -ErrorAction SilentlyContinue | Out-Null
+    }
+    if (-not (Test-Path (Join-Path $SignedModules -ChildPath "WDACAuditing"))) {
+        New-Item -ItemType Directory -Name "WDACAuditing" -Path $SignedModules -ErrorAction SilentlyContinue | Out-Null
+    }
 
     #Case 1: Only the name of one module is provided
     if ($FileName) {
@@ -127,16 +134,13 @@ function Set-SignedPowerShellModules {
         #Appending "\*" to the end of the path is the only way you can use Get-ChildItem without specifying the "Recurse" flag
         $ModulesFiles = Get-ChildItem -Path ($PSModuleRoot + "\*") -Include ('*.ps1', '*.psm1', '*.psd1') -ErrorAction Stop
         $ResourceFiles = Get-ChildItem -Path ($PSModuleRoot + "\Resources\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
+        $WDACAuditingFiles = Get-ChildItem -Path ($PSModuleRoot + "\WDACAuditing\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
     } catch {
         throw $_
         return
     }
 
-    if (-not (Test-Path (Join-Path $SignedModules -ChildPath "Resources"))) {
-        New-Item -ItemType Directory -Name "Resources" -Path $SignedModules | Out-Null
-    }
-
-    $FileSources = @($ModulesFiles,$ResourceFiles)
+    $FileSources = @($ModulesFiles,$ResourceFiles,$WDACAuditingFiles)
     foreach ($FileSource in $FileSources) {
         foreach ($Module in $FileSource) {
             try {
@@ -146,7 +150,10 @@ function Set-SignedPowerShellModules {
                 } else {
                     if ($ResourceFiles -contains $Module) {
                         $Copied = Copy-Item $Module -Destination "$SignedModules\Resources" -PassThru -Force -ErrorAction Stop 
-                    } else {
+                    } elseif ($WDACAuditingFiles -contains $Module) {
+                        $Copied = Copy-Item $Module -Destination "$SignedModules\WDACAuditing" -PassThru -Force -ErrorAction Stop 
+                    }
+                    else {
                         $Copied = Copy-Item $Module -Destination $SignedModules -PassThru -Force -ErrorAction Stop 
                     }
                     $IsValid = Set-AuthenticodeSignature $Copied.ResolvedTarget -Certificate (Get-ChildItem $PSCodeSigningCert) -ErrorAction Stop

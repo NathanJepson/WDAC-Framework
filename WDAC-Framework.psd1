@@ -61,7 +61,9 @@
     FunctionsToExport = 'Set-ValueLocalStorageJSON',
                         'Reset-TestStorage',
                         'Set-SignedPowerShellModules',
-                        'Add-WDACTrustDB'
+                        'Add-WDACTrustDB',
+                        'Get-WDACApplockerScriptMsiEvent',
+                        'Get-WDACCodeIntegrityEvent'
     
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     # CmdletsToExport = '*'
