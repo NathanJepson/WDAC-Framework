@@ -42,7 +42,7 @@ function Copy-WDACAuditing {
         if (-not $_.IsModulePresent -and $_.SysDrive) {
         #Case: Module WDACAuditing.psm1 is not yet installed on the remote machine
             if ($iterator -eq 0) {
-                Write-Host "Copying module WDACAuditing to machines which don't have it...."
+                Write-Verbose "Copying module WDACAuditing to machines which don't have it...."
             }
 
             $TempDrive = ( ($_.SysDrive -split '\:')[0])
