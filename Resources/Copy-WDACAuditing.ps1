@@ -16,7 +16,7 @@ function Copy-WDACAuditing {
     $Result = Invoke-Command -ErrorAction SilentlyContinue -Session $sess -ScriptBlock {
         $IsModulePresent = Test-Path "$($Env:Programfiles)\WindowsPowerShell\Modules\WDACAuditing\WDACAuditing.psm1"
         if (-not ($IsModulePresent)) {
-            New-Item -ItemType Directory -Name "WDACAuditing" -Path "$($Env:Programfiles)\WindowsPowerShell\Modules\" -ErrorAction SilentlyContinue
+            New-Item -ItemType Directory -Name "WDACAuditing" -Path "$($Env:Programfiles)\WindowsPowerShell\Modules\" -ErrorAction SilentlyContinue | Out-Null
         }
         $SysDrive = $null
         if ($PSVersionTable.PSEdition -eq "Core") {
@@ -39,7 +39,7 @@ function Copy-WDACAuditing {
     $iterator = 0; #Used to denote when a notice of file copying should be written.
     $jobs = @()
     $Result | ForEach-Object {
-        if (-not $_.IsModulePresent) {
+        if (-not $_.IsModulePresent -and $_.SysDrive) {
         #Case: Module WDACAuditing.psm1 is not yet installed on the remote machine
             if ($iterator -eq 0) {
                 Write-Host "Copying module WDACAuditing to machines which don't have it...."
