@@ -59,6 +59,7 @@ function Get-WDACEvents {
         }
     }
 
+    Write-Verbose "Extracting events from remote machines(s)."
     $sess = New-PSSession -ComputerName $RemoteMachine -ErrorAction SilentlyContinue
     if ($sess) {
         $Events = Invoke-Command -Session $sess -ScriptBlock { 
