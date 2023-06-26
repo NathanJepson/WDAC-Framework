@@ -233,7 +233,7 @@ function Add-WDACTrustDB {
         return;
     }
 
-    New-Item -Path $Destination -Name $DBName
+    New-Item -Path $Destination -Name $DBName | Out-Null
 
     $sDatabaseConnectionString=[string]::Format("data source={0}",$Database)
     $oSQLiteDBConnection = New-Object System.Data.SQLite.SQLiteConnection

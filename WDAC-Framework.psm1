@@ -1,4 +1,4 @@
-$Modules = @("Resources\JSON-LocalStorageTools.psm1", "WDACAuditing\WDACAuditing.psm1")
+$Modules = @("Resources\JSON-LocalStorageTools.psm1", "WDACAuditing\WDACAuditing.psm1", "Resources\SQL-TrustDBTools.psm1")
 
 $Scripts = @("Set-SignedPowerShellModules.ps1","Add-WDACTrustDB.ps1","Get-WDACEvents.ps1","Resources\Copy-WDACAuditing.ps1")
 
