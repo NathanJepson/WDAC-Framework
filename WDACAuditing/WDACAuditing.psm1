@@ -748,3 +748,6 @@ Copy-WDACEventFile outputs a FileInfo object representing the new file that was 
         }
     }
 }
+
+#We need to be explicit in which functions we are exporting, otherwise we cannot import them into a remote PowerShell session (due to constrained language restrictions)
+Export-ModuleMember -Function Get-WDACApplockerScriptMsiEvent, Get-WDACCodeIntegrityEvent
