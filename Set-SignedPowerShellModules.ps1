@@ -114,7 +114,7 @@ function Set-SignedPowerShellModules {
             if ($SignInPlace -or $FileName -eq "WDAC-Framework.psm1" -or $FileName -eq "WDAC-Framework.psd1") {
                 $IsValid = Set-AuthenticodeSignature (Join-Path $PSModuleRoot -ChildPath $FileName) -Certificate (Get-ChildItem $PSCodeSigningCert)
             } else {
-                $Copied = Copy-Item (Join-Path $PSModuleRoot -ChildPath $FileName) -Destination $SignedModules -PassThru -Force -ErrorAction Stop 
+                $Copied = Copy-Item (Join-Path $PSModuleRoot -ChildPath $FileName) -Destination (Join-Path $SignedModules -ChildPath (Split-Path $FileName)) -PassThru -Force -ErrorAction Stop 
                 $IsValid = Set-AuthenticodeSignature $Copied.ResolvedTarget -Certificate (Get-ChildItem $PSCodeSigningCert)
             }
             
