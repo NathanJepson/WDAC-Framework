@@ -9,7 +9,7 @@ function Copy-WDACAuditing {
     $sess = New-PSSession $RemoteMachine -ErrorAction SilentlyContinue
 
     if (-not $sess) {
-        throw "PowerShell remoting not available to these devices.";
+        throw New-Object System.Management.Automation.Remoting.PSRemotingTransportException
         return;
     }
 

@@ -54,6 +54,9 @@ function Get-WDACEvents {
     if (-not $SkipModuleCheck) {
         try {
             Copy-WDACAuditing -RemoteMachine $RemoteMachine -PSModuleRoot $PSModuleRoot -ModulePath $ModulePath -ErrorAction Stop
+        } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
+            Write-Error "PowerShell remoting is not available for those devices."
+            return
         } catch {
             Write-Verbose $_
         }
