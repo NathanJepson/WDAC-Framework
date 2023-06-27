@@ -24,7 +24,7 @@ function New-WDACGroup {
     )
 
     try {
-        New-SqliteWDACGroupRow -GroupName $GroupName
+        New-SqliteWDACGroupRow -GroupName $GroupName -ErrorAction Stop
     } catch {
         Write-Error $_
     }
