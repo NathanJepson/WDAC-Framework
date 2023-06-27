@@ -13,7 +13,7 @@ function Get-WDACEvents {
     License: MIT License
 
     .PARAMETER RemoteMachine
-    The remote machine(s) to grab code integrity events from.
+    The remote machine(s) to grab code integrity events from. Omit this parameter to grab events from just the local machine.
 
     .PARAMETER SkipModuleCheck
     When specified, the script will not check if WDACAuditing module is located on remote machine(s).
@@ -25,53 +25,165 @@ function Get-WDACEvents {
     Get-WDACEvents -RemoteMachine PC1,PC2
     #>
 
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'Both')]
     param(
-        [Parameter(Mandatory=$true)]
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [Parameter(ParameterSetName = 'MSIorScripts')]
         [ValidateNotNullOrEmpty()]
         [string[]]$RemoteMachine,
-        [switch]$SkipModuleCheck
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [Parameter(ParameterSetName = 'MSIorScripts')]
+        [switch]$SkipModuleCheck,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [Parameter(ParameterSetName = 'MSIorScripts')]
+        [Int64]$MaxEvents,
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [switch]$PEEvents,
+        [Parameter(ParameterSetName = 'MSIorScripts')]
+        [switch]$MSIorScripts,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'MSIorScripts')]
+        [switch]$ShowAllowedEvents,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [Parameter(ParameterSetName = 'MSIorScripts')]
+        [switch]$SignerInformation,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [Parameter(ParameterSetName = 'MSIorScripts')]
+        [switch]$SinceLastPolicyRefresh,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [switch]$User,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [switch]$Kernel,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [switch]$Audit,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [switch]$Enforce,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [switch]$CheckWhqlStatus,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [switch]$IgnoreNativeImagesDLLs,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [switch]$IgnoreDenyEvents
     )
 
-    if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
-        $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-        Write-Verbose "The current file is in the SignedModules folder."
-    } else {
-        $PSModuleRoot = $PSScriptRoot
-    }
-
-    $Signed = $false
-    if (Test-Path (Join-Path $PSModuleRoot -ChildPath ".\SignedModules\WDACAuditing\WDACAuditing.psm1")) {
-        $Signed = $true
-    }
-
-    if ($Signed) {
-        $ModulePath = ".\SignedModules\WDACAuditing\WDACAuditing.psm1"
-    } else {
-        $ModulePath = ".\WDACAuditing\WDACAuditing.psm1"
-    }
-
-    if (-not $SkipModuleCheck) {
-        try {
-            Copy-WDACAuditing -RemoteMachine $RemoteMachine -PSModuleRoot $PSModuleRoot -ModulePath $ModulePath -ErrorAction Stop
-        } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
-            Write-Error "PowerShell remoting is not available for those devices."
-            return
-        } catch {
-            Write-Verbose $_
+    begin {
+        if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+            $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+            Write-Verbose "The current file is in the SignedModules folder."
+        } else {
+            $PSModuleRoot = $PSScriptRoot
         }
-    }
 
-    Write-Verbose "Extracting events from remote machines(s)."
-    $sess = New-PSSession -ComputerName $RemoteMachine -ErrorAction SilentlyContinue
-    if ($sess) {
-        $Events = Invoke-Command -Session $sess -ScriptBlock { 
-            try {Import-Module WDACAuditing -ErrorAction Stop; Get-WDACCodeIntegrityEvent -SignerInformation -CheckWhqlStatus -MaxEvents 4 -ErrorAction Stop }
-            catch {return $_}
+        $Signed = $false
+        if (Test-Path (Join-Path $PSModuleRoot -ChildPath ".\SignedModules\WDACAuditing\WDACAuditing.psm1")) {
+            $Signed = $true
         }
+
+        if ($Signed) {
+            $ModulePath = ".\SignedModules\WDACAuditing\WDACAuditing.psm1"
+        } else {
+            $ModulePath = ".\WDACAuditing\WDACAuditing.psm1"
+        }
+
+        $PE_And_MSI = $false
+        if ( ($PEEvents -and $MSIorScripts) -or ( (-not $PEEvents) -and (-not $MSIorScripts))) {
+            $PE_And_MSI = $true
+        }
+
+        $PEScriptBlock = {
+        Param(
+            [Int64]$MaxEvents,
+            [switch]$User,
+            [switch]$Kernel,
+            [switch]$Audit,
+            [switch]$Enforce,
+            [switch]$SinceLastPolicyRefresh,
+            [switch]$SignerInformation,
+            [switch]$CheckWhqlStatus,
+            [switch]$IgnoreNativeImagesDLLs,
+            [switch]$IgnoreDenyEvents
+        )
+            try {
+                Import-Module -Name "WDACAuditing" 
+                Get-WDACCodeIntegrityEvent -MaxEvents:$MaxEvents -User:$User -Kernel:$Kernel -Audit:$Audit -Enforce:$Enforce -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -SignerInformation:$SignerInformation -CheckWhqlStatus:$CheckWhqlStatus -IgnoreNativeImagesDLLs:$IgnoreNativeImagesDLLs -IgnoreDenyEvents:$IgnoreDenyEvents -ErrorAction Stop }
+            catch {
+                Write-Verbose $_
+                return $null
+            }
+        }
+
+        $MSIorScript_ScriptBlock = {
+        Param(
+            [Int64]$MaxEvents,
+            [switch]$SignerInformation,
+            [switch]$ShowAllowedEvents,
+            [switch]$SinceLastPolicyRefresh
+        )
+            try {
+                Import-Module -Name "WDACAuditing" 
+                Get-WDACApplockerScriptMsiEvent -MaxEvents:$MaxEvents -SignerInformation:$SignerInformation -ShowAllowedEvents:$ShowAllowedEvents -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -ErrorAction Stop }
+            catch {
+                Write-Verbose $_
+                return $null
+            }
+        }
+
+        $PEEventResults = $null
+        $MSIorScriptEventResults = $null
     }
-    #TODO: Configure Get-WDACCodeIntegrityEvent flags and Get-WDACApplockerScriptMsiEvent flags
-    #Write-Host ($Events | Format-List -Property * | Out-String)
     
-    return $Events
+    process {
+
+        if (-not $SkipModuleCheck) {
+            try {
+                Copy-WDACAuditing -RemoteMachine $RemoteMachine -PSModuleRoot $PSModuleRoot -ModulePath $ModulePath -ErrorAction Stop
+            } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
+                Write-Error "PowerShell remoting is not available for those devices."
+                return
+            } catch {
+                Write-Verbose $_
+            }
+        }
+
+        if (-not $RemoteMachine) {
+            Write-Verbose "Extracting events from local machine."
+            if ($PE_And_MSI -or $PEEvents) {
+                $PEEventResults = Invoke-Command -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents
+            }
+            if ($PE_And_MSI -or $MSIorScripts) {
+                $MSIorScriptEventResults = Invoke-Command -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh
+            }
+        } else {
+            Write-Verbose "Extracting events from remote machines(s)."
+            $sess = New-PSSession -ComputerName $RemoteMachine -ErrorAction SilentlyContinue
+            if ($sess) {
+                if ($PE_And_MSI -or $PEEvents) {
+                    $PEEventResults = Invoke-Command -Session $sess -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents
+                }
+                if ($PE_And_MSI -or $MSIorScripts) {
+                    $MSIorScriptEventResults = Invoke-Command -Session $sess -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh
+                }
+            }
+        }
+    }
+
+    end {
+        if ($sess) {
+            $sess | Remove-PSSession
+        }
+
+        return $PEEventResults, $MSIorScriptEventResults
+    }
 }

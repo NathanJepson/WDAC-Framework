@@ -1,5 +1,4 @@
 function Import-SQLite {
-    
     [CmdletBinding()]
     param (
         [ValidateNotNullOrEmpty()]
@@ -8,14 +7,13 @@ function Import-SQLite {
 
     if (-not $SqliteAssembly) {
         try {
-            $SqliteAssembly = (Get-LocalStorageJSON)."SqliteAssembly"
-            if (-not $SqliteAssembly) {
+            $TrueSqliteAssembly = (Get-LocalStorageJSON)."SqliteAssembly"
+            if (-not $TrueSqliteAssembly) {
                 throw "No valid value for Sqlite binary provided from local storage."
             }
+            $SqliteAssembly = $TrueSqliteAssembly
         } catch {
-            Write-Error $_
-            Write-Warning "Unable to read or process the file path for the Sqlite binary."
-            return
+            throw "Unable to read or process the file path for the Sqlite binary."
         }
     }
 
@@ -29,13 +27,10 @@ function Import-SQLite {
             Write-Warning "Unable to update cached Sqlite binary."
         }
     } catch [NotSupportedException] {
-        Write-Verbose $_
-        Write-Error "This Sqlite binary is not supported in this version of PowerShell.";
-        return;
+        throw "This Sqlite binary is not supported in this version of PowerShell.";
     } catch {
-        Write-Verbose $_
-        Write-Error "Could not load the Sqlite binary. Failure to create database.";
-        return;
+        Write-Verbose $_;
+        throw "Could not load the Sqlite binary.";
     }
 }
 
