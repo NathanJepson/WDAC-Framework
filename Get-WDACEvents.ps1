@@ -18,11 +18,57 @@ function Get-WDACEvents {
     .PARAMETER SkipModuleCheck
     When specified, the script will not check if WDACAuditing module is located on remote machine(s).
 
-    .EXAMPLE
-    Get-WDACEvents -RemoteMachine PC1 -SkipModuleCheck
+    .PARAMETER MaxEvents
+    Specifies the maximum number of events that Get-WDACCodeIntegrityEvent and Get-WDACApplockerScriptMsiEvent return. The default is to return all the events.
+
+    .PARAMETER PEEvents
+    Get non-MSI and non-Script-Based WDAC events (i.e., uses Get-WDACCodeIntegrityEvent). By default this is already enabled.
+
+    .PARAMETER MSIorScripts
+    Get MSI or Script-based events (i.e., uses Get-WDACApplockerScriptMsiEvent). By default this is already enabled.
+
+    .PARAMETER ShowAllowedEvents
+    Parameter for Get-WDACApplockerScriptMsiEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER SignerInformation
+    Parameter for both Get-WDACApplockerScriptMsiEvent and Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER SinceLastPolicyRefresh
+    Parameter for both Get-WDACApplockerScriptMsiEvent and Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER User
+    Parameter for Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER Kernel
+    Parameter for Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER Audit
+    Parameter for Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER Enforce
+    Parameter for Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER CheckWhqlStatus
+    Parameter for Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER IgnoreNativeImagesDLLs
+    Parameter for Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
+
+    .PARAMETER IgnoreDenyEvents
+    Parameter for Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
 
     .EXAMPLE
-    Get-WDACEvents -RemoteMachine PC1,PC2
+    Get-WDACEvents -MaxEvents 4 -SignerInformation -Verbose
+
+    .EXAMPLE
+    Get-WDACEvents -RemoteMachine PC1,PC2 -SkipModuleCheck
+
+    .EXAMPLE
+    Get-WDACEvents -RemoteMachine PC1 -PEEvents -MaxEvents 2 -SinceLastPolicyRefresh -CheckWhqlStatus
+
+    .EXAMPLE
+    Get-WDACEvents -RemoteMachine PC1,PC2 -MSIorScripts -ShowAllowedEvents -SinceLastPolicyRefresh
+
     #>
 
     [CmdletBinding(DefaultParameterSetName = 'Both')]
@@ -113,10 +159,13 @@ function Get-WDACEvents {
             [switch]$SignerInformation,
             [switch]$CheckWhqlStatus,
             [switch]$IgnoreNativeImagesDLLs,
-            [switch]$IgnoreDenyEvents
+            [switch]$IgnoreDenyEvents,
+            [bool]$ImportModule
         )
             try {
-                Import-Module -Name "WDACAuditing" 
+                if ($ImportModule) {
+                    Import-Module -Name "WDACAuditing"
+                }
                 Get-WDACCodeIntegrityEvent -MaxEvents:$MaxEvents -User:$User -Kernel:$Kernel -Audit:$Audit -Enforce:$Enforce -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -SignerInformation:$SignerInformation -CheckWhqlStatus:$CheckWhqlStatus -IgnoreNativeImagesDLLs:$IgnoreNativeImagesDLLs -IgnoreDenyEvents:$IgnoreDenyEvents -ErrorAction Stop }
             catch {
                 Write-Verbose $_
@@ -129,10 +178,13 @@ function Get-WDACEvents {
             [Int64]$MaxEvents,
             [switch]$SignerInformation,
             [switch]$ShowAllowedEvents,
-            [switch]$SinceLastPolicyRefresh
+            [switch]$SinceLastPolicyRefresh,
+            [bool]$ImportModule
         )
             try {
-                Import-Module -Name "WDACAuditing" 
+                if ($ImportModule) {
+                    Import-Module -Name "WDACAuditing"
+                } 
                 Get-WDACApplockerScriptMsiEvent -MaxEvents:$MaxEvents -SignerInformation:$SignerInformation -ShowAllowedEvents:$ShowAllowedEvents -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -ErrorAction Stop }
             catch {
                 Write-Verbose $_
@@ -142,11 +194,17 @@ function Get-WDACEvents {
 
         $PEEventResults = $null
         $MSIorScriptEventResults = $null
+
+        $ImportModule = $false
+        if ($RemoteMachine) {
+            $ImportModule = $true
+        }
     }
     
     process {
 
-        if (-not $SkipModuleCheck) {
+        #Check whether WDACAuditing should be copied if SkipModuleCheck is not set and we are running on remote machines
+        if (-not $SkipModuleCheck -and $RemoteMachine) {
             try {
                 Copy-WDACAuditing -RemoteMachine $RemoteMachine -PSModuleRoot $PSModuleRoot -ModulePath $ModulePath -ErrorAction Stop
             } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
@@ -160,20 +218,20 @@ function Get-WDACEvents {
         if (-not $RemoteMachine) {
             Write-Verbose "Extracting events from local machine."
             if ($PE_And_MSI -or $PEEvents) {
-                $PEEventResults = Invoke-Command -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents
+                $PEEventResults = Invoke-Command -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents,$ImportModule
             }
             if ($PE_And_MSI -or $MSIorScripts) {
-                $MSIorScriptEventResults = Invoke-Command -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh
+                $MSIorScriptEventResults = Invoke-Command -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh,$ImportModule
             }
         } else {
             Write-Verbose "Extracting events from remote machines(s)."
             $sess = New-PSSession -ComputerName $RemoteMachine -ErrorAction SilentlyContinue
             if ($sess) {
                 if ($PE_And_MSI -or $PEEvents) {
-                    $PEEventResults = Invoke-Command -Session $sess -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents
+                    $PEEventResults = Invoke-Command -Session $sess -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents,$ImportModule
                 }
                 if ($PE_And_MSI -or $MSIorScripts) {
-                    $MSIorScriptEventResults = Invoke-Command -Session $sess -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh
+                    $MSIorScriptEventResults = Invoke-Command -Session $sess -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh,$ImportModule
                 }
             }
         }
