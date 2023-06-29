@@ -192,8 +192,8 @@ function Get-WDACEvents {
             }
         }
 
-        $PEEventResults = $null
-        $MSIorScriptEventResults = $null
+        $PEEventResults = @()
+        $MSIorScriptEventResults = @()
 
         $ImportModule = $false
         if ($RemoteMachine) {
