@@ -150,24 +150,24 @@ function Get-WDACEvents {
 
         $PEScriptBlock = {
         Param(
-            [Int64]$MaxEvents,
-            [switch]$User,
-            [switch]$Kernel,
-            [switch]$Audit,
-            [switch]$Enforce,
-            [switch]$SinceLastPolicyRefresh,
-            [switch]$SignerInformation,
-            [switch]$CheckWhqlStatus,
-            [switch]$IgnoreNativeImagesDLLs,
-            [switch]$IgnoreDenyEvents,
-            [bool]$ImportModule
+            $MaxEvents,
+            $User,
+            $Kernel,
+            $Audit,
+            $Enforce,
+            $SinceLastPolicyRefresh,
+            $SignerInformation,
+            $CheckWhqlStatus,
+            $IgnoreNativeImagesDLLs,
+            $IgnoreDenyEvents,
+            $ImportModule
         )
             try {
                 if ($ImportModule) {
                     Import-Module -Name "WDACAuditing"
                 }
-                Get-WDACCodeIntegrityEvent -MaxEvents:$MaxEvents -User:$User -Kernel:$Kernel -Audit:$Audit -Enforce:$Enforce -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -SignerInformation:$SignerInformation -CheckWhqlStatus:$CheckWhqlStatus -IgnoreNativeImagesDLLs:$IgnoreNativeImagesDLLs -IgnoreDenyEvents:$IgnoreDenyEvents -ErrorAction Stop }
-            catch {
+                Get-WDACCodeIntegrityEvent -MaxEvents:$MaxEvents -User:$User -Kernel:$Kernel -Audit:$Audit -Enforce:$Enforce -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -SignerInformation:$SignerInformation -CheckWhqlStatus:$CheckWhqlStatus -IgnoreNativeImagesDLLs:$IgnoreNativeImagesDLLs -IgnoreDenyEvents:$IgnoreDenyEvents -ErrorAction Stop 
+            } catch {
                 Write-Verbose $_
                 return $null
             }
@@ -175,18 +175,18 @@ function Get-WDACEvents {
 
         $MSIorScript_ScriptBlock = {
         Param(
-            [Int64]$MaxEvents,
-            [switch]$SignerInformation,
-            [switch]$ShowAllowedEvents,
-            [switch]$SinceLastPolicyRefresh,
-            [bool]$ImportModule
+            $MaxEvents,
+            $SignerInformation,
+            $ShowAllowedEvents,
+            $SinceLastPolicyRefresh,
+            $ImportModule
         )
             try {
                 if ($ImportModule) {
                     Import-Module -Name "WDACAuditing"
                 } 
-                Get-WDACApplockerScriptMsiEvent -MaxEvents:$MaxEvents -SignerInformation:$SignerInformation -ShowAllowedEvents:$ShowAllowedEvents -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -ErrorAction Stop }
-            catch {
+                Get-WDACApplockerScriptMsiEvent -MaxEvents:$MaxEvents -SignerInformation:$SignerInformation -ShowAllowedEvents:$ShowAllowedEvents -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -ErrorAction Stop 
+            } catch {
                 Write-Verbose $_
                 return $null
             }
