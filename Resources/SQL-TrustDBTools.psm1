@@ -1,3 +1,15 @@
+if ((Split-Path ((Get-Item $PSScriptRoot).Parent) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\..\"
+} else {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
+}
+
 function Import-SQLite {
     [CmdletBinding()]
     param (
@@ -13,6 +25,7 @@ function Import-SQLite {
             }
             $SqliteAssembly = $TrueSqliteAssembly
         } catch {
+            Write-Verbose $_
             throw "Unable to read or process the file path for the Sqlite binary."
         }
     }
