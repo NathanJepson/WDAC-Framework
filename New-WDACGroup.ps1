@@ -24,7 +24,11 @@ function New-WDACGroup {
     )
 
     try {
-        New-SqliteWDACGroupRow -GroupName $GroupName -ErrorAction Stop
+        if (New-WDACGroup_SQL -GroupName $GroupName -ErrorAction Stop) {
+            Write-Host "Group created successfully."
+        } else {
+            throw "Unsuccessful attempt to create new group."
+        }
     } catch {
         Write-Error $_
     }

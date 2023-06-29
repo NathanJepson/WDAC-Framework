@@ -73,7 +73,39 @@ function New-SqliteConnection {
     }
 }
 
-function New-SqliteWDACGroupRow {
+function Find-WDACGroup {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $GroupName
+    )
+
+    $result = $false
+
+    try {
+        $Connection = New-SQLiteConnection -ErrorAction Stop
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from GROUPS WHERE GroupName = @GroupName"
+        $Command.Parameters.AddWithValue("GroupName",$GroupName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        $Reader.Close()
+        $Connection.close()
+        return $result
+    } catch {
+        throw $_
+    }
+}
+
+
+function New-WDACGroup_SQL {
     [cmdletbinding()]
     Param ( 
         [ValidateNotNullOrEmpty()]
@@ -85,10 +117,11 @@ function New-SqliteWDACGroupRow {
         $Connection = New-SQLiteConnection -ErrorAction Stop
         $Command = $Connection.CreateCommand()
         $Command.Commandtext = "INSERT INTO GROUPS (GroupName) VALUES (@GroupName)"
-        $Command.Parameters.AddWithValue("GroupName",$GroupName)
+        $Command.Parameters.AddWithValue("GroupName",$GroupName) | Out-Null
         $Command.ExecuteNonQuery()
         $Connection.close()
     } catch {
         throw $_
     }
 }
+
