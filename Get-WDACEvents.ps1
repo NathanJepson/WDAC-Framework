@@ -242,6 +242,12 @@ function Get-WDACEvents {
             $sess | Remove-PSSession
         }
 
-        return $PEEventResults, $MSIorScriptEventResults
+        if ($PE_And_MSI) {
+            return $PEEventResults, $MSIorScriptEventResults
+        } elseif ($PEEvents) {
+            return $PEEventResults
+        } elseif ($MSIorScripts) {
+            return $MSIorScriptEventResults
+        }
     }
 }
