@@ -89,9 +89,34 @@ function Add-WDACTrustDB {
         FOREIGN KEY(AppIndex) REFERENCES file_publishers(AppIndex) ON DELETE RESTRICT
     );
 
+    CREATE TABLE msi_or_script (
+        SHA256FlatHash TEXT PRIMARY KEY,
+        TimeDetected TEXT NOT NULL,
+        FirstDetectedPath TEXT NOT NULL,
+        FirstDetectedUser TEXT,
+        FirstDetectedProcessID Integer,
+        SHA256AuthenticodeHash TEXT NOT NULL,
+        UserWriteable Integer DEFAULT 0 NOT NULL,
+        Signed Integer DEFAULT 0 NOT NULL,
+        OriginDevice TEXT NOT NULL,
+        EventType Text,
+        AppIndex Integer UNIQUE NOT NULL,
+        Trusted Integer DEFAULT 0 NOT NULL,
+        Staged Integer DEFAULT 0 NOT NULL,
+        Revoked Integer DEFAULT 0 NOT NULL,
+        Deferred Integer DEFAULT 0 NOT NULL,
+        Blocked Integer DEFAULT 0 NOT NULL,
+        BlockingPolicyID Text NOT NULL,
+        AllowedPolicyID Text,
+        Comment Text,
+        FOREIGN KEY(AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
+        FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
+    );
+
     CREATE TABLE signers (
-        AppIndex TEXT NOT NULL,
-        SignatureIndex TEXT NOT NULL,
+        AppIndex INTEGER NOT NULL,
+        SignatureIndex INTEGER NOT NULL,
         CertificateTBSHash TEXT NOT NULL,
         SignatureType TEXT,
         PageHash Integer DEFAULT 0 NOT NULL,
@@ -134,7 +159,7 @@ function Add-WDACTrustDB {
 
     CREATE TABLE file_publishers (
         PublisherIndex Integer NOT NULL,
-        AppIndex Text NOT NULL,
+        AppIndex Integer NOT NULL,
         Trusted Integer DEFAULT 0 NOT NULL,
         Staged Integer DEFAULT 0 NOT NULL,
         Revoked Integer DEFAULT 0 NOT NULL,
