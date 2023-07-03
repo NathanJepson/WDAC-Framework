@@ -121,7 +121,7 @@ function Add-WDACTrustDB {
         PolicyBits Integer,
         ValidatedSigningLevel Text,
         VerificationError Text,
-        FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE RESTRICT,
+        FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE CASCADE,
         FOREIGN KEY(AppIndex) REFERENCES msi_or_script(AppIndex) ON DELETE RESTRICT,
         FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE CASCADE,
         PRIMARY KEY(AppIndex,SignatureIndex)
@@ -132,8 +132,8 @@ function Add-WDACTrustDB {
         CommonName Text NOT NULL,
         IsLeaf DEFAULT 1 NOT NULL,
         ParentCertTBSHash Text,
-        NotValidBefore Text NOT NULL,
-        NotValidAfter Text NOT NULL,
+        NotValidBefore Text,
+        NotValidAfter Text,
         FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE SET NULL
     );
     

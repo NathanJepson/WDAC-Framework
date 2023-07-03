@@ -329,3 +329,147 @@ function Add-WDACApp {
         throw $_
     }
 }
+
+
+function Find-WDACCertificate {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from certificates WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $_
+    }
+}
+
+function Add-WDACCertificate {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$CommonName,
+        [bool]$IsLeaf=$false,
+        $ParentCertTBSHash,
+        $NotValidBefore,
+        $NotValidAfter,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "INSERT INTO certificates (TBSHash,CommonName,IsLeaf,ParentCertTBSHash,NotValidBefore,NotValidAfter) values (@TBSHash,@CommonName,@IsLeaf,@ParentCertTBSHash,@NotValidBefore,@NotValidAfter)"
+            $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+            $Command.Parameters.AddWithValue("CommonName",$CommonName) | Out-Null
+            $Command.Parameters.AddWithValue("IsLeaf",$IsLeaf) | Out-Null
+            $Command.Parameters.AddWithValue("ParentCertTBSHash",$ParentCertTBSHash) | Out-Null
+            $Command.Parameters.AddWithValue("NotValidBefore",$NotValidBefore) | Out-Null
+            $Command.Parameters.AddWithValue("NotValidAfter",$NotValidAfter) | Out-Null
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $_
+    }
+
+}
+
+function Add-WDACAppSigner {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$AppIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$SignatureIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$CertificateTBSHash,
+        $SignatureType,
+        [bool]$PageHash = $false,
+        [int]$Flags,
+        [int]$PolicyBits,
+        $ValidatedSigningLevel,
+        $VerificationError,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "INSERT INTO signers (AppIndex,SignatureIndex,CertificateTBSHash,SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError) values (@AppIndex,@SignatureIndex,@CertificateTBSHash,@SignatureType,@PageHash,@Flags,@PolicyBits,@ValidatedSigningLevel,@VerificationError)"
+            $Command.Parameters.AddWithValue("AppIndex",$AppIndex) | Out-Null
+            $Command.Parameters.AddWithValue("SignatureIndex",$SignatureIndex) | Out-Null
+            $Command.Parameters.AddWithValue("CertificateTBSHash",$CertificateTBSHash) | Out-Null
+            $Command.Parameters.AddWithValue("SignatureType",$SignatureType) | Out-Null
+            $Command.Parameters.AddWithValue("PageHash",$PageHash) | Out-Null
+            $Command.Parameters.AddWithValue("Flags",$Flags) | Out-Null
+            $Command.Parameters.AddWithValue("PolicyBits",$PolicyBits) | Out-Null
+            $Command.Parameters.AddWithValue("ValidatedSigningLevel",$ValidatedSigningLevel) | Out-Null
+            $Command.Parameters.AddWithValue("VerificationError",$VerificationError) | Out-Null
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $_
+    }
+}
