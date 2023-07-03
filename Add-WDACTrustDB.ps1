@@ -123,7 +123,7 @@ function Add-WDACTrustDB {
         VerificationError Text,
         FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE RESTRICT,
         FOREIGN KEY(AppIndex) REFERENCES msi_or_script(AppIndex) ON DELETE RESTRICT,
-        FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
+        FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE CASCADE,
         PRIMARY KEY(AppIndex,SignatureIndex)
     );
     
@@ -134,7 +134,7 @@ function Add-WDACTrustDB {
         ParentCertTBSHash Text,
         NotValidBefore Text NOT NULL,
         NotValidAfter Text NOT NULL,
-        FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT
+        FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE SET NULL
     );
     
     CREATE TABLE publishers (
@@ -152,7 +152,7 @@ function Add-WDACTrustDB {
         PublisherIndex Integer UNIQUE NOT NULL,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
-        FOREIGN KEY(PcaCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
+        FOREIGN KEY(PcaCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE CASCADE,
         PRIMARY KEY(PcaCertTBSHash,LeafCertCN)
     );
 
@@ -173,7 +173,7 @@ function Add-WDACTrustDB {
         FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE RESTRICT,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
-        FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE RESTRICT
+        FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE CASCADE
     );
     
     CREATE TABLE groups (
