@@ -109,6 +109,7 @@ function Register-MSIorScriptEvent {
         [ValidateNotNullOrEmpty()]
         $WDACEvent
     )
+    #TODO - Implement Function
 }
 
 
@@ -166,7 +167,7 @@ filter Register-WDACEvents {
         if ($WDACEvent.Psobject.Properties.value.count -le ($MSI_OR_SCRIPT_PSOBJECT_LENGTH + 1)) {
         #Case 1: It is an MSI or Script
 
-            continue; #FIXME
+            continue; #TODO - Implement Function
             try {
                 Register-MSIorScriptEvent -WDACEvent $WDACEvent -ErrorAction Stop
             } catch {

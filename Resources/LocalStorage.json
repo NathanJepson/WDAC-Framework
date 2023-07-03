@@ -18,18 +18,7 @@
             "_TypeExamples": ["SMB","S3","Local"]
         },
 
-        "WorkingBasePoliciesDirectory" : {
-            "IsParent": "",
-            "Location": "",
-            "_LocationExamples": "",
-            "Type" : "",
-            "_TypeExamples": ["SMB","S3","Local"],
-            "Parent" : "",
-            "ParentType" : "",
-            "ParentLocation" : ""
-        },
-        
-        "WorkingSupplementalPoliciesDirectory" : {
+        "WorkingPoliciesDirectory" : {
             "IsParent": "",
             "Location": "",
             "_LocationExamples": "",
