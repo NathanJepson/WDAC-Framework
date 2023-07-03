@@ -84,9 +84,7 @@ function Add-WDACTrustDB {
         AppIndex Integer UNIQUE NOT NULL,
         RequestedSigningLevel Text,
         ValidatedSigningLevel Text,
-        FOREIGN KEY(AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
-        FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
-        FOREIGN KEY(AppIndex) REFERENCES file_publishers(AppIndex) ON DELETE RESTRICT
+        FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
 
     CREATE TABLE msi_or_script (
@@ -109,7 +107,6 @@ function Add-WDACTrustDB {
         BlockingPolicyID Text NOT NULL,
         AllowedPolicyID Text,
         Comment Text,
-        FOREIGN KEY(AppIndex) REFERENCES signers(AppIndex) ON DELETE RESTRICT,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
@@ -124,6 +121,8 @@ function Add-WDACTrustDB {
         PolicyBits Integer,
         ValidatedSigningLevel Text,
         VerificationError Text,
+        FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE RESTRICT,
+        FOREIGN KEY(AppIndex) REFERENCES msi_or_script(AppIndex) ON DELETE RESTRICT,
         FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE RESTRICT,
         PRIMARY KEY(AppIndex,SignatureIndex)
     );
@@ -171,6 +170,7 @@ function Add-WDACTrustDB {
         MinimumAllowedVersion Text,
         MaximumAllowedVersion Text,
         PRIMARY KEY(PublisherIndex,AppIndex),
+        FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE RESTRICT,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE RESTRICT
