@@ -9,3 +9,5 @@ Test-Script.ps1
 *.xml
 *.cip
 *.p7
+!Resources/AllowAll.xml
+!Resources/DenyAllAudit.xml
