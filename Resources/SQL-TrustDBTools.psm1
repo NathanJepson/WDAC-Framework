@@ -125,3 +125,207 @@ function New-WDACGroup_SQL {
     }
 }
 
+function Get-MAXAppIndexID {
+    [cmdletbinding()]
+    Param ( 
+        [switch]$isMSIorScript,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null;
+    $NoConnectionProvided = $false;
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        if ($isMSIorScript) {
+            $Command.Commandtext = "Select MAX(AppIndex) from msi_or_script"
+        } else {        
+            $Command.Commandtext = "Select MAX(AppIndex) from apps"
+        }
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $Reader["MAX(AppIndex)"]
+                if ($result -is [System.DBNull]) {
+                    $Reader.Close()
+                    $Connection.close()
+                    return $null
+                } else {
+                    $Reader.Close()
+                    $Connection.close()
+                    return $result
+                }
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.close()
+        }
+        throw $_
+    }
+}
+
+
+function Find-WDACApp {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from apps WHERE SHA256FlatHash = @FlatHash"
+        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $_
+    }
+}
+
+function Get-WDACApp {
+
+}
+
+function Add-WDACApp {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FileName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TimeDetected,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FirstDetectedPath,
+        $FirstDetectedUser,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$FirstDetectedProcessID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FirstDetectedProcessName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256AuthenticodeHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$OriginDevice,
+        $EventType,
+        $SigningScenario,
+        $OriginalFileName,
+        $FileVersion,
+        $InternalName,
+        $FileDescription,
+        $ProductName,
+        $PackageFamilyName,
+        [bool]$UserWriteable=$false,
+        [bool]$FailedWHQL=$false,
+        $RequestedSigningLevel,
+        $ValidatedSigningLevel,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$BlockingPolicyID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$AppIndex,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        #$Connection.
+        #$Transaction = $Connection.BeginTransaction() #FIXME
+        $Command = $Connection.CreateCommand()
+        #$Transaction = $Connection.BeginTransaction()
+        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,@AppIndex)"
+            $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+            $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+            $Command.Parameters.AddWithValue("TimeDetected",$TimeDetected) | Out-Null
+            $Command.Parameters.AddWithValue("FirstDetectedPath",$FirstDetectedPath) | Out-Null
+            $Command.Parameters.AddWithValue("FirstDetectedUser",$FirstDetectedUser) | Out-Null
+            $Command.Parameters.AddWithValue("FirstDetectedProcessID",$FirstDetectedProcessID) | Out-Null
+            $Command.Parameters.AddWithValue("FirstDetectedProcessName",$FirstDetectedProcessName) | Out-Null
+            $Command.Parameters.AddWithValue("SHA256AuthenticodeHash",$SHA256AuthenticodeHash) | Out-Null
+            $Command.Parameters.AddWithValue("OriginDevice",$OriginDevice) | Out-Null
+            $Command.Parameters.AddWithValue("EventType",$EventType) | Out-Null
+            $Command.Parameters.AddWithValue("SigningScenario",$SigningScenario) | Out-Null
+            $Command.Parameters.AddWithValue("OriginalFileName",$OriginalFileName) | Out-Null
+            $Command.Parameters.AddWithValue("FileVersion",$FileVersion) | Out-Null
+            $Command.Parameters.AddWithValue("InternalName",$InternalName) | Out-Null
+            $Command.Parameters.AddWithValue("FileDescription",$FileDescription) | Out-Null
+            $Command.Parameters.AddWithValue("ProductName",$ProductName) | Out-Null
+            $Command.Parameters.AddWithValue("PackageFamilyName",$PackageFamilyName) | Out-Null
+            $Command.Parameters.AddWithValue("UserWriteable",$UserWriteable) | Out-Null
+            $Command.Parameters.AddWithValue("FailedWHQL",$FailedWHQL) | Out-Null
+            $Command.Parameters.AddWithValue("RequestedSigningLevel",$RequestedSigningLevel) | Out-Null
+            $Command.Parameters.AddWithValue("ValidatedSigningLevel",$ValidatedSigningLevel) | Out-Null
+            $Command.Parameters.AddWithValue("BlockingPolicyID",$BlockingPolicyID) | Out-Null
+            $Command.Parameters.AddWithValue("AppIndex",$AppIndex) | Out-Null
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        # if ($Transaction) {
+        #     $Transaction.Rollback()
+        # }
+        throw $_
+    }
+}
