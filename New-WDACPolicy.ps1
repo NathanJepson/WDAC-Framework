@@ -1,7 +1,7 @@
 function New-WDACPolicy {
     <#
     .SYNOPSIS
-    Creates a new WDAC policy .XML file and places it in the working policies directory (and its parent directory if applicable)
+    Creates a new WDAC policy .XML file and places it in the working policies directory (and the authoritative parent location if applicable)
 
     .DESCRIPTION
     Create a WDAC policy based on user supplied parameters including merging with Microsoft-recommended block rules as well
@@ -88,6 +88,10 @@ function New-WDACPolicy {
             $Audit = $true
         }
 
+        if (($AllowByDefaultPolicy -and $Supplemental) -or ($DenyByDefaultPolicy -and $Supplemental)) {
+            throw "Error: Allow-by-default or deny-by-default is inherited from the base policy when -supplemental is set."
+        }
+
         $WDACCodeSigner = $null
 
         if ($Signed) {
@@ -106,7 +110,7 @@ function New-WDACPolicy {
     }
 
     process {
-            
+        
     }
 
     end {

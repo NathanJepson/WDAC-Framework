@@ -4,6 +4,7 @@ SignedModules/**/*.ps1
 SignedModules/**/*.psd1
 Resources/LocalStorageTest.json
 Resources/ProjectNotes.txt
+.WDACFrameworkData/*.xml
 Test-Script.ps1
 *.db
 *.xml
@@ -11,3 +12,4 @@ Test-Script.ps1
 *.p7
 !Resources/AllowAll.xml
 !Resources/DenyAllAudit.xml
+!Resources/SupplementalShell.xml
