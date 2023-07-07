@@ -27,10 +27,10 @@ function New-WDACPolicy {
     Adds a new signer rule for the PowerShell code signing certificate to this new WDAC policy.
 
     .PARAMETER UpdatePolicySigner
-    Creates a new signer rule for updating this policy--the signer rule referencing the WDAC policy code signing certificate (i.e., the WDACPolicySigningCertificate in LocalStorage.json)
+    Creates a new signer rule for updating this policy--using the WDAC policy code signing certificate (i.e., the WDACPolicySigningCertificate) obtained from LocalStorage.json
 
     .PARAMETER SupplementalPolicySigner
-    Creates a new signer rule for adding signed supplemental policies--the signer rule referencing the WDAC policy code signing certificate (i.e., the WDACPolicySigningCertificate in LocalStorage.json)
+    Creates a new signer rule for adding signed supplemental policies--using the WDAC policy code signing certificate (i.e., the WDACPolicySigningCertificate) obtained from LocalStorage.json
 
     .PARAMETER DoNotCacheRecommended
     When this is set, Microsoft's recommended policy rules will be purged (not stored locally after pulling from Github)
@@ -141,6 +141,7 @@ function New-WDACPolicy {
         [switch]$Audit,
         [ValidateScript({-not $Audit}, ErrorMessage = "A policy cannot be both an Audit policy and an Enforced policy. This is according to Plato's Law of non-contradiction. The philosphers are laughing you to scorn.")]
         [switch]$Enforced,
+        [Alias("UserModeCodeIntegrity")]
         [switch]$UMCI,
         [switch]$BootMenuProtection,
         [switch]$WHQL,
@@ -154,13 +155,15 @@ function New-WDACPolicy {
         [Alias("Store")]
         [switch]$EnforceStoreApps,
         [switch]$EnableManagedInstaller,
+        [Alias("IntelligentSecurityGraph")]
         [switch]$ISG,
         [switch]$InvalidateEAsOnReboot,
         [switch]$UpdatePolicyNoReboot,
         [switch]$AllowSupplementalPolicies,
         [switch]$DisableRuntimeFilepathRules,
         [switch]$DynamicCodeSecurity,
-        [switch]$TreatRevokedAsUnsigned
+        [switch]$TreatRevokedAsUnsigned,
+        [switch]$HVCI
     )
 
     begin {
@@ -206,7 +209,7 @@ function New-WDACPolicy {
             #For a signed policy, the default behavior is to add both a supplemental and an update policy signer
                 $UpdatePolicySigner = $true
                 if ($AllowSupplementalPolicies) {
-                    $SupplementalPolicySigner = $true
+                    $SupplementalPolicySigner = $true #TODO: Is this option able to be enabled for a supplemental policy without breaking anything?
                 }
             }
         } else {
@@ -222,7 +225,7 @@ function New-WDACPolicy {
             $WorkingPoliciesLocation = (Get-LocalStorageJSON -ErrorAction Stop)."WorkingPoliciesDirectory"."Location"
             $WorkingPoliciesLocationType = (Get-LocalStorageJSON -ErrorAction Stop)."WorkingPoliciesDirectory"."Type"
 
-            if (-not $WorkingPoliciesLocation -or -not $WorkingPoliciesLocationType) {
+            if (-not $WorkingPoliciesLocation -or -not $WorkingPoliciesLocationType -or "" -eq $WorkingPoliciesLocation -or "" -eq $WorkingPoliciesLocationType) {
                 throw "Null or invalid values provided for Working Policies location (or the location type)"
             }
         } catch {
@@ -235,9 +238,23 @@ function New-WDACPolicy {
             try {
                 $WDACodeSigner = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
                 if (-not $WDACodeSigner -or "" -eq $WDACodeSigner) {
-                    throw "Error: Empty or null value for signing certificate retreived from Local Storage."
+                    throw "Error: Empty or null value for WDAC Policy signing certificate retreived from Local Storage."
                 } elseif (-not ($WDACodeSigner.ToLower() -match "cert\:\\")) {
-                    throw "Local cache does not specify a valid certificate path for the signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
+                    throw "Local cache does not specify a valid certificate path for the WDAC policy signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
+                }
+            } catch {
+                Write-Error $_
+                return;
+            }
+        }
+
+        if ($AddPSCodeSigner) {
+            try {
+                $PSCodeSigner = (Get-LocalStorageJSON -ErrorAction Stop)."PowerShellCodeSigningCertificate"
+                if (-not $PSCodeSigner -or "" -eq $PSCodeSigner) {
+                    throw "Error: Empty or null value for PowerShell code signing certificate retreived from Local Storage."
+                } elseif (-not ($PSCodeSigner.ToLower() -match "cert\:\\")) {
+                    throw "Local cache does not specify a valid certificate path for the PowerShell code signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
                 }
             } catch {
                 Write-Error $_
@@ -337,7 +354,141 @@ function New-WDACPolicy {
             #TODO
             }
 
+            #TODO: =====================================================================
+            #Add PS code signer and WDAC policy signer rules here
+            #===========================================================================
+
+            #Apply Policy Options ======================================================
+            #Case 0: 'Enabled:UMCI'
+            if ($UMCI) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 0
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 0 -Delete
+            }
+            #Case 1: 'Enabled:Boot Menu Protection'
+            if ($BootMenuProtection) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 1
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 1 -Delete
+            }
+            #Case 2: 'Required:WHQL'
+            if ($WHQL) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 2
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 2 -Delete
+            }
+            #Case 3: 'Enabled:Audit Mode'
+            if ($Audit) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 3
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 3 -Delete
+            }
+            #Case 4: 'Disabled:Flight Signing'
+            if ($DisableFlightSigning) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 4
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 4 -Delete
+            }
+            #Case 5: 'Enabled:Inherit Default Policy'
+            if ($InheritDefaultPolicy) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 5
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 5 -Delete
+            }
+            #Case 6: 'Enabled:Unsigned System Integrity Policy'
+            if ($Unsigned) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 6
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 6 -Delete
+            }
             
+            #Case 7: 'Allowed:Debug Policy Augmented'
+            #Not yet supported by Microsoft
+
+            #Case 8: 'Required:EV Signers'
+            #Not yet supported by Microsoft
+
+            #Case 9: 'Enabled:Advanced Boot Options Menu'
+            if ($AdvancedBootOptionsMenu) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 9
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 9 -Delete
+            }
+            #Case 10: 'Enabled:Boot Audit On Failure'
+            if ($BootAuditOnFailure) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 10
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 10 -Delete
+            }
+            #Case 11: 'Disabled:Script Enforcement'
+            if ($DisableScriptEnforcement) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 11
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 11 -Delete
+            }
+            #Case 12: 'Required:Enforce Store Applications'
+            if ($EnforceStoreApps) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 12
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 12 -Delete
+            }
+            #Case 13: 'Enabled:Managed Installer'
+            if ($EnableManagedInstaller) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 13
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 13 -Delete
+            }
+            #Case 14:'Enabled:Intelligent Security Graph Authorization'
+            if ($ISG) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 14
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 14 -Delete
+            }
+            #Case 15:'Enabled:Invalidate EAs on Reboot'
+            if ($InvalidateEAsOnReboot) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 15
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 15 -Delete
+            }
+            #Case 16:'Enabled:Update Policy No Reboot'
+            if ($UpdatePolicyNoReboot) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 16
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 16 -Delete
+            }
+            #Case 17:'Enabled:Allow Supplemental Policies'
+            if ($AllowSupplementalPolicies) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 17
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 17 -Delete
+            }
+            #Case 18:'Disabled:Runtime FilePath Rule Protection'
+            if ($DisableRuntimeFilepathRules) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 18
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 18 -Delete
+            }
+            #Case 19:'Enabled:Dynamic Code Security'
+            if ($DynamicCodeSecurity) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 19
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 19 -Delete
+            }
+            #Case 20:'Enabled:Revoked Expired As Unsigned'
+            if ($TreatRevokedAsUnsigned) {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 20
+            } else {
+                Set-RuleOption -FilePath $TempPolicyPath -Option 20 -Delete
+            }
+            #Case HVCI: Whether HVCI is enabled
+            if ($HVCI) {
+                Set-HVCIOptions -Enabled -FilePath $TempPolicyPath
+            } else {
+                #TODO: Provide an option to set the -strict flag (which will set it to "2")
+            }
+            #===========================================================================
+
+            #TODO: Add Policy Information to the database
 
         } catch {
             Write-Error $_
