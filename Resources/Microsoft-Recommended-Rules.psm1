@@ -60,12 +60,13 @@ function Get-XMLFromMDFileParser {
 function Get-DriverBlockRules {
     [CmdletBinding()]
     param (
-        [switch]$DoNotCacheRecommended
+        [bool]$DoNotCacheRecommended
     )
 
     try {
-        Write-Verbose "Retrieving driver block rules from Github.com if they aren't in .WDACFrameworkData"
+        
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md"))) {
+            Write-Verbose "Retrieving driver block rules from Github.com."
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/windows-itpro-docs/public/windows/security/threat-protection/windows-defender-application-control/microsoft-recommended-driver-block-rules.md" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md") -ErrorAction Stop 
         }
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml"))) {
@@ -106,12 +107,13 @@ function Get-DriverBlockRules {
 function Get-UserModeBlockRules {
     [CmdletBinding()]
     param (
-        [switch]$DoNotCacheRecommended
+        [bool]$DoNotCacheRecommended
     )
 
     try {
-        Write-Verbose "Retrieving driver block rules from Github.com if they aren't in .WDACFrameworkData"
+        
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md"))) {
+            Write-Verbose "Retrieving user mode block rules from Github.com."
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/windows-itpro-docs/public/windows/security/threat-protection/windows-defender-application-control/microsoft-recommended-block-rules.md" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md") -ErrorAction Stop 
         }
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-wdacwizard.xml"))) {
@@ -162,3 +164,5 @@ function Get-WindowsModeRules {
         [switch]$CachePolicy
     )
 }
+
+Export-ModuleMember -Function Get-DriverBlockRules, Get-UserModeBlockRules, Get-AllowMicrosoftModeRules, Get-WindowsModeRules
