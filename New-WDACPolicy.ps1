@@ -146,6 +146,7 @@ function New-WDACPolicy {
         [switch]$Unsigned,
         [ValidateScript({-not $Enforced}, ErrorMessage = "A policy cannot be both an Audit policy and an Enforced policy. This is according to Plato's Law of non-contradiction. The philosphers are laughing you to scorn.")]
         [switch]$Audit,
+        [Alias("Enforce")]
         [ValidateScript({-not $Audit}, ErrorMessage = "A policy cannot be both an Audit policy and an Enforced policy. This is according to Plato's Law of non-contradiction. The philosphers are laughing you to scorn.")]
         [switch]$Enforced,
         [Alias("UserModeCodeIntegrity")]
@@ -208,8 +209,6 @@ function New-WDACPolicy {
             $Audit = $true
         }
 
-        $WDACCodeSigner = $null
-
         if ($Signed) {
             
             if (-not $UpdatePolicySigner -and -not $SupplementalPolicySigner) {
@@ -271,7 +270,8 @@ function New-WDACPolicy {
 
         try {
             if (Find-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop) {
-                throw "A policy with the name $PolicyName already exists."
+                Write-Error "A policy with the name $PolicyName already exists."
+                return;
             }
         } catch {
             Write-Verbose $_
@@ -509,7 +509,17 @@ function New-WDACPolicy {
             }
             #===========================================================================
 
-            #TODO: Add Policy Information to the database
+            #==========Add policy to database=====================================
+            [xml]$PolicyXML = Get-Content -Path $TempPolicyPath -ErrorAction Stop
+            $VerisonNumber = $PolicyXML.SiPolicy.VersionEx
+
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $Transaction = $Connection.BeginTransaction()
+            if (-not (Add-WDACPolicy -PolicyGUID $PolicyID.Substring(11) -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                throw "Failed to add this policy to the database."
+            }
+            
+            #======================================================================
 
         } catch {
             Write-Error $_
@@ -517,14 +527,17 @@ function New-WDACPolicy {
         }
 
         try {
-            [xml]$PolicyXML = Get-Content -Path $TempPolicyPath
-            $VerisonNumber = $PolicyXML.SiPolicy.VersionEx
+            
             $NewFileName = ($PolicyName + "_v" + ($VerisonNumber.replace('.','_')) + ".xml")
             if ($WorkingPoliciesLocationType.ToLower() -eq "local") {
                 Copy-Item $TempPolicyPath -Destination (Join-Path $WorkingPoliciesLocation -ChildPath $NewFileName) -Force -ErrorAction Stop
             } else {
             #TODO: Other working policies directory types
             }
+            
+            $Transaction.Commit()
+            $Connection.Close()
+            Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
         } catch {
             Write-Verbose $_
             throw "There was a problem placing the new policy file into your working policies directory."
@@ -539,6 +552,14 @@ function New-WDACPolicy {
             if (Test-Path $TempPolicyPath) {
                 Remove-Item $TempPolicyPath -Force
             }
+        }
+
+        if ($Transaction) {
+            $Transaction.Rollback()
+        }
+
+        if ($Connection) {
+            $Connection.Close()
         }
 
         if ($PSModuleRoot) {

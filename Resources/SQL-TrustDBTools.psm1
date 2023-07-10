@@ -563,3 +563,67 @@ function Find-WDACPolicyByName {
         throw $_
     }
 }
+
+function Add-WDACPolicy {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        $PolicyID,
+        $PolicyHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $PolicyName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $PolicyVersion,
+        $ParentPolicyGUID,
+        [bool]$BaseOrSupplemental,
+        [bool]$IsSigned,
+        [bool]$AuditMode,
+        [bool]$IsPillar,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $OriginLocation,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $OriginLocationType,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "INSERT INTO policies (PolicyGUID,PolicyID,PolicyHash,PolicyName,PolicyVersion,ParentPolicyGUID,BaseOrSupplemental,IsSigned,AuditMode,IsPillar,OriginLocation,OriginLocationType) values (@PolicyGUID,@PolicyID,@PolicyHash,@PolicyName,@PolicyVersion,@ParentPolicyGUID,@BaseOrSupplemental,@IsSigned,@AuditMode,@IsPillar,@OriginLocation,@OriginLocationType)"
+            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+            $Command.Parameters.AddWithValue("PolicyID",$PolicyID) | Out-Null
+            $Command.Parameters.AddWithValue("PolicyHash",$PolicyHash) | Out-Null
+            $Command.Parameters.AddWithValue("PolicyName",$PolicyName) | Out-Null
+            $Command.Parameters.AddWithValue("PolicyVersion",$PolicyVersion) | Out-Null
+            $Command.Parameters.AddWithValue("ParentPolicyGUID",$ParentPolicyGUID) | Out-Null
+            $Command.Parameters.AddWithValue("BaseOrSupplemental",$BaseOrSupplemental) | Out-Null
+            $Command.Parameters.AddWithValue("IsSigned",$IsSigned) | Out-Null
+            $Command.Parameters.AddWithValue("AuditMode",$AuditMode) | Out-Null
+            $Command.Parameters.AddWithValue("IsPillar",$IsPillar) | Out-Null
+            $Command.Parameters.AddWithValue("OriginLocation",$OriginLocation) | Out-Null
+            $Command.Parameters.AddWithValue("OriginLocationType",$OriginLocationType) | Out-Null
+            
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $_
+    }
+}
