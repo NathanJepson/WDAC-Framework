@@ -217,6 +217,12 @@ function Add-WDACTrustDB {
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
 
+    CREATE TABLE ad_hoc_policy_assignments (
+        PolicyGUID Text NOT NULL,
+        DeviceName Text NOT NULL,
+        PrimaryKey(PolicyGUID,DeviceName)
+    );
+
     CREATE TABLE devices (
         DeviceName Text PRIMARY KEY,
         AllowedGroup Text,
