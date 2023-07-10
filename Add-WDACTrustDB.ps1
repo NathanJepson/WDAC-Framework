@@ -187,22 +187,18 @@ function Add-WDACTrustDB {
         FOREIGN KEY(MirroredGroupName) REFERENCES groups(GroupName) ON DELETE CASCADE,
         FOREIGN KEY(GroupName) REFERENCES groups(GroupName) ON DELETE CASCADE
     );
-    
-    CREATE TABLE pillars (
-        PillarName Text NOT NULL PRIMARY KEY,
-        PolicyGUID Text
-    );
 
     CREATE TABLE policies (
         PolicyGUID Text NOT NULL PRIMARY KEY,
         PolicyID Text,
-        PolicyHash Text NOT NULL,
+        PolicyHash Text,
         PolicyName Text UNIQUE NOT NULL,
         PolicyVersion Text NOT NULL,
         ParentPolicyGUID Text,
         BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
         IsSigned Integer DEFAULT 0 NOT NULL,
         AuditMode Integer DEFAULT 1 NOT NULL,
+        IsPillar Integer DEFAULT 0 NOT NULL,
         OriginLocation Text NOT NULL,
         OriginLocationType Text NOT NULL,
         FOREIGN KEY (PolicyGUID) REFERENCES pillars(PolicyGUID) ON DELETE RESTRICT,
@@ -220,7 +216,7 @@ function Add-WDACTrustDB {
     CREATE TABLE ad_hoc_policy_assignments (
         PolicyGUID Text NOT NULL,
         DeviceName Text NOT NULL,
-        PrimaryKey(PolicyGUID,DeviceName),
+        PRIMARY KEY(PolicyGUID,DeviceName),
         FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE CASCADE,
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
