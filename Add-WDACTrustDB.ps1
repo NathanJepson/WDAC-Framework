@@ -220,7 +220,9 @@ function Add-WDACTrustDB {
     CREATE TABLE ad_hoc_policy_assignments (
         PolicyGUID Text NOT NULL,
         DeviceName Text NOT NULL,
-        PrimaryKey(PolicyGUID,DeviceName)
+        PrimaryKey(PolicyGUID,DeviceName),
+        FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE CASCADE,
+        FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
 
     CREATE TABLE devices (
