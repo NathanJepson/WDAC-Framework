@@ -201,7 +201,6 @@ function Add-WDACTrustDB {
         IsPillar Integer DEFAULT 0 NOT NULL,
         OriginLocation Text NOT NULL,
         OriginLocationType Text NOT NULL,
-        FOREIGN KEY (PolicyGUID) REFERENCES pillars(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY (ParentPolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
 
