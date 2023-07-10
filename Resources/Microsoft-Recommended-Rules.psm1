@@ -96,9 +96,9 @@ function Get-DriverBlockRules {
     }
     
     if ($DoNotCacheRecommended) {
-        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.xml") -Force
-        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md") -Force
-        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml") -Force
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.xml") -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md") -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml") -Force -ErrorAction SilentlyContinue
     }
 
     return $rules
@@ -143,9 +143,9 @@ function Get-UserModeBlockRules {
     }
     
     if ($DoNotCacheRecommended) {
-        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.xml") -Force
-        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md") -Force
-        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-wdacwizard.xml") -Force
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.xml") -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md") -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-wdacwizard.xml") -Force -ErrorAction SilentlyContinue
     }
 
     return $rules
@@ -154,15 +154,92 @@ function Get-UserModeBlockRules {
 function Get-AllowMicrosoftModeRules {
     [CmdletBinding()]
     param (
-        [switch]$CachePolicy
+        [bool]$DoNotCacheRecommended
     )
+
+    try {
+        
+        if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml"))) {
+            Write-Verbose "Retrieving AllowMicrosoft.xml policy from Github.com."
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/main/WDAC-Policy-Wizard/app/MSIX/AllowMicrosoft.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml") -ErrorAction Stop 
+        }
+    } catch {
+        throw "Trouble retrieving AllowMicrosoft.xml policy from Github.com."
+    }
+
+    if (Test-Path "$($Env:WINDIR)\schemas\CodeIntegrity\ExamplePolicies\AllowMicrosoft.xml") {
+        [XML]$ExampleAllowMicrosoft = Get-Content -Path "$($Env:WINDIR)\schemas\CodeIntegrity\ExamplePolicies\AllowMicrosoft.xml"
+        $ExampleAllowMicrosoftVersion = $ExampleAllowMicrosoft.SiPolicy.VersionEx
+    }
+
+    if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml")) {
+        [XML]$WizardAllowMicrosoft = Get-Content -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml")
+        $WizardAllowMicrosoftVersion = $WizardAllowMicrosoft.SiPolicy.VersionEx
+    }
+
+    if ($ExampleAllowMicrosoftVersion -and $WizardAllowMicrosoftVersion) {
+        if ((Compare-Versions -Version1 $ExampleAllowMicrosoftVersion -Version2 $WizardAllowMicrosoftVersion) -eq 1) {
+            $rules = Get-CIPolicy -FilePath "$($Env:WINDIR)\schemas\CodeIntegrity\ExamplePolicies\AllowMicrosoft.xml"
+        } else {
+            $rules = Get-CIPolicy -FilePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml")
+        }
+    } elseif ($ExampleAllowMicrosoft) {
+        $rules = Get-CIPolicy -FilePath "$($Env:WINDIR)\schemas\CodeIntegrity\ExamplePolicies\AllowMicrosoft.xml"
+    } else {
+        $rules = Get-CIPolicy -FilePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml")
+    }
+
+    if ($DoNotCacheRecommended) {
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml") -Force -ErrorAction SilentlyContinue
+    }
+
+    return $rules
 }
 
 function Get-WindowsModeRules {
     [CmdletBinding()]
     param (
-        [switch]$CachePolicy
+        [bool]$DoNotCacheRecommended
     )
+
+    try {
+        
+        if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml"))) {
+            Write-Verbose "Retrieving DefaultWindows.xml policy from Github.com."
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/main/WDAC-Policy-Wizard/app/MSIX/DefaultWindows_Audit.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml") -ErrorAction Stop 
+        }
+    } catch {
+        throw "Trouble retrieving DefaultWindows.xml policy from Github.com."
+    }
+
+    
+    if (Test-Path "$($Env:WINDIR)\schemas\CodeIntegrity\ExamplePolicies\DefaultWindows_Audit.xml") {
+        [XML]$ExampleWindowsMode = Get-Content -Path "$($Env:WINDIR)\schemas\CodeIntegrity\ExamplePolicies\DefaultWindows_Audit.xml"
+        $ExampleWindowsModeVersion = $ExampleWindowsMode.SiPolicy.VersionEx
+    }
+
+    if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml")) {
+        [XML]$WizardWindowsMode = Get-Content -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml")
+        $WizardWindowsmodeVersion = $WizardWindowsMode.SiPolicy.VersionEx
+    }
+
+    if ($ExampleWindowsModeVersion -and $WizardWindowsmodeVersion) {
+        if ((Compare-Versions -Version1 $ExampleWindowsModeVersion -Version2 $WizardWindowsmodeVersion) -eq 1) {
+            $rules = Get-CIPolicy -FilePath "$($Env:WINDIR)\schemas\CodeIntegrity\ExamplePolicies\DefaultWindows_Audit.xml"
+        } else {
+            $rules = Get-CIPolicy -FilePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml")
+        }
+    } elseif ($ExampleWindowsModeVersion) {
+        $rules = Get-CIPolicy -FilePath "$($Env:WINDIR)\schemas\CodeIntegrity\ExamplePolicies\DefaultWindows_Audit.xml"
+    } else {
+        $rules = Get-CIPolicy -FilePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml")
+    }
+
+    if ($DoNotCacheRecommended) {
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml") -Force -ErrorAction SilentlyContinue
+    }
+
+    return $rules
 }
 
 Export-ModuleMember -Function Get-DriverBlockRules, Get-UserModeBlockRules, Get-AllowMicrosoftModeRules, Get-WindowsModeRules

@@ -311,7 +311,7 @@ function New-WDACPolicy {
 
             if ($DriverBlockRules) {
             #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
-                PowerShell {
+                $DriverBlockRulesTask = PowerShell {
                     [CmdletBinding()]
                     Param(
                         $TempPolicyPath,
@@ -321,19 +321,31 @@ function New-WDACPolicy {
                         $IsVerbose
                     )
 
-                    Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1");
-                    $driverrules = Get-DriverBlockRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
-                    if ($DenyByDefaultPolicy) {
-                    #Remove the rule with the asterisk if it is a deny by default policy
-                        $driverrules = $driverrules | Where-Object {-not ($_.attributes["FileName"] -eq "*")}
+                    try {
+                        Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1") -ErrorAction Stop;
+                        $driverrules = Get-DriverBlockRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
+                        if ($DenyByDefaultPolicy) {
+                        #Remove the rule with the asterisk if it is a deny by default policy
+                            $driverrules = $driverrules | Where-Object {-not ($_.attributes["FileName"] -eq "*")}
+                        }
+                        Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $driverrules -ErrorAction Stop | Out-Null;
+                    } catch {
+                        Write-Error $_
+                        return $false
                     }
-                    Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $driverrules -ErrorAction Stop | Out-Null;
+                    
+                    return $true
+
                 } -args $TempPolicyPath,$PSModuleRoot,$DenyByDefaultPolicy,$DoNotCacheRecommended.ToBool(),$VerbosePreference
+
+                if (-not $DriverBlockRulesTask) {
+                    throw "Unable to merge with driver block rules. Error occurred."
+                }
             }
 
             if ($OtherBlockRules) {
             #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
-                PowerShell {
+                $UserModeBlockRulesTask = PowerShell {
                     [CmdletBinding()]
                     Param(
                         $TempPolicyPath,
@@ -343,22 +355,84 @@ function New-WDACPolicy {
                         $IsVerbose
                     )
                     
-                    Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1");
-                    $usermoderules = Get-UserModeBlockRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
-                    if ($DenyByDefaultPolicy) {
-                    #Remove the rule with the asterisk if it is a deny by default policy
-                        $usermoderules = $usermoderules | Where-Object {-not ($_.attributes["FileName"] -eq "*")}
+                    try {
+                        Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1") -ErrorAction Stop;
+                        $usermoderules = Get-UserModeBlockRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
+                        if ($DenyByDefaultPolicy) {
+                        #Remove the rule with the asterisk if it is a deny by default policy
+                            $usermoderules = $usermoderules | Where-Object {-not ($_.attributes["FileName"] -eq "*")}
+                        }
+                        Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $usermoderules -ErrorAction Stop | Out-Null;
+                    } catch {
+                        Write-Error $_
+                        return $false
                     }
-                    Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $usermoderules -ErrorAction Stop | Out-Null;
+                    
+                    return $true
+
                 } -args $TempPolicyPath,$PSModuleRoot,$DenyByDefaultPolicy,$DoNotCacheRecommended.ToBool(),$VerbosePreference
+
+                if (-not $UserModeBlockRulesTask) {
+                    throw "Unable to merge with user mode block rules. Error occurred."
+                }
             }
 
             if ($DefaultWindowsMode) {
-            #TODO
+            #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
+
+                $WindowsModeTask = PowerShell {
+                    [CmdletBinding()]
+                    Param(
+                        $TempPolicyPath,
+                        $PSModuleRoot,
+                        $DoNotCacheRecommended,
+                        $IsVerbose
+                    )
+                    try {
+                        Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1") -ErrorAction Stop;
+                        $rules = Get-WindowsModeRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
+                        Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $rules -ErrorAction Stop | Out-Null;
+                    } catch {
+                        Write-Error $_
+                        return $false
+                    }
+
+                    return $true
+
+                } -args $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference
+                if (-not $WindowsModeTask) {
+                    throw "Unable to merge with Default Windows Mode rules. Error occurred."
+                }
             }
 
             if ($AllowMicrosoftMode) {
-            #TODO
+            #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
+
+                $AddMicrosoftModeTask = PowerShell {
+                    [CmdletBinding()]
+                    Param(
+                        $TempPolicyPath,
+                        $PSModuleRoot,
+                        $DoNotCacheRecommended,
+                        $IsVerbose
+                    )
+
+                    try {
+                        Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1") -ErrorAction Stop;
+                        $rules = Get-AllowMicrosoftModeRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
+                        Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $rules -ErrorAction Stop | Out-Null;
+                    } catch {
+                        Write-Error $_
+                        return $false
+                    }
+
+                    return $true
+                    
+                } -args $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference
+
+                if (-not $AddMicrosoftModeTask) {
+                    throw "Unable to merge with Microsoft Mode rules. Error occurred."
+                }
             }
 
             #Add Code Signing / Policy Signing Rules: =====================================================================
