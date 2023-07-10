@@ -27,25 +27,31 @@ function New-WDACPolicy {
     Adds a new signer rule for the PowerShell code signing certificate to this new WDAC policy.
 
     .PARAMETER UpdatePolicySigner
-    Creates a new signer rule for updating this policy--using the WDAC policy code signing certificate (i.e., the WDACPolicySigningCertificate) obtained from LocalStorage.json
+    Creates a new signer rule for the WDAC Policy Signing certificate--for updating this policy--obtained from LocalStorage.json (i.e., the WDACPolicySigningCertificate)
 
     .PARAMETER SupplementalPolicySigner
-    Creates a new signer rule for adding signed supplemental policies--using the WDAC policy code signing certificate (i.e., the WDACPolicySigningCertificate) obtained from LocalStorage.json
+    Creates a new signer rule for the WDAC Policy Signing certificate--for signing a supplemental policy--obtained from LocalStorage.json (i.e., the WDACPolicySigningCertificate)
 
     .PARAMETER DoNotCacheRecommended
     When this is set, Microsoft's recommended policy rules will be purged (not stored locally after pulling from Github)
 
     .PARAMETER DenyByDefaultPolicy
+    This policy will deny apps by default.
 
     .PARAMETER AllowByDefaultPolicy
+    This policy will allow apps by default.
 
     .PARAMETER DriverBlockRules
+    When this is set, this policy will be merged with Microsoft's recommended driver block rules.
 
     .PARAMETER OtherBlockRules
+    When this is set, this policy will be merged with Microsoft's recommended user mode block rules.
 
     .PARAMETER DefaultWindowsMode
+    When this is set, the policy will be merged with the Default Windows Mode WDAC policy provided by Microsoft.
 
     .PARAMETER AllowMicrosoftMode
+    When this is set, the policy will be merged with the Allow Microsoft Mode WDAC policy provided by Microsoft.
 
     .PARAMETER Supplemental
 
@@ -126,6 +132,7 @@ function New-WDACPolicy {
         [ValidateScript({-not $DenyByDefaultPolicy}, ErrorMessage = "Cannot have both an allow-by-default and a deny-by-default policy.")]
         [switch]$AllowByDefaultPolicy,
         [switch]$DriverBlockRules,
+        [Alias("UserModeBlockRules")]
         [switch]$OtherBlockRules,
         [Alias("Windows")]
         [switch]$DefaultWindowsMode,
@@ -354,9 +361,23 @@ function New-WDACPolicy {
             #TODO
             }
 
-            #TODO: =====================================================================
-            #Add PS code signer and WDAC policy signer rules here
-            #===========================================================================
+            #Add Code Signing / Policy Signing Rules: =====================================================================
+            if ($AddPSCodeSigner) {
+                Export-CodeSignerAsCER -Destination (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -PSCodeSigner -ErrorAction Stop | Out-Null
+                Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer") -User -Kernel -ErrorAction Stop
+            }
+
+            if ($UpdatePolicySigner -or $SupplementalPolicySigner) {
+                Export-CodeSignerAsCER -Destination (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -WDACCodeSigner -ErrorAction Stop | Out-Null
+                if ($UpdatePolicySigner) {
+                    Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Update -ErrorAction Stop
+                } 
+                if ($SupplementalPolicySigner) {
+                    Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Supplemental -ErrorAction Stop
+                }
+            }
+            #==============================================================================================================
+
 
             #Apply Policy Options ======================================================
             #Case 0: 'Enabled:UMCI'
@@ -517,6 +538,16 @@ function New-WDACPolicy {
         if ($TempPolicyPath) {
             if (Test-Path $TempPolicyPath) {
                 Remove-Item $TempPolicyPath -Force
+            }
+        }
+
+        if ($PSModuleRoot) {
+            if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer")) {
+                Remove-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer") -Force
+            }
+    
+            if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer")) {
+                Remove-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Force
             }
         }
     }
