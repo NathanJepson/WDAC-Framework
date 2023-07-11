@@ -1,3 +1,14 @@
+function Test-InvalidValidFileNameChars {
+#Invalid characters: \ / : * ? " < > |
+[CmdletBinding()]
+param(
+    [ValidateNotNullOrEmpty()]
+    [Parameter(Mandatory=$true)]
+    [string]$FileChars
+)
+    return ($FileChars -match "(\\|\/|\:|\*|\?|\`"|\<|\>|\|)")
+}
+
 function New-WDACPolicy {
     <#
     .SYNOPSIS
@@ -186,6 +197,10 @@ function New-WDACPolicy {
             $PSModuleRoot = $PSScriptRoot
         }
 
+        if (Test-InvalidValidFileNameChars -FileChars $PolicyName) {
+            throw "The policy name contains invalid characters. Please use valid characters which are valid for file paths and file names."
+        }
+
         if ($Supplemental -and ($DenyByDefaultPolicy -or $AllowByDefaultPolicy)) {
             throw "Error: Allow-by-default or deny-by-default is inherited from the base policy when -supplemental is set."
         }
@@ -282,6 +297,11 @@ function New-WDACPolicy {
             if (Find-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop) {
                 Write-Error "A policy with the name $PolicyName already exists."
                 return;
+            }
+            if ($OtherPolicyID) {
+                if (Find-WDACPolicyByID -PolicyID $OtherPolicyID) {
+                    Write-Warning "Warning: Other policy with instance of ID $OtherPolicyID already exists in the database."
+                }
             }
         } catch {
             Write-Verbose $_
