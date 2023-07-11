@@ -300,7 +300,7 @@ function New-WDACPolicy {
             }
             if ($OtherPolicyID) {
                 if (Find-WDACPolicyByID -PolicyID $OtherPolicyID) {
-                    Write-Warning "Warning: Other policy with instance of ID $OtherPolicyID already exists in the database."
+                    Write-Warning "Other policy with instance of ID $OtherPolicyID already exists in the database."
                 }
             }
         } catch {
