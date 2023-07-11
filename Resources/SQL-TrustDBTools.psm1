@@ -574,7 +574,7 @@ function Add-WDACPolicy {
         $PolicyHash,
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
-        $PolicyName,
+        [string]$PolicyName,
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         $PolicyVersion,

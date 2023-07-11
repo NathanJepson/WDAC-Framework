@@ -118,6 +118,7 @@ function New-WDACPolicy {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyName,
+        [string]$PolicyID,
         [string]$FilePath,
         [string]$BasePolicyID,
         [switch]$AddPSCodeSigner,
@@ -223,6 +224,12 @@ function New-WDACPolicy {
                 throw "-UpdatePolicySigner and -SupplementalPolicySigner are only valid options for a signed policy (i.e., the -Signed flag is set.)"
             }
         }
+
+        #This is the optional non-GUID Policy ID which the user can supply
+        $OtherPolicyID = $null
+        if ($PolicyID) {
+            $OtherPolicyID = $PolicyID
+        }
     }
 
     process {
@@ -304,6 +311,9 @@ function New-WDACPolicy {
                         throw "Error: Supplemental flag is set but base policy ID and PolicyID are identical."
                     }
                 }
+
+                Set-CIPolicyIdInfo -FilePath $TempPolicyPath -PolicyName $PolicyName -ErrorAction Stop
+
             } elseif ($Supplemental) {
                 Copy-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\SupplementalShell.xml") -Destination $TempPolicyPath -Force
             } elseif ($AllowByDefaultPolicy) {
@@ -319,6 +329,10 @@ function New-WDACPolicy {
                 } else {
                     $PolicyID = Set-CIPolicyIdInfo -FilePath $TempPolicyPath -ResetPolicyID -PolicyName $PolicyName -ErrorAction Stop
                 }
+            }
+
+            if ($OtherPolicyID) {
+                Set-CIPolicyIdInfo -FilePath $TempPolicyPath -PolicyId $OtherPolicyID
             }
 
             if ($DriverBlockRules) {
@@ -602,12 +616,12 @@ function New-WDACPolicy {
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $Transaction = $Connection.BeginTransaction()
             if (-not $FilePath) {
-                if (-not (Add-WDACPolicy -PolicyGUID $PolicyID.Substring(11) -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                if (-not (Add-WDACPolicy -PolicyGUID $PolicyID.Substring(11) -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
                     throw "Failed to add this policy to the database."
                 }    
             } else {
             #No need to cut off 11 characters if the policy ID was provided from a file
-                if (-not (Add-WDACPolicy -PolicyGUID $PolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                if (-not (Add-WDACPolicy -PolicyGUID $PolicyID -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
                     throw "Failed to add this policy to the database."
                 }    
             }
