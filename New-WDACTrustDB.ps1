@@ -1,4 +1,4 @@
-function Add-WDACTrustDB {
+function New-WDACTrustDB {
     <#
     .SYNOPSIS
     Creates a new WDAC trust database (storing audit events, trusted files, and groups / devices)

@@ -61,7 +61,7 @@
     FunctionsToExport = 'Set-ValueLocalStorageJSON',
                         'Reset-TestStorage',
                         'Set-SignedPowerShellModules',
-                        'Add-WDACTrustDB',
+                        'New-WDACTrustDB',
                         'Get-WDACApplockerScriptMsiEvent',
                         'Get-WDACCodeIntegrityEvent',
                         'Get-WDACEvents',
