@@ -162,7 +162,6 @@ function New-WDACTrustDB {
 
     CREATE TABLE file_publishers (
         PublisherIndex Integer NOT NULL,
-        AppIndex Integer NOT NULL,
         Trusted Integer DEFAULT 0 NOT NULL,
         TrustedDriver Integer DEFAULT 0 NOT NULL,
         TrustedUserMode Integer DEFAULT 0 NOT NULL,
@@ -173,10 +172,10 @@ function New-WDACTrustDB {
         AllowedPolicyID Text,
         Comment Text,
         BlockingPolicyID Text,
-        MinimumAllowedVersion Text,
+        MinimumAllowedVersion Text NOT NULL,
         MaximumAllowedVersion Text,
         OriginalFileName Text NOT NULL,
-        PRIMARY KEY(PublisherIndex,AppIndex),
+        PRIMARY KEY(PublisherIndex,OriginalFileName,MinimumAllowedVersion),
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE CASCADE
