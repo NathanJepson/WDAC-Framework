@@ -169,8 +169,8 @@ function Add-WDACTrustDB {
         BlockingPolicyID Text,
         MinimumAllowedVersion Text,
         MaximumAllowedVersion Text,
+        OriginalFileName Text NOT NULL,
         PRIMARY KEY(PublisherIndex,AppIndex),
-        FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE RESTRICT,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE CASCADE
