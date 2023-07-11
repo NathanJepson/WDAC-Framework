@@ -116,13 +116,13 @@ function New-WDACPolicy {
     .PARAMETER TreatRevokedAsUnsigned
 
     .EXAMPLE
-    ()
+    New-WDACPolicy -Deny -PolicyName "CashiersBottomFloor2" -PolicyID "CodeInteg12" -DriverBlockRules -OtherBlockRules -Signed -Enforce -AddPSCodeSigner -UpdatePolicySigner -SupplementalPolicySigner -DynamicCodeSecurity -DisableRuntimeFilepathRules -HVCI -BootMenuProtection -AllowSupplementalPolicies -Verbose
 
     .EXAMPLE
-    ()
+    New-WDACPolicy -Allow -PolicyName "Cashiers" -Supplemental -BasePolicyID "{A244370E-44C9-4C06-B551-F6016E563076}" -Windows -Audit -Unsigned -DynamicCodeSecurity -DisableRuntimeFilepathRules -HVCI -DoNotCacheRecommended -BootMenuProtection -BootAuditOnFailure -AdvancedBootOptionsMenu -ISG
 
     .EXAMPLE
-    ()
+    New-WDACPolicy -FilePath "C:\Users\JohnSmith\WDAC Policies\AlreadyExistingPolicy.XML" -Deny -PolicyName "Support Staff" -Microsoft -Enforced -Signed -HVCI -ISG -BootMenuProtection -BootAuditOnFailure -AdvancedBootOptionsMenu -UpdatePolicyNoReboot
     #>
 
     [CmdletBinding()]
