@@ -239,6 +239,7 @@ function Add-WDACTrustDB {
         BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
         IsSigned Integer DEFAULT 0 NOT NULL,
         AuditMode Integer DEFAULT 1 NOT NULL,
+        IsPillar Integer DEFAULT 0 NOT NULL,
         OriginLocation Text NOT NULL,
         OriginLocationType Text NOT NULL,
         PRIMARY KEY(DeferredPoliciesIndex)
