@@ -17,6 +17,9 @@ function New-WDACPolicy {
     .PARAMETER PolicyName
     Specify the name of the policy as a string. (Required.) You must use valid characters which can be part of a file path / file name.
 
+    .PARAMETER PolicyID
+    This is an optional way to set the non-GUID Policy ID.
+
     .PARAMETER FilePath
     If you have already created the WDAC policy XML file and just want to set some options, specify its filepath with this.
 
