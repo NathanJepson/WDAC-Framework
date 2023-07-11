@@ -291,7 +291,19 @@ function New-WDACPolicy {
 
         try {
             if ($FilePath) {
-                Copy-Item $FilePath -Destination $TempPolicyPath -Force
+                Copy-Item $FilePath -Destination $TempPolicyPath -Force -ErrorAction Stop
+                [xml]$TempXML = Get-Content -Path $TempPolicyPath
+                $PolicyID = $TempXML.SiPolicy.PolicyID
+                $BasePolicyID = $TempXML.SiPolicy.BasePolicyID
+                if (-not $PolicyID -or -not $BasePolicyID) {
+                    throw "No valid PolicyID or BasePolicyID was found in the provided file."
+                } 
+
+                if ($Supplemental) {
+                    if ($PolicyID -eq $BasePolicyID) {
+                        throw "Error: Supplemental flag is set but base policy ID and PolicyID are identical."
+                    }
+                }
             } elseif ($Supplemental) {
                 Copy-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\SupplementalShell.xml") -Destination $TempPolicyPath -Force
             } elseif ($AllowByDefaultPolicy) {
@@ -589,10 +601,17 @@ function New-WDACPolicy {
 
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $Transaction = $Connection.BeginTransaction()
-            if (-not (Add-WDACPolicy -PolicyGUID $PolicyID.Substring(11) -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
-                throw "Failed to add this policy to the database."
+            if (-not $FilePath) {
+                if (-not (Add-WDACPolicy -PolicyGUID $PolicyID.Substring(11) -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                    throw "Failed to add this policy to the database."
+                }    
+            } else {
+            #No need to cut off 11 characters if the policy ID was provided from a file
+                if (-not (Add-WDACPolicy -PolicyGUID $PolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                    throw "Failed to add this policy to the database."
+                }    
             }
-            
+
             #======================================================================
 
         } catch {
