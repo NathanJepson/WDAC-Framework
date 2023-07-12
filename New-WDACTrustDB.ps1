@@ -136,6 +136,16 @@ function New-WDACTrustDB {
         ParentCertTBSHash Text,
         NotValidBefore Text,
         NotValidAfter Text,
+        Trusted Integer DEFAULT 0 NOT NULL,
+        TrustedDriver Integer DEFAULT 0 NOT NULL,
+        TrustedUserMode Integer DEFAULT 0 NOT NULL,
+        Staged Integer DEFAULT 0 NOT NULL,
+        Revoked Integer DEFAULT 0 NOT NULL,
+        Deferred Integer DEFAULT 0 NOT NULL,
+        Blocked Integer DEFAULT 0 NOT NULL,
+        AllowedPolicyID Text,
+        Comment Text,
+        BlockingPolicyID Text,
         FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE SET NULL
     );
     
