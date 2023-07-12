@@ -227,7 +227,153 @@ function Find-WDACApp {
 }
 
 function Get-WDACApp {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
 
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from apps WHERE SHA256FlatHash = @FlatHash"
+        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $Result = [PSCustomObject]@{
+                    SHA256FlatHash = $Reader["SHA256FlatHash"];
+                    FileName = $Reader["FileName"];
+                    TimeDetected = $Reader["TimeDetected"];
+                    FirstDetectedPath = $Reader["FirstDetectedPath"];
+                    FirstDetectedUser = $Reader["FirstDetectedUser"];
+                    FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
+                    FirstDetectedProcessName = $Reader["FirstDetectedProcessName"];
+                    SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                    OriginDevice  = $Reader["OriginDevice"];
+                    EventType = $Reader["EventType"];
+                    SigningScenario = $Reader["SigningScenario"];
+                    OriginalFileName = $Reader["OriginalFileName"];
+                    FileVersion = $Reader["FileVersion"];
+                    InternalName = $Reader["InternalName"];
+                    FileDescription  = $Reader["FileDescription"];
+                    ProductName = $Reader["ProductName"];
+                    PackageFamilyName = $Reader["PackageFamilyName"];
+                    UserWriteable = [bool]($Reader["UserWriteable"]);
+                    FailedWHQL = [bool]($Reader["FailedWHQL"]);
+                    Trusted = [bool]($Reader["Trusted"]);
+                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
+                    TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
+                    Staged = [bool]($Reader["Staged"]);
+                    Revoked = [bool]($Reader["Revoked"]);
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                    AllowedPolicyID = $Reader["AllowedPolicyID"];
+                    DeferredPolicyIndex = ($Reader["DeferredPolicyIndex"]);
+                    Comment = $Reader["Comment"];
+                    AppIndex = ($Reader["AppIndex"]);
+                    RequestedSigningLevel = $Reader["RequestedSigningLevel"];
+                    ValidatedSigningLevel = $Reader["ValidatedSigningLevel"]
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        Write-Error $_ #FIXME
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $_
+    }
+}
+
+function Get-WDACAppSigners {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$AppIndex,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from signers WHERE AppIndex = @AppIndex"
+        $Command.Parameters.AddWithValue("AppIndex",$AppIndex) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    AppIndex = [int]($Reader["AppIndex"]);
+                    SignatureIndex = [int]($Reader["SignatureIndex"]);
+                    CertificateTBSHash = $Reader["CertificateTBSHash"];
+                    SignatureType = $Reader["SignatureType"];
+                    PageHash = $Reader["PageHash"];
+                    Flags = $Reader["Flags"];
+                    PolicyBits = $Reader["PolicyBits"];
+                    ValidatedSigningLevel = $Reader["ValidatedSigningLevel"];
+                    VerificationError = $Reader["VerificationError"]
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Get-WDACAppSignersByFlatHash {
+    [cmdletbinding()]
+    param(
+        [string]$SHA256FlatHash
+    )
 }
 
 function Add-WDACApp {
@@ -673,3 +819,14 @@ function Add-WDACPolicy {
         throw $_
     }
 }
+
+function Add-WDACPublisher {
+    [cmdletbinding()]
+    param ()
+}
+
+function Add-WDACFilePublisher {
+    [cmdletbinding()]
+    param ()
+}
+
