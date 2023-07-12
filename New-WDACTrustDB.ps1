@@ -82,10 +82,12 @@ function New-WDACTrustDB {
         Blocked Integer DEFAULT 0 NOT NULL,
         BlockingPolicyID Text NOT NULL,
         AllowedPolicyID Text,
+        DeferredPolicyIndex Integer,
         Comment Text,
         AppIndex Integer UNIQUE NOT NULL,
         RequestedSigningLevel Text,
         ValidatedSigningLevel Text,
+        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
 
@@ -102,13 +104,17 @@ function New-WDACTrustDB {
         EventType Text,
         AppIndex Integer UNIQUE NOT NULL,
         Trusted Integer DEFAULT 0 NOT NULL,
+        TrustedDriver Integer DEFAULT 0 NOT NULL,
+        TrustedUserMode Integer DEFAULT 0 NOT NULL,
         Staged Integer DEFAULT 0 NOT NULL,
         Revoked Integer DEFAULT 0 NOT NULL,
         Deferred Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
         BlockingPolicyID Text NOT NULL,
         AllowedPolicyID Text,
+        DeferredPolicyIndex Integer,
         Comment Text,
+        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
@@ -144,8 +150,10 @@ function New-WDACTrustDB {
         Deferred Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
         AllowedPolicyID Text,
+        DeferredPolicyIndex Integer,
         Comment Text,
         BlockingPolicyID Text,
+        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE SET NULL
     );
     
@@ -161,11 +169,13 @@ function New-WDACTrustDB {
         Blocked Integer DEFAULT 0 NOT NULL,
         PublisherTBSHash Text NOT NULL,
         AllowedPolicyID Text,
+        DeferredPolicyIndex Integer,
         Comment Text,
         BlockingPolicyID Text,
         PublisherIndex Integer UNIQUE NOT NULL,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(PcaCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE CASCADE,
         PRIMARY KEY(PcaCertTBSHash,LeafCertCN)
     );
@@ -180,6 +190,7 @@ function New-WDACTrustDB {
         Deferred Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
         AllowedPolicyID Text,
+        DeferredPolicyIndex Integer,
         Comment Text,
         BlockingPolicyID Text,
         MinimumAllowedVersion Text NOT NULL,
@@ -188,6 +199,7 @@ function New-WDACTrustDB {
         PRIMARY KEY(PublisherIndex,OriginalFileName,MinimumAllowedVersion),
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE CASCADE
     );
     
@@ -239,13 +251,13 @@ function New-WDACTrustDB {
         DeviceName Text PRIMARY KEY,
         AllowedGroup Text,
         UpdateDeferring Integer DEFAULT 0,
-        DeferredPoliciesIndex Integer,
+        DeferredPolicyIndex Integer,
         FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
-        FOREIGN KEY(DeferredPoliciesIndex) REFERENCES deferred_policies(DeferredPoliciesIndex) ON DELETE RESTRICT
+        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT
     );
 
     CREATE TABLE deferred_policies (
-        DeferredPoliciesIndex Integer,
+        DeferredPolicyIndex Integer PRIMARY KEY,
         DeferredDevicePolicyGUID Text,
         PolicyName Text NOT NULL,
         PolicyID Text,
@@ -256,8 +268,7 @@ function New-WDACTrustDB {
         AuditMode Integer DEFAULT 1 NOT NULL,
         IsPillar Integer DEFAULT 0 NOT NULL,
         OriginLocation Text NOT NULL,
-        OriginLocationType Text NOT NULL,
-        PRIMARY KEY(DeferredPoliciesIndex)
+        OriginLocationType Text NOT NULL
     );
 '@    
     $Database = Join-Path -Path $Destination -ChildPath $DBName
