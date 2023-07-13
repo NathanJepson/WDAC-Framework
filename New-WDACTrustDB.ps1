@@ -153,6 +153,8 @@ function New-WDACTrustDB {
         DeferredPolicyIndex Integer,
         Comment Text,
         BlockingPolicyID Text,
+        FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(ParentCertTBSHash) REFERENCES certificates(TBSHash) ON DELETE SET NULL
     );
@@ -195,8 +197,9 @@ function New-WDACTrustDB {
         BlockingPolicyID Text,
         MinimumAllowedVersion Text NOT NULL,
         MaximumAllowedVersion Text,
-        OriginalFileName Text NOT NULL,
-        PRIMARY KEY(PublisherIndex,OriginalFileName,MinimumAllowedVersion),
+        FileName Text NOT NULL,
+        SpecificFileNameLevel Text,
+        PRIMARY KEY(PublisherIndex,FileName,MinimumAllowedVersion),
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,

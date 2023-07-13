@@ -34,6 +34,8 @@
         "PowerShellCodeSigningCertificate" : "",
         "_PSCodeSigningCertExample" : "Cert:\\CurrentUser\\My\\27018D517AAA57E94D10075C084C0DEA13E793EB",
         "WDACPolicySigningCertificate" : "",
-        "_WDACSigningCertExample" : "Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3"
+        "_WDACSigningCertExample" : "Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3",
+        "PreferredOrganizationRuleLevel" : "",
+        "PreferredOrganizationRuleFallbacks" : []
     }
 ]

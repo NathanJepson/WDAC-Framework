@@ -9,6 +9,12 @@ param(
     return ($FileChars -match "(\\|\/|\:|\*|\?|\`"|\<|\>|\|)")
 }
 
+function Remove-CurlyBracesPolicyID {
+    [CmdletBinding()]
+    param()
+    #TODO
+}
+
 function New-WDACPolicy {
     <#
     .SYNOPSIS
@@ -132,8 +138,11 @@ function New-WDACPolicy {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyName,
+        [ValidateNotNullOrEmpty()]
         [string]$PolicyID,
+        [ValidateNotNullOrEmpty()]
         [string]$FilePath,
+        [ValidateNotNullOrEmpty()]
         [string]$BasePolicyID,
         [switch]$AddPSCodeSigner,
         [switch]$UpdatePolicySigner,

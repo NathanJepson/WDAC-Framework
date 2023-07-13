@@ -73,6 +73,37 @@ function New-SqliteConnection {
     }
 }
 
+function Compare-Versions {
+#Source: https://www.geeksforgeeks.org/compare-two-version-numbers/
+    Param(
+        $Version1,
+        $Version2
+    )
+    $vnum1,$vnum2 = 0;
+
+    for ($i=$j=0; $i -lt $Version1.Length -or $j -lt $Version2.Length;) {
+        while ($i -lt ($version1.Length) -and ($Version1[$i] -ne ".")) {
+            $vnum1 = ($vnum1 * 10) + [int]($Version1[$i]);
+            $i++;
+        }
+        while ($j -lt ($Version2.Length) -and ($Version2[$j] -ne ".")) {
+            $vnum2 = ($vnum2 * 10) + [int]($Version2[$j]);
+            $j++;
+        }
+
+        if ($vnum1 -gt $vnum2) {
+            return 1; #Version1 is bigger
+        } 
+        if ($vnum2 -gt $vnum1) {
+            return -1; #Version2 is bigger
+        }
+        $vnum1,$vnum2 = 0; 
+        $i++;
+        $j++
+    }
+    return 0; #They are the same version number
+}
+
 function Find-WDACGroup {
     [cmdletbinding()]
     Param ( 
@@ -103,7 +134,6 @@ function Find-WDACGroup {
         throw $_
     }
 }
-
 
 function New-WDACGroup_SQL {
     [cmdletbinding()]
@@ -179,7 +209,6 @@ function Get-MAXAppIndexID {
         throw $_
     }
 }
-
 
 function Find-WDACApp {
     [cmdletbinding()]
@@ -297,14 +326,14 @@ function Get-WDACApp {
         }
         return $result
     } catch {
-        Write-Error $_ #FIXME
+        $theError = $_
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
         if ($Reader) {
             $Reader.Close()
         }
-        throw $_
+        throw $theError
     }
 }
 
@@ -374,6 +403,56 @@ function Get-WDACAppSignersByFlatHash {
     param(
         [string]$SHA256FlatHash
     )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "SELECT * From signers WHERE AppIndex = (SELECT AppIndex from apps WHERE SHA256FlatHash = @SHA256FlatHash);"
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    AppIndex = [int]($Reader["AppIndex"]);
+                    SignatureIndex = [int]($Reader["SignatureIndex"]);
+                    CertificateTBSHash = $Reader["CertificateTBSHash"];
+                    SignatureType = $Reader["SignatureType"];
+                    PageHash = $Reader["PageHash"];
+                    Flags = $Reader["Flags"];
+                    PolicyBits = $Reader["PolicyBits"];
+                    ValidatedSigningLevel = $Reader["ValidatedSigningLevel"];
+                    VerificationError = $Reader["VerificationError"]
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
 }
 
 function Add-WDACApp {
@@ -465,6 +544,7 @@ function Add-WDACApp {
             $Connection.close()
         }
     } catch {
+        $theError = $_
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
@@ -472,10 +552,9 @@ function Add-WDACApp {
         # if ($Transaction) {
         #     $Transaction.Rollback()
         # }
-        throw $_
+        throw $theError
     }
 }
-
 
 function Find-WDACCertificate {
     [cmdletbinding()]
@@ -512,13 +591,85 @@ function Find-WDACCertificate {
         }
         return $result
     } catch {
+        $theError = $_
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
         if ($Reader) {
             $Reader.Close()
         }
-        throw $_
+        throw $theError
+    }
+}
+
+function Get-WDACCertificate {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from certificates WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+   
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result += [PSCustomObject]@{
+                    TBSHash = $Reader["TBSHash"];
+                    CommonName = $Reader["CommonName"];
+                    IsLeaf = [bool]($Reader["IsLeaf"]);
+                    ParentCertTBSHash = $Reader["ParentCertTBSHash"];
+                    NotValidBefore = $Reader["NotValidBefore"];
+                    NotValidAfter = $Reader["NotValidAfter"];
+                    Untrusted = [bool]($Reader["Untrusted"]);
+                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
+                    TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
+                    Staged = [bool]($Reader["Staged"]);
+                    Revoked = [bool]($Reader["Revoked"]);
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    AllowedPolicyID = $Reader["AllowedPolicyID"];
+                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
+                    Comment = $Reader["Comment"];
+                    BlockingPolicyID = $Reader["BlockingPolicyID"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
     }
 }
 
@@ -619,6 +770,7 @@ function Add-WDACAppSigner {
         throw $_
     }
 }
+
 function Find-WDACPolicy {
     [cmdletbinding()]
     Param ( 
@@ -663,7 +815,6 @@ function Find-WDACPolicy {
         throw $_
     }
 }
-
 
 function Find-WDACPolicyByName {
     [cmdletbinding()]
@@ -812,21 +963,482 @@ function Add-WDACPolicy {
             $Connection.close()
         }
     } catch {
+        $theError = $_
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
 
-        throw $_
+        throw $theError
+    }
+}
+
+function Get-WDACPublisher {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$LeafCertCN,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PcaCertTBSHash,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from publishers WHERE LeafCertCN = @LeafCertCN AND PcaCertTBSHash = @PcaCertTBSHash"
+        $Command.Parameters.AddWithValue("LeafCertCN",$LeafCertCN) | Out-Null
+        $Command.Parameters.AddWithValue("PcaCertTBSHash",$PcaCertTBSHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+   
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [PSCustomObject]@{
+                    LeafCertCN = $Reader["LeafCertCN"];
+                    PcaCertTBSHash = $Reader["PcaCertTBSHash"];
+                    Untrusted = [bool]($Reader["Untrusted"]);
+                    TrustedDriver = [bool]$Reader["TrustedDriver"];
+                    TrustedUserMode = [bool]$Reader["TrustedUserMode"];
+                    Staged = [bool]$Reader["Staged"];
+                    Revoked = [bool]($Reader["Revoked"]);
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    PublisherTBSHash = $Reader["PublisherTBSHash"];
+                    AllowedPolicyID = $Reader["AllowedPolicyID"];
+                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
+                    Comment = $Reader["Comment"];
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                    PublisherIndex = $Reader["PublisherIndex"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Get-WDACPublisherByPublisherIndex {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$PublisherIndex,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from publishers WHERE PublisherIndex = @PublisherIndex"
+        $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+   
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [PSCustomObject]@{
+                    LeafCertCN = $Reader["LeafCertCN"];
+                    PcaCertTBSHash = $Reader["PcaCertTBSHash"];
+                    Untrusted = [bool]($Reader["Untrusted"]);
+                    TrustedDriver = [bool]$Reader["TrustedDriver"];
+                    TrustedUserMode = [bool]$Reader["TrustedUserMode"];
+                    Staged = [bool]$Reader["Staged"];
+                    Revoked = [bool]($Reader["Revoked"]);
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    PublisherTBSHash = $Reader["PublisherTBSHash"];
+                    AllowedPolicyID = $Reader["AllowedPolicyID"];
+                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
+                    Comment = $Reader["Comment"];
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                    PublisherIndex = $Reader["PublisherIndex"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
     }
 }
 
 function Add-WDACPublisher {
     [cmdletbinding()]
-    param ()
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$LeafCertCN,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PcaCertTBSHash,
+        [bool]$Untrusted = $false,
+        [bool]$TrustedDriver = $false,
+        [bool]$TrustedUserMode = $false,
+        [bool]$Staged = $false,
+        [bool]$Revoked = $false,
+        [bool]$Deferred = $false,
+        [bool]$Blocked = $false,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PublisherTBSHash,
+        $AllowedPolicyID,
+        $DeferredPolicyIndex,
+        $Comment,
+        $BlockingPolicyID,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "INSERT INTO publishers (LeafCertCN,PcaCertTBSHash,Untrusted,TrustedDriver,TrustedUserMode,Staged,Revoked,Deferred,Blocked,PublisherTBSHash,AllowedPolicyID,DeferredPolicyIndex,Comment,BlockingPolicyID,PublisherIndex) values (@LeafCertCN,@PcaCertTBSHash,@Untrusted,@TrustedDriver,@TrustedUserMode,@Staged,@Revoked,@Deferred,@Blocked,@PublisherTBSHash,@AllowedPolicyID,@DeferredPolicyIndex,@Comment,@BlockingPolicyID,(SELECT IFNULL(Max(PublisherIndex), 0) + 1 FROM publishers))"
+            $Command.Parameters.AddWithValue("LeafCertCN",$LeafCertCN) | Out-Null
+            $Command.Parameters.AddWithValue("PcaCertTBSHash",$PcaCertTBSHash) | Out-Null
+            $Command.Parameters.AddWithValue("Untrusted",$Untrusted) | Out-Null
+            $Command.Parameters.AddWithValue("TrustedDriver",$TrustedDriver) | Out-Null
+            $Command.Parameters.AddWithValue("TrustedUserMode",$TrustedUserMode) | Out-Null
+            $Command.Parameters.AddWithValue("Staged",$Staged) | Out-Null
+            $Command.Parameters.AddWithValue("Revoked",$Revoked) | Out-Null
+            $Command.Parameters.AddWithValue("Deferred",$Deferred) | Out-Null
+            $Command.Parameters.AddWithValue("Blocked",$Blocked) | Out-Null
+            $Command.Parameters.AddWithValue("PublisherTBSHash",$PublisherTBSHash) | Out-Null
+            $Command.Parameters.AddWithValue("AllowedPolicyID",$AllowedPolicyID) | Out-Null
+            $Command.Parameters.AddWithValue("DeferredPolicyIndex",$DeferredPolicyIndex) | Out-Null
+            $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+            $Command.Parameters.AddWithValue("BlockingPolicyID",$BlockingPolicyID) | Out-Null
+            
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Get-WDACFilePublishers {
+#Gets Multiple File Publishers!
+#TODO: Add the [string]$SpecificFileNameLevel parameter and implement its usage
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PublisherIndex,
+        $FileName,
+        $MinimumAllowedVersion,
+        $MaximumAllowedVersion,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        if ($FileName) {
+            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+            $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex"
+        }
+        $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                
+                $VersionNumMin = $Reader["MinimumAllowedVersion"];
+                $VersionNumMinTmp = $VersionNumMin
+                $VersionNumMax = $Reader["MaximumAllowedVersion"];
+                $VersionNumMaxTmp = $VersionNumMax
+                if (-not $VersionNumMin) {
+                    $VersionNumMin = "0.0.0.0"
+                }
+                if (-not $VersionNumMax) {
+                    $VersionNumMax = "65535.65535.65535.65535"
+                }
+
+                if ($MinimumAllowedVersion) {
+                    if ((Compare-Versions -Version1 $VersionNumMax -Version2 $MinimumAllowedVersion) -eq -1) {
+                        continue;
+                    }
+                    if ((Compare-Versions -Version1 $MinimumAllowedVersion -Version2 $VersionNumMin) -eq 1) {
+                        continue;
+                    }
+                } 
+                if ($MaximumAllowedVersion) {
+                    if ((Compare-Versions -Version1 $VersionNumMin -Version2 $MaximumAllowedVersion) -eq 1) {
+                        continue;
+                    }
+                    if ((Compare-Versions -Version1 $MaximumAllowedVersion -Version2 $VersionNumMax) -eq -1) {
+                        continue;
+                    }  
+                }
+
+                $result += [PSCustomObject]@{
+                    PublisherIndex = $Reader["PublisherIndex"];
+                    Untrusted = [bool]$Reader["Untrusted"];
+                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
+                    TrustedUserMode = [bool]$Reader["TrustedUserMode"];
+                    Staged = [bool]$Reader["Staged"];
+                    Revoked = [bool]$Reader["Revoked"];
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    AllowedPolicyID = ($Reader["AllowedPolicyID"]);
+                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
+                    Comment = $Reader["Comment"];
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                    MinimumAllowedVersion = $VersionNumMinTmp;
+                    MaximumAllowedVersion = $VersionNumMaxTmp;
+                    FileName = $Reader["FileName"];
+                    SpecificFileNameLevel = $Reader["SpecificFileNameLevel"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
 }
 
 function Add-WDACFilePublisher {
     [cmdletbinding()]
-    param ()
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PublisherIndex,
+        [bool]$Untrusted = $false,
+        [bool]$TrustedDriver = $false,
+        [bool]$TrustedUserMode = $false,
+        [bool]$Staged = $false,
+        [bool]$Revoked = $false,
+        [bool]$Deferred = $false,
+        [bool]$Blocked = $false,
+        $AllowedPolicyID,
+        [ValidateNotNullOrEmpty()]
+        [int]$DeferredPolicyIndex,
+        $Comment,
+        $BlockingPolicyID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$MinimumAllowedVersion,
+        $MaximumAllowedVersion,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FileName,
+        $SpecificFileNameLevel,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "INSERT INTO file_publishers (PublisherIndex,Untrusted,TrustedDriver,TrustedUserMode,Staged,Revoked,Deferred,Blocked,AllowedPolicyID,DeferredPolicyIndex,Comment,BlockingPolicyID,MinimumAllowedVersion,MaximumAllowedVersion,FileName,SpecificFileNameLevel) values (@PublisherIndex,@Untrusted,@TrustedDriver,@TrustedUserMode,@Staged,@Revoked,@Deferred,@Blocked,@AllowedPolicyID,@DeferredPolicyIndex,@Comment,@BlockingPolicyID,@MinimumAllowedVersion,@MaximumAllowedVersion,@FileName,@SpecificFileNameLevel)"
+            $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+            $Command.Parameters.AddWithValue("Untrusted",$Untrusted) | Out-Null
+            $Command.Parameters.AddWithValue("TrustedDriver",$TrustedDriver) | Out-Null
+            $Command.Parameters.AddWithValue("TrustedUserMode",$TrustedUserMode) | Out-Null
+            $Command.Parameters.AddWithValue("Staged",$Staged) | Out-Null
+            $Command.Parameters.AddWithValue("Revoked",$Revoked) | Out-Null
+            $Command.Parameters.AddWithValue("Deferred",$Deferred) | Out-Null
+            $Command.Parameters.AddWithValue("Blocked",$Blocked) | Out-Null
+            $Command.Parameters.AddWithValue("AllowedPolicyID",$AllowedPolicyID) | Out-Null
+            $Command.Parameters.AddWithValue("DeferredPolicyIndex",$DeferredPolicyIndex) | Out-Null
+            $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+            $Command.Parameters.AddWithValue("BlockingPolicyID",$BlockingPolicyID) | Out-Null
+            $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
+            $Command.Parameters.AddWithValue("MaximumAllowedVersion",$MaximumAllowedVersion) | Out-Null
+            $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
+            
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+
 }
 
+function Expand-WDACApp {
+#NOTE: This function also adds publishers and file publishers to the database!
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [string]$Level,
+        [ValidateNotNullOrEmpty()]
+        [string[]]$Fallbacks,
+        [ValidateNotNullOrEmpty()]
+        [string]$MinimumAllowedVersion,
+        [ValidateNotNullOrEmpty()]
+        [string]$MaximumAllowedVersion,
+        [ValidateNotNullOrEmpty()]
+        [string]$FileName,
+        [ValidateNotNullOrEmpty()]
+        [string]$SpecificFileNameLevel
+    )
+
+    try {
+        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        if (-not $Signers) {
+            return $null
+        }
+    
+        if (-not $Level) {
+            $Levels = @("Publisher", "FilePublisher", "LeafCertificate", "PcaCertificate")
+        } else {
+            $Levels = @()
+            $Levels += $Level
+            if ($Fallbacks) {
+                foreach ($Fallback in $Fallbacks) {
+                    $Levels += $Fallback
+                }
+            }
+        }
+        
+        $Result = [PSCustomObject]@{}
+        foreach ($LevelType in $Levels) {
+            $Result | Add-Member -Type NoteProperty -Name $LevelType -Value $null
+        }
+        $Publishers = @()
+        $FilePublishers = @()
+        $LeafCertificates = @()
+        $PcaCertificates = @()
+    
+        foreach ($Signer in $Signers) {
+            $LeafCertTBSHash = $Signer.CertificateTBSHash
+            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -ErrorAction Stop
+            $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
+            $LeafCertificates += $LeafCert
+            $PcaCertificates += $PcaCert
+    
+            $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+            if (-not $Publisher) {
+                if (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop) {
+                    $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                } else {
+                    throw "Trouble adding a publisher to the database."
+                }
+            }
+            $Publishers += $Publisher
+            $FilePublishers2 = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName:$FileName -MinimumAllowedVersion:$MinimumAllowedVersion -MaximumAllowedVersion:$MaximumAllowedVersion -ErrorAction Stop
+            #TODO: Allow for a flag that adds file publishers to the database based on most lowest version number -- but only if the user desires
+            #TODO: Implement usage of [string]$SpecificFileNameLevel parameter
+            if ($FilePublishers2) {
+                $FilePublishers += $FilePublishers2
+            }
+        }
+
+        foreach ($LevelType in $Levels) {
+            if ($LevelType -eq "Publisher") {
+                $Result.Publisher = $Publishers
+            } elseif ($LevelType -eq "FilePublisher") {
+                $Result.FilePublisher = $FilePublishers
+            } elseif ($LevelType -eq "LeafCertificate") {
+                $Result.LeafCertificate = $LeafCertificates
+            } elseif ($LevelType -eq "PcaCertificate") {
+                $Result.PcaCertificate = $PcaCertificates
+            }
+        }
+        
+        return $Result
+    } catch {
+        throw $_
+    }
+}

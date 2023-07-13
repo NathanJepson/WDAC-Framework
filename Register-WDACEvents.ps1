@@ -132,6 +132,12 @@ filter Register-WDACEvents {
     .PARAMETER NoOut
     When this is set, no output is returned.
 
+    .PARAMETER Level
+    Your preferred level; when this is set, the cmdlet checks whether an apps is already trusted at the specified level, and if it is, doesn't add the code integrity event to the apps table
+
+    .PARAMETER Fallbacks
+    Backup preferred levels (see 'Level' parameter). If an app is trusted at the level of a fallback, the WDACEvent is not added to the apps table.
+
     .INPUTS
     [PSCustomObject] Result of Get-WDACEvents
 
@@ -152,8 +158,14 @@ filter Register-WDACEvents {
     Param (
         [Parameter(Mandatory, ValueFromPipeline)]
         $WDACEvents,
-        [switch]$NoOut
+        [switch]$NoOut,
+        [ValidateNotNullOrEmpty()]
+        [string]$Level,
+        [ValidateNotNullOrEmpty()]
+        [string]$Fallbacks
     )
+
+    #TODO: Implement Level and Fallbacks
 
     $MSI_OR_SCRIPT_PSOBJECT_LENGTH = 14
     
