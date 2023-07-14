@@ -664,17 +664,17 @@ function New-WDACPolicy {
 
             #==========Add policy to database=====================================
             [xml]$PolicyXML = Get-Content -Path $TempPolicyPath -ErrorAction Stop
-            $VerisonNumber = $PolicyXML.SiPolicy.VersionEx
+            $VersionNumber = $PolicyXML.SiPolicy.VersionEx
 
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $Transaction = $Connection.BeginTransaction()
             if (-not $FilePath) {
-                if (-not (Add-WDACPolicy -PolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString ($PolicyID.Substring(11))) -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $BasePolicyID) -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                if (-not (Add-WDACPolicy -PolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString ($PolicyID.Substring(11))) -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VersionNumber -ParentPolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $BasePolicyID) -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
                     throw "Failed to add this policy to the database."
                 }    
             } else {
             #No need to cut off 11 characters if the policy ID was provided from a file
-                if (-not (Add-WDACPolicy -PolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $PolicyID) -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $BasePolicyID) -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                if (-not (Add-WDACPolicy -PolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $PolicyID) -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VersionNumber -ParentPolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $BasePolicyID) -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
                     throw "Failed to add this policy to the database."
                 }    
             }
@@ -688,7 +688,7 @@ function New-WDACPolicy {
 
         try {
             
-            $NewFileName = ($PolicyName + "_v" + ($VerisonNumber.replace('.','_')) + ".xml")
+            $NewFileName = ($PolicyName + "_v" + ($VersionNumber.replace('.','_')) + ".xml")
             if ($WorkingPoliciesLocationType.ToLower() -eq "local") {
                 Copy-Item $TempPolicyPath -Destination (Join-Path $WorkingPoliciesLocation -ChildPath $NewFileName) -Force -ErrorAction Stop
             } else {
