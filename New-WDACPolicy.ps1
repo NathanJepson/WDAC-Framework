@@ -326,7 +326,7 @@ function New-WDACPolicy {
                 return;
             }
             if ($OtherPolicyID) {
-                if (Find-WDACPolicyByID -PolicyID $OtherPolicyID) {
+                if (Find-WDACPolicyByID -PolicyID $OtherPolicyID -ErrorAction SilentlyContinue) {
                     Write-Warning "Other policy with instance of ID $OtherPolicyID already exists in the database."
                 }
             }
