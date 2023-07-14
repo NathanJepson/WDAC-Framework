@@ -155,6 +155,55 @@ function New-WDACGroup_SQL {
     }
 }
 
+function Get-WDACGroups {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "SELECT GroupName From groups;"
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    GroupName = ($Reader["GroupName"]);
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Get-MAXAppIndexID {
     [cmdletbinding()]
     Param ( 
@@ -972,6 +1021,64 @@ function Add-WDACPolicy {
     }
 }
 
+function Get-WDACPolicy {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from policies WHERE PolicyGUID = @PolicyGUID"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [PSCustomObject]@{
+                    PolicyGUID = $Reader["PolicyGUID"];
+                    PolicyID = $Reader["PolicyID"];
+                    PolicyHash = $Reader["PolicyHash"];
+                    PolicyName = $Reader["PolicyName"];
+                    PolicyVersion = $Reader["PolicyVersion"];
+                    ParentPolicyGUID = $Reader["ParentPolicyGUID"];
+                    BaseOrSupplemental = [bool]$Reader["BaseOrSupplemental"];
+                    IsSigned = [bool]$Reader["IsSigned"];
+                    AuditMode = [bool]$Reader["AuditMode"];
+                    IsPillar = [bool]$Reader["IsPillar"];
+                    OriginLocation = $Reader["OriginLocation"];
+                    OriginLocationType = $Reader["OriginLocationType"]
+                }
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Get-WDACPublisher {
     [cmdletbinding()]
     param (
@@ -1351,6 +1458,101 @@ function Add-WDACFilePublisher {
         throw $theError
     }
 
+}
+
+function Get-WDACDevice {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeviceName,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from devices WHERE DeviceName = @DeviceName"
+        $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+   
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [PSCustomObject]@{
+                    DeviceName = $Reader["DeviceName"];
+                    AllowedGroup = $Reader["AllowedGroup"];
+                    UpdateDeferring = [bool]$Reader["UpdateDeferring"];
+                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Add-WDACDevice {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeviceName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$AllowedGroup,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "INSERT INTO devices (DeviceName,AllowedGroup) values (@DeviceName,@AllowedGroup)"
+            $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+            $Command.Parameters.AddWithValue("AllowedGroup",$AllowedGroup) | Out-Null
+           
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
 }
 
 function Expand-WDACApp {
