@@ -11,8 +11,23 @@ param(
 
 function Remove-CurlyBracesPolicyID {
     [CmdletBinding()]
-    param()
-    #TODO
+    param(
+        [Parameter(Mandatory=$true)]
+        $InputPolicyString
+    )
+
+    if (-not $InputPolicyString) {
+        return $null
+    }
+
+    if ($InputPolicyString -match "\{") {
+        $InputPolicyString = $InputPolicyString.replace('{','');
+    }
+    if ($InputPolicyString -match "\}") {
+        $InputPolicyString = $InputPolicyString.replace('}','');
+    }
+
+    return $InputPolicyString
 }
 
 function New-WDACPolicy {
@@ -125,7 +140,7 @@ function New-WDACPolicy {
     New-WDACPolicy -Deny -PolicyName "CashiersBottomFloor2" -PolicyID "CodeInteg12" -DriverBlockRules -OtherBlockRules -Signed -Enforce -AddPSCodeSigner -UpdatePolicySigner -SupplementalPolicySigner -DynamicCodeSecurity -DisableRuntimeFilepathRules -HVCI -BootMenuProtection -AllowSupplementalPolicies -Verbose
 
     .EXAMPLE
-    New-WDACPolicy -Allow -PolicyName "Cashiers" -Supplemental -BasePolicyID "{A244370E-44C9-4C06-B551-F6016E563076}" -Windows -Audit -Unsigned -DynamicCodeSecurity -DisableRuntimeFilepathRules -HVCI -DoNotCacheRecommended -BootMenuProtection -BootAuditOnFailure -AdvancedBootOptionsMenu -ISG
+    New-WDACPolicy -Allow -PolicyName "Cashiers" -Supplemental -BasePolicyID "A244370E-44C9-4C06-B551-F6016E563076" -Windows -Audit -Unsigned -DynamicCodeSecurity -DisableRuntimeFilepathRules -HVCI -DoNotCacheRecommended -BootMenuProtection -BootAuditOnFailure -AdvancedBootOptionsMenu -ISG
 
     .EXAMPLE
     New-WDACPolicy -FilePath "C:\Users\JohnSmith\WDAC Policies\AlreadyExistingPolicy.XML" -Deny -PolicyName "Support Staff" -Microsoft -Enforced -Signed -HVCI -ISG -BootMenuProtection -BootAuditOnFailure -AdvancedBootOptionsMenu -UpdatePolicyNoReboot
@@ -142,8 +157,10 @@ function New-WDACPolicy {
         [string]$PolicyID,
         [ValidateNotNullOrEmpty()]
         [ValidatePattern('\.xml$')]
+        [ValidateScript({Test-Path $_}, ErrorMessage = "Cannot find the file that you provided.")]
         [string]$FilePath,
         [ValidateNotNullOrEmpty()]
+        [ValidateScript({-not ($_ -match "(\{|\})")}, ErrorMessage = "Please provide the base policy ID without curly braces.")]
         [string]$BasePolicyID,
         [switch]$AddPSCodeSigner,
         [switch]$UpdatePolicySigner,
@@ -345,6 +362,9 @@ function New-WDACPolicy {
                     }
                 }
 
+                if (Find-WDACPolicy -PolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $PolicyID) -ErrorAction Stop) {
+                    throw "A base policy of ID $PolicyID already exists in the database."
+                }
                 Set-CIPolicyIdInfo -FilePath $TempPolicyPath -PolicyName $PolicyName -ErrorAction Stop
 
             } elseif ($Supplemental) {
@@ -649,12 +669,12 @@ function New-WDACPolicy {
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $Transaction = $Connection.BeginTransaction()
             if (-not $FilePath) {
-                if (-not (Add-WDACPolicy -PolicyGUID $PolicyID.Substring(11) -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                if (-not (Add-WDACPolicy -PolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString ($PolicyID.Substring(11))) -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $BasePolicyID) -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
                     throw "Failed to add this policy to the database."
                 }    
             } else {
             #No need to cut off 11 characters if the policy ID was provided from a file
-                if (-not (Add-WDACPolicy -PolicyGUID $PolicyID -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID $BasePolicyID -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
+                if (-not (Add-WDACPolicy -PolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $PolicyID) -PolicyID $OtherPolicyID -PolicyName $PolicyName -PolicyVersion $VerisonNumber -ParentPolicyGUID (Remove-CurlyBracesPolicyID -InputPolicyString $BasePolicyID) -BaseOrSupplemental $Supplemental.ToBool() -IsSigned $Signed.ToBool() -AuditMode $Audit.ToBool() -IsPillar $Pillar.ToBool() -OriginLocation $WorkingPoliciesLocation -OriginLocationType $WorkingPoliciesLocationType -Connection $Connection -ErrorAction Stop)) {
                     throw "Failed to add this policy to the database."
                 }    
             }
