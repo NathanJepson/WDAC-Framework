@@ -141,6 +141,7 @@ function New-WDACPolicy {
         [ValidateNotNullOrEmpty()]
         [string]$PolicyID,
         [ValidateNotNullOrEmpty()]
+        [ValidatePattern('\.xml$')]
         [string]$FilePath,
         [ValidateNotNullOrEmpty()]
         [string]$BasePolicyID,
