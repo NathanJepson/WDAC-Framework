@@ -1079,6 +1079,56 @@ function Get-WDACPolicy {
     }
 }
 
+function Get-WDACPoliciesGUIDandName {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "SELECT PolicyGUID,PolicyName From policies;"
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    PolicyGUID = $Reader["PolicyGUID"];
+                    PolicyName = $Reader["PolicyName"]
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Get-WDACPublisher {
     [cmdletbinding()]
     param (
