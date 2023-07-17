@@ -1810,7 +1810,6 @@ function Expand-WDACApp {
             $Publishers += $Publisher
             $FilePublishers2 = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName:$FileName -MinimumAllowedVersion:$MinimumAllowedVersion -MaximumAllowedVersion:$MaximumAllowedVersion -SpecificFileNameLevel:$SpecificFileNameLevel -ErrorAction Stop
             #TODO: Allow for a flag that adds file publishers to the database based on most lowest version number -- but only if the user desires
-            #TODO: Implement usage of [string]$SpecificFileNameLevel parameter
             if ($FilePublishers2) {
                 $FilePublishers += $FilePublishers2
             }
