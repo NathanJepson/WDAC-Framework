@@ -1751,15 +1751,19 @@ function Expand-WDACApp {
         [string]$MaximumAllowedVersion,
         [ValidateNotNullOrEmpty()]
         [string]$FileName,
-        [ValidateNotNullOrEmpty()]
         [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
-        [string]$SpecificFileNameLevel="OriginalFileName"
+        $SpecificFileNameLevel="OriginalFileName"
     )
 
     try {
 
-        if ($SpecificFileNameLevel) {
-            $SpecificFileNameLevel = [string]$SpecificFileNameLevel
+        if (-not $FileName) {
+            $TempApp = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+            $FileName = $TempApp.$SpecificFileNameLevel
+            if (-not $FileName) {
+            #Handle case where you have an empty string as the filename, so just cast to null
+                $FileName = $null
+            }
         }
 
         $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
