@@ -504,6 +504,87 @@ function Get-WDACAppSignersByFlatHash {
     }
 }
 
+function Get-WDACAppsToSetTrust {
+    [cmdletbinding()]
+    param(
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from apps WHERE Untrusted = 0 AND TrustedDriver = 0 AND TrustedUserMode = 0 AND Staged = 0 AND Revoked = 0 AND Deferred = 0 AND Blocked = 0"
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    SHA256FlatHash = $Reader["SHA256FlatHash"];
+                    FileName = $Reader["FileName"];
+                    TimeDetected = $Reader["TimeDetected"];
+                    FirstDetectedPath = $Reader["FirstDetectedPath"];
+                    FirstDetectedUser = $Reader["FirstDetectedUser"];
+                    FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
+                    FirstDetectedProcessName = $Reader["FirstDetectedProcessName"];
+                    SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                    OriginDevice  = $Reader["OriginDevice"];
+                    EventType = $Reader["EventType"];
+                    SigningScenario = $Reader["SigningScenario"];
+                    OriginalFileName = $Reader["OriginalFileName"];
+                    FileVersion = $Reader["FileVersion"];
+                    InternalName = $Reader["InternalName"];
+                    FileDescription  = $Reader["FileDescription"];
+                    ProductName = $Reader["ProductName"];
+                    PackageFamilyName = $Reader["PackageFamilyName"];
+                    UserWriteable = [bool]($Reader["UserWriteable"]);
+                    FailedWHQL = [bool]($Reader["FailedWHQL"]);
+                    Trusted = [bool]($Reader["Trusted"]);
+                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
+                    TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
+                    Staged = [bool]($Reader["Staged"]);
+                    Revoked = [bool]($Reader["Revoked"]);
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                    AllowedPolicyID = $Reader["AllowedPolicyID"];
+                    DeferredPolicyIndex = ($Reader["DeferredPolicyIndex"]);
+                    Comment = $Reader["Comment"];
+                    AppIndex = ($Reader["AppIndex"]);
+                    RequestedSigningLevel = $Reader["RequestedSigningLevel"];
+                    ValidatedSigningLevel = $Reader["ValidatedSigningLevel"]
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Add-WDACApp {
     [cmdletbinding()]
     Param ( 
@@ -1341,7 +1422,8 @@ function Get-WDACFilePublishers {
         $FileName,
         $MinimumAllowedVersion,
         $MaximumAllowedVersion,
-        [ValidateNotNullOrEmpty()]
+        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
+        $SpecificFileNameLevel="OriginalFileName",
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1349,6 +1431,10 @@ function Get-WDACFilePublishers {
     $NoConnectionProvided = $false
 
     try {
+        if ($SpecificFileNameLevel) {
+            $SpecificFileNameLevel = [string]$SpecificFileNameLevel
+        }
+
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $NoConnectionProvided = $true
@@ -1463,7 +1549,8 @@ function Add-WDACFilePublisher {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$FileName,
-        $SpecificFileNameLevel,
+        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
+        $SpecificFileNameLevel="OriginalFileName",
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
@@ -1664,10 +1751,16 @@ function Expand-WDACApp {
         [ValidateNotNullOrEmpty()]
         [string]$FileName,
         [ValidateNotNullOrEmpty()]
-        [string]$SpecificFileNameLevel
+        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
+        [string]$SpecificFileNameLevel="OriginalFileName"
     )
 
     try {
+
+        if ($SpecificFileNameLevel) {
+            $SpecificFileNameLevel = [string]$SpecificFileNameLevel
+        }
+
         $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
         if (-not $Signers) {
             return $null
