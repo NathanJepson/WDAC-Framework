@@ -1441,12 +1441,13 @@ function Get-WDACFilePublishers {
         }
         $Command = $Connection.CreateCommand()
         if ($FileName) {
-            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
             $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
         } else {
-            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex"
+            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND SpecificFileNameLevel = @SpecificFileNameLevel"
         }
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -1803,7 +1804,7 @@ function Expand-WDACApp {
                 }
             }
             $Publishers += $Publisher
-            $FilePublishers2 = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName:$FileName -MinimumAllowedVersion:$MinimumAllowedVersion -MaximumAllowedVersion:$MaximumAllowedVersion -ErrorAction Stop
+            $FilePublishers2 = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName:$FileName -MinimumAllowedVersion:$MinimumAllowedVersion -MaximumAllowedVersion:$MaximumAllowedVersion -SpecificFileNameLevel:$SpecificFileNameLevel -ErrorAction Stop
             #TODO: Allow for a flag that adds file publishers to the database based on most lowest version number -- but only if the user desires
             #TODO: Implement usage of [string]$SpecificFileNameLevel parameter
             if ($FilePublishers2) {
