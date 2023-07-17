@@ -1605,6 +1605,47 @@ function Add-WDACDevice {
     }
 }
 
+function Add-WDACPolicyAssignment {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$GroupName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "INSERT INTO policy_assignments (GroupName,PolicyGUID) values (@GroupName,@PolicyGUID)"
+            $Command.Parameters.AddWithValue("GroupName",$GroupName) | Out-Null
+            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+            
+            
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
 function Expand-WDACApp {
 #NOTE: This function also adds publishers and file publishers to the database!
     [CmdletBinding()]
