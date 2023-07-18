@@ -1546,7 +1546,7 @@ function Add-WDACFilePublisher {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$MinimumAllowedVersion,
-        $MaximumAllowedVersion,
+        $MaximumAllowedVersion="65355.65355.65355.65355",
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$FileName,
@@ -1596,6 +1596,60 @@ function Add-WDACFilePublisher {
         throw $theError
     }
 
+}
+
+function Set-WDACFilePublisherMinimumAllowedVersion {
+#Note, this function only works if just ONE file publisher rule exists for the publisher index / filename / filenamelevel combination.
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PublisherIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $FileName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $MinimumAllowedVersion,
+        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
+        $SpecificFileNameLevel="OriginalFileName",
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        
+        $tempFilePublishers = Get-WDACFilePublishers -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion "0.0.0.0" -SpecificFileNameLevel $SpecificFileNameLevel -ErrorAction Stop
+        
+        if ($tempFilePublishers.Count -gt 1) {
+            throw "Cannot decide which file publisher rule to set MinimumAllowedVersion, as there are multiple which fit the specified criteria."
+        }
+
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "UPDATE file_publishers SET MinimumAllowedVersion = @MinimumAllowedVersion WHERE PublisherIndex = @PublisherIndex AND SpecificFileNameLevel = @SpecificFileNameLevel AND FileName = @FileName"
+            $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
+            $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
+            $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+           
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
 }
 
 function Get-WDACDevice {
@@ -1734,7 +1788,7 @@ function Add-WDACPolicyAssignment {
     }
 }
 
-function Expand-WDACApp {
+function Expand-WDACAppDeprecated {
 #NOTE: This function also adds publishers and file publishers to the database!
     [CmdletBinding()]
     Param (
@@ -1742,28 +1796,36 @@ function Expand-WDACApp {
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
         [ValidateNotNullOrEmpty()]
-        [string]$Level,
-        [ValidateNotNullOrEmpty()]
-        [string[]]$Fallbacks,
-        [ValidateNotNullOrEmpty()]
         [string]$MinimumAllowedVersion,
         [ValidateNotNullOrEmpty()]
         [string]$MaximumAllowedVersion,
         [ValidateNotNullOrEmpty()]
         [string]$FileName,
         [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
-        $SpecificFileNameLevel="OriginalFileName"
+        $SpecificFileNameLevel="OriginalFileName",
+        [switch]$AlwaysSetMinimumVersions,
+        [switch]$AddFilePublisher,
+        [switch]$AddPublisher
     )
+
+    if ($AddFilePublisher) {
+    #If we want to add a file publisher to the database, we will need to add the publisher as well
+        $AddPublisher = $true
+    }
 
     try {
 
-        if (-not $FileName) {
-            $TempApp = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
-            $FileName = $TempApp.$SpecificFileNameLevel
-            if (-not $FileName) {
-            #Handle case where you have an empty string as the filename, so just cast to null
-                $FileName = $null
-            }
+        $TempApp = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+
+        $FileVersion = $null
+        if ($TempApp.FileVersion) {
+            $FileVersion = $TempApp.FileVersion
+        }
+
+        if (-not $FileName) {        
+            if ($TempApp.$SpecificFileNameLevel) {
+                $FileName = $TempApp.$SpecificFileNameLevel
+            } 
         }
 
         $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
@@ -1771,17 +1833,7 @@ function Expand-WDACApp {
             return $null
         }
     
-        if (-not $Level) {
-            $Levels = @("Publisher", "FilePublisher", "LeafCertificate", "PcaCertificate")
-        } else {
-            $Levels = @()
-            $Levels += $Level
-            if ($Fallbacks) {
-                foreach ($Fallback in $Fallbacks) {
-                    $Levels += $Fallback
-                }
-            }
-        }
+        $Levels = @("Publisher", "FilePublisher", "LeafCertificate", "PcaCertificate")
         
         $Result = [PSCustomObject]@{}
         foreach ($LevelType in $Levels) {
@@ -1795,23 +1847,55 @@ function Expand-WDACApp {
         foreach ($Signer in $Signers) {
             $LeafCertTBSHash = $Signer.CertificateTBSHash
             $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -ErrorAction Stop
-            $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
             $LeafCertificates += $LeafCert
-            $PcaCertificates += $PcaCert
-    
-            $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
-            if (-not $Publisher) {
-                if (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop) {
-                    $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
-                } else {
-                    throw "Trouble adding a publisher to the database."
+            if ($LeafCert.ParentCertTBSHash) {
+                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
+                $PcaCertificates += $PcaCert
+
+                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                if (-not $Publisher -and $AddPublisher) {
+                #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
+                    if (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop) {
+                        $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                    } else {
+                        throw "Trouble adding a publisher to the database."
+                    }
                 }
+                $Publishers += $Publisher
             }
-            $Publishers += $Publisher
-            $FilePublishers2 = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName:$FileName -MinimumAllowedVersion:$MinimumAllowedVersion -MaximumAllowedVersion:$MaximumAllowedVersion -SpecificFileNameLevel:$SpecificFileNameLevel -ErrorAction Stop
-            #TODO: Allow for a flag that adds file publishers to the database based on most lowest version number -- but only if the user desires
-            if ($FilePublishers2) {
-                $FilePublishers += $FilePublishers2
+    
+            if ($FileVersion -and $FileName) {
+            #Can only get file publishers for this app if there is a file version and file name set
+
+                
+                $FilePublishers2 = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName $FileName -MinimumAllowedVersion:$MinimumAllowedVersion -MaximumAllowedVersion:$MaximumAllowedVersion -SpecificFileNameLevel $SpecificFileNameLevel -ErrorAction Stop
+                
+                if ($AlwaysSetMinimumVersions -and (-not $MinimumAllowedVersion -or ($MinimumAllowedVersion -eq "0.0.0.0"))) {
+                #Add new file publisher to the database if AlwaysSetMinimumVersions is set
+                #If minimum version is specified in the search, don't bother adding a file publisher or modifying a file publisher entry to have a lower version number--but this can be overriden if it was 0.0.0.0
+                    
+                    if ($FilePublishers2.Count -eq 1) {
+                        $thisFilePublisher = $FilePublishers2[0]
+                        if ((Compare-Versions -Version1 $FileVersion -Version2 $thisFilePublisher.MinimumAllowedVersion) -eq -1) {
+                            
+                            Set-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $Publisher -FileName $FileName -MinimumAllowedVersion $FileVersion -SpecificFileNameLevel $SpecificFileNameLevel -ErrorAction Stop
+                        }
+                    } elseif ($FilePublishers2.Count -gt 1) {
+                        throw "AlwaysSetMinimumVersions is set, but multiple file publishers encountered for one signer / app combination."
+                    } else {
+                        if ($AddFilePublisher) {
+                        #Only add FilePublisher to the database if that is specified
+                            
+                            Add-WDACFilePublisher -MinimumAllowedVersion $FileVersion -PublisherIndex $Publisher.PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -ErrorAction Stop
+                        }
+                    }
+
+                    $FilePublishers2 = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName $FileName -MinimumAllowedVersion:$MinimumAllowedVersion -MaximumAllowedVersion:$MaximumAllowedVersion -SpecificFileNameLevel $SpecificFileNameLevel -ErrorAction Stop
+                }
+                
+                if ($FilePublishers2) {
+                    $FilePublishers += $FilePublishers2
+                }
             }
         }
 

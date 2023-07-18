@@ -160,8 +160,10 @@ filter Register-WDACEvents {
         $WDACEvents,
         [switch]$NoOut,
         [ValidateNotNullOrEmpty()]
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         [string]$Level,
         [ValidateNotNullOrEmpty()]
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         [string]$Fallbacks
     )
 
