@@ -1413,7 +1413,6 @@ function Add-WDACPublisher {
 
 function Get-WDACFilePublishers {
 #Gets Multiple File Publishers!
-#TODO: Add the [string]$SpecificFileNameLevel parameter and implement its usage
     [cmdletbinding()]
     param (
         [ValidateNotNullOrEmpty()]
@@ -1539,8 +1538,7 @@ function Add-WDACFilePublisher {
         [bool]$Deferred = $false,
         [bool]$Blocked = $false,
         $AllowedPolicyID,
-        [ValidateNotNullOrEmpty()]
-        [int]$DeferredPolicyIndex,
+        $DeferredPolicyIndex,
         $Comment,
         $BlockingPolicyID,
         [ValidateNotNullOrEmpty()]
@@ -1912,6 +1910,47 @@ function Expand-WDACAppDeprecated {
         }
         
         return $Result
+    } catch {
+        throw $_
+    }
+}
+
+function Expand-WDACApp {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [switch]$AddPublisher
+    )
+
+    $Result = @()
+    try {
+        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        if (-not $Signers) {
+            return $null
+        }
+
+        foreach ($Signer in $Signers) {
+            $LeafCertTBSHash = $Signer.CertificateTBSHash
+            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -ErrorAction Stop
+
+            if ($LeafCert.ParentCertTBSHash) {
+                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
+                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                if (-not $Publisher -and $AddPublisher) {
+                #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
+                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop)) {
+                        throw "Trouble adding a publisher to the database."
+                    }
+                }
+            }
+
+            $Result += @{SignerIndex = $Signer.SignatureIndex; SignerInfo = ( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError); LeafCert = $LeafCert; PcaCert = $PcaCert}
+        }
+
+        $ResultObj = $Result | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
+        return $ResultObj
     } catch {
         throw $_
     }
