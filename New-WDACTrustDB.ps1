@@ -205,6 +205,14 @@ function New-WDACTrustDB {
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE CASCADE
     );
+
+    CREATE TABLE file_publisher_options (
+        FileName Text NOT NULL,
+        SpecificFileNameLevel Text,
+        PublisherIndex Integer NOT NULL,
+        VersioningType Integer NOT NULL,
+        PRIMARY KEY(PublisherIndex,FileName)
+    );
     
     CREATE TABLE groups (
         GroupName Text PRIMARY KEY
