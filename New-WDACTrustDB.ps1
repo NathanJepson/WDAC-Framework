@@ -225,6 +225,12 @@ function New-WDACTrustDB {
         PRIMARY KEY (FileName,PublisherIndex,PolicyGUID)
     );
     
+    CREATE TABLE policy_versioning_options (
+        PolicyGUID Text PRIMARY KEY,
+        VersioningType Integer NOT NULL,
+        FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
+    );
+
     CREATE TABLE groups (
         GroupName Text PRIMARY KEY
     );
