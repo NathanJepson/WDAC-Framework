@@ -36,6 +36,7 @@
         "WDACPolicySigningCertificate" : "",
         "_WDACSigningCertExample" : "Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3",
         "PreferredOrganizationRuleLevel" : "",
-        "PreferredOrganizationRuleFallbacks" : []
+        "PreferredOrganizationRuleFallbacks" : [],
+        "GlobalVersioningType" : ""
     }
 ]

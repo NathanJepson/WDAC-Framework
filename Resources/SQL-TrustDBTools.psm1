@@ -1946,7 +1946,7 @@ function Expand-WDACApp {
                 }
             }
 
-            $Result += @{SignerIndex = $Signer.SignatureIndex; SignerInfo = ( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError); LeafCert = $LeafCert; PcaCert = $PcaCert}
+            $Result += @{SignatureIndex = $Signer.SignatureIndex; SignerInfo = ( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError); LeafCert = $LeafCert; PcaCert = $PcaCert}
         }
 
         $ResultObj = $Result | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }

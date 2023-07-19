@@ -211,7 +211,18 @@ function New-WDACTrustDB {
         SpecificFileNameLevel Text,
         PublisherIndex Integer NOT NULL,
         VersioningType Integer NOT NULL,
+        MinimumAllowedVersionPivot Text,
         PRIMARY KEY(PublisherIndex,FileName)
+    );
+
+    CREATE TABLE policy_file_publisher_options (
+        FileName Text NOT NULL,
+        PublisherIndex Integer NOT NULL,
+        PolicyGUID Text NOT NULL,
+        SpecificFileNameLevel Text,
+        MinimumAllowedVersionPivot Text,
+        FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        PRIMARY KEY (FileName,PublisherIndex,PolicyGUID)
     );
     
     CREATE TABLE groups (
