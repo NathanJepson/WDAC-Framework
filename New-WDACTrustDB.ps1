@@ -206,6 +206,25 @@ function New-WDACTrustDB {
         FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE CASCADE
     );
 
+    CREATE TABLE file_names (
+        FileName Text PRIMARY KEY,
+        SpecificFileNameLevel Text,
+        Untrusted Integer DEFAULT 0 NOT NULL,
+        TrustedDriver Integer DEFAULT 0 NOT NULL,
+        TrustedUserMode Integer DEFAULT 0 NOT NULL,
+        Staged Integer DEFAULT 0 NOT NULL,
+        Revoked Integer DEFAULT 0 NOT NULL,
+        Deferred Integer DEFAULT 0 NOT NULL,
+        Blocked Integer DEFAULT 0 NOT NULL,
+        AllowedPolicyID Text,
+        DeferredPolicyIndex Integer,
+        Comment Text,
+        BlockingPolicyID Text,
+        FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT
+    );
+
     CREATE TABLE file_publisher_options (
         FileName Text NOT NULL,
         SpecificFileNameLevel Text,
