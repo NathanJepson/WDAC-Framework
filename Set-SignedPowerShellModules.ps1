@@ -52,13 +52,11 @@ function Set-SignedPowerShellModules {
     if ($FileName) {
         if (-not (Test-Path (Join-Path $PSModuleRoot -ChildPath $FileName))) {
             throw "Not a valid filename that you can sign. Please provide script or module names within WDAC-Framework or WDACTools."
-            return
         } 
 
         $Extension = (Get-ChildItem (Join-Path $PSModuleRoot -ChildPath $FileName) | Select-Object Extension).Extension
         if ($Extension -ne ".ps1" -and $Extension -ne ".psm1" -and $Extension -ne ".psd1") {
             throw "You can only sign .ps1, .psm1, and .psd1 files in this repository."
-            return
         }
     }
 
@@ -66,7 +64,6 @@ function Set-SignedPowerShellModules {
 
     if (-not ($PSCodeSigningCert.ToLower() -match "cert\:\\") -and $PSCodeSigningCert) {
         throw "Not a valid certificate path for the signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
-        return
     }
 
     $PSCodeSigningJSON = (Get-LocalStorageJSON)."PowerShellCodeSigningCertificate"
@@ -74,7 +71,6 @@ function Set-SignedPowerShellModules {
     if ( (-not $PSCodeSigningCert) -and $PSCodeSigningJSON) {
         if (-not ($PSCodeSigningJSON.ToLower() -match "cert\:\\")) {
             throw "Local cache does not specify a valid certificate path for the signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
-            return
         }
     }
 
@@ -93,7 +89,6 @@ function Set-SignedPowerShellModules {
     } elseif (-not $PSCodeSigningJSON -and -not $PSCodeSigningCert) {
         Write-Verbose "Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
         throw "There is not a valid certificate provided from local cache or passed to this commandlet OR there is a problem reading local storage. Please specify or set a Code Signing certificate."
-        return
     }
 
     if (-not $PSCodeSigningCert) {
@@ -126,7 +121,6 @@ function Set-SignedPowerShellModules {
             }
         } catch {
             throw $_
-            return
         }
 
         return
@@ -141,7 +135,6 @@ function Set-SignedPowerShellModules {
         $WDACCommitToolsFiles = Get-ChildItem -Path ($PSModuleRoot + "\WDAC Commit Tools\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
     } catch {
         throw $_
-        return
     }
 
     $FileSources = @($ModulesFiles,$ResourceFiles,$WDACAuditingFiles)

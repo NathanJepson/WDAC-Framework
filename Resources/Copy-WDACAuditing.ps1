@@ -10,7 +10,6 @@ function Copy-WDACAuditing {
 
     if (-not $sess) {
         throw New-Object System.Management.Automation.Remoting.PSRemotingTransportException
-        return;
     }
 
     $Result = Invoke-Command -ErrorAction SilentlyContinue -Session $sess -ScriptBlock {

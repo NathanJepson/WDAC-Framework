@@ -54,7 +54,6 @@ function Import-WDACPolicy {
     } catch {
         Write-Verbose $_
         throw "Trouble in retrieving your working policies location."
-        return
     }
 
 
@@ -137,7 +136,6 @@ function Import-WDACPolicy {
         } catch {
             Write-Verbose $_
             throw "There was a problem placing the new policy file into your working policies directory."
-            return
         }
 
         Write-Verbose "Policy Import successful."

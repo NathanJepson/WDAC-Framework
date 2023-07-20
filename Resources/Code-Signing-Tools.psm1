@@ -33,7 +33,6 @@ function Export-CodeSignerAsCER {
             
         } catch {
             throw $_
-            return
         }
     }
 
@@ -49,7 +48,6 @@ function Export-CodeSignerAsCER {
             Export-Certificate -Cert $cert -FilePath (Join-Path -Path $Destination -ChildPath "WDACCodeSigning.cer")
         } catch {
             throw $_
-            return
         }
     }
 }

@@ -289,7 +289,6 @@ function New-WDACPolicy {
         } catch {
             Write-Verbose $_
             throw "Trouble in retrieving your working policies location."
-            return
         }
 
         if ($Signed) {
@@ -701,7 +700,6 @@ function New-WDACPolicy {
         } catch {
             Write-Verbose $_
             throw "There was a problem placing the new policy file into your working policies directory."
-            return
         }
 
         Write-Verbose "Policy creation successful."
