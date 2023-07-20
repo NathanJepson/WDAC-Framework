@@ -686,6 +686,40 @@ function Add-WDACApp {
     }
 }
 
+function Remove-WDACApp {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "DELETE FROM apps WHERE SHA256FlatHash = @SHA256FlatHash"
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
 function Find-WDACCertificate {
     [cmdletbinding()]
     Param ( 
@@ -1544,7 +1578,7 @@ function Add-WDACFilePublisher {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$MinimumAllowedVersion,
-        $MaximumAllowedVersion="65355.65355.65355.65355",
+        $MaximumAllowedVersion="65535.65535.65535.65535",
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$FileName,
@@ -1915,6 +1949,130 @@ function Expand-WDACAppDeprecated {
     }
 }
 
+function Add-WDACFileName {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FileName,
+        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
+        $SpecificFileNameLevel="OriginalFileName",
+        [bool]$Untrusted = $false,
+        [bool]$TrustedDriver = $false,
+        [bool]$TrustedUserMode = $false,
+        [bool]$Staged = $false,
+        [bool]$Revoked = $false,
+        [bool]$Deferred = $false,
+        [bool]$Blocked = $false,
+        $AllowedPolicyID,
+        $DeferredPolicyIndex,
+        $Comment,
+        $BlockingPolicyID,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "INSERT INTO file_names (FileName,SpecificFileNameLevel,Untrusted,TrustedDriver,TrustedUserMode,Staged,Revoked,Deferred,Blocked,AllowedPolicyID,DeferredPolicyIndex,Comment,BlockingPolicyID) values (@FileName,@SpecificFileNameLevel,@Untrusted,@TrustedDriver,@TrustedUserMode,@Staged,@Revoked,@Deferred,@Blocked,@AllowedPolicyID,@DeferredPolicyIndex,@Comment,@BlockingPolicyID)"
+            $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
+            $Command.Parameters.AddWithValue("Untrusted",$Untrusted) | Out-Null
+            $Command.Parameters.AddWithValue("TrustedDriver",$TrustedDriver) | Out-Null
+            $Command.Parameters.AddWithValue("TrustedUserMode",$TrustedUserMode) | Out-Null
+            $Command.Parameters.AddWithValue("Staged",$Staged) | Out-Null
+            $Command.Parameters.AddWithValue("Revoked",$Revoked) | Out-Null
+            $Command.Parameters.AddWithValue("Deferred",$Deferred) | Out-Null
+            $Command.Parameters.AddWithValue("Blocked",$Blocked) | Out-Null
+            $Command.Parameters.AddWithValue("AllowedPolicyID",$AllowedPolicyID) | Out-Null
+            $Command.Parameters.AddWithValue("DeferredPolicyIndex",$DeferredPolicyIndex) | Out-Null
+            $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+            $Command.Parameters.AddWithValue("BlockingPolicyID",$BlockingPolicyID) | Out-Null
+            
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Get-WDACFileName {
+    [CmdletBinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FileName,
+        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
+        $SpecificFileNameLevel="OriginalFileName",
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from file_names WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
+        $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [PSCustomObject]@{
+                    FileName = $Reader["FileName"];
+                    SpecificFileNameLevel = $Reader["SpecificFileNameLevel"];
+                    Untrusted = [bool]$Reader["Untrusted"];
+                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
+                    TrustedUserMode = [bool]$Reader["TrustedUserMode"];
+                    Staged = [bool]$Reader["Staged"];
+                    Revoked = [bool]$Reader["Revoked"];
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    AllowedPolicyID = ($Reader["AllowedPolicyID"]);
+                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
+                    Comment = $Reader["Comment"];
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                }
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Expand-WDACApp {
     [CmdletBinding()]
     Param (
@@ -1951,6 +2109,257 @@ function Expand-WDACApp {
 
         $ResultObj = $Result | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
         return $ResultObj
+    } catch {
+        throw $_
+    }
+}
+
+function Get-AppTrusted {
+#Determines if an app (WDAC event) would be able to run based on the "TrustedDriver" or "TrustedUserMode" attributes of various rule levels
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [Alias("Hash","FlatHash")]
+        [string]$SHA256FlatHash,
+        [Alias("Levels")]
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
+        $AllPossibleLevels,
+        [switch]$Driver,
+        [switch]$UserMode
+    )
+
+    if (-not $AllPossibleLevels) {
+        $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    }
+    $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
+
+    try {
+        $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        if (-not $AppInstance) {
+            throw "No instance of this app $SHA256FlatHash in the database."
+        }
+        #TODO -> MSI_OR_SCRIPT APP INSTANCE
+        $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+
+        if (-not $Driver -and -not $UserMode) {
+            if ($AppInstance.SigningScenario -eq "UserMode") {
+                $UserMode = $true
+            } elseif ($AppInstance.SigningScenario -eq "Driver") {
+                $Driver = $true
+            } else {
+                $UserMode = $true
+                $Driver = $false
+            }
+        }
+
+        function Get-TrustedInstance {
+            [CmdletBinding()]
+            Param (
+                [ValidateNotNullOrEmpty()]
+                [Parameter(Mandatory=$true)]
+                $Instance,
+                [switch]$Driver,
+                [switch]$UserMode
+            )
+    
+            if ($Driver -and $UserMode -and ($Instance.TrustedDriver -and $Instance.TrustedUserMode)) {
+                return $true
+            } elseif ($Driver -and $Instance.TrustedDriver) {
+                return $true
+            } elseif ($UserMode -and $Instance.TrustedUserMode) {
+                return $true
+            }
+        }
+
+        function Get-TrustedInstanceFilePublishers {
+            [CmdletBinding()]
+            Param (
+                [ValidateNotNullOrEmpty()]
+                [Parameter(Mandatory=$true)]
+                $FilePublishers,
+                [switch]$Driver,
+                [switch]$UserMode,
+                [ValidateNotNullOrEmpty()]
+                [Parameter(Mandatory=$true)]
+                $FileVersion
+            )
+
+            foreach ($FilePublisher in $FilePublishers) {
+                $CompareMin = Compare-Versions -Version1 $FileVersion -Version2 $FilePublisher.MinimumAllowedVersion
+                $CompareMax = Compare-Versions -Version1 $FileVersion -Version2 $FilePublisher.MaximumAllowedVersion
+                $Encompasses = $false
+                if (($CompareMin -eq 1 -or $CompareMin -eq 0) -and ($CompareMax -eq -1 -or $CompareMax -eq 0)) {
+                    $Encompasses = $true
+                }
+
+                if ($Encompasses -and (Get-TrustedInstance -Instance $FilePublisher -Driver:$Driver -UserMode:$UserMode)) {
+                    return $true
+                }
+            }
+        }
+
+        switch ($AllPossibleLevels) {
+            "Hash" {
+                if (Get-TrustedInstance -Instance $AppInstance -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
+                    return $true
+                }
+            }
+            "FilePath" {<#TODO#>}
+            "FileName" {
+                if ($AppInstance.OriginalFileName -or $AppInstance.InternalName -or $AppInstance.FileDescription -or $AppInstance.ProductName -or $AppInstance.PackageFamilyName) {
+                    switch ($SpecificFileNameLevels) {
+                        "OriginalFileName" {
+                            if ($AppInstance.OriginalFileName) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.OriginalFileName
+                                if ($TempFileName) {
+                                    if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                        "InternalName" {
+                            if ($AppInstance.InternalName) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.InternalName -SpecificFileNameLevel "InternalName"
+                                if ($TempFileName) {
+                                    if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                        "FileDescription" {
+                            if ($AppInstance.FileDescription) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.FileDescription -SpecificFileNameLevel "FileDescription"
+                                if ($TempFileName) {
+                                    if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                        "ProductName" {
+                            if ($AppInstance.ProductName) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.ProductName -SpecificFileNameLevel "ProductName"
+                                if ($TempFileName) {
+                                    if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                        "PackageFamilyName" {
+                            if ($AppInstance.PackageFamilyName) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.PackageFamilyName -SpecificFileNameLevel "PackageFamilyName"
+                                if ($TempFileName) {
+                                    if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } 
+            }
+            "LeafCertificate" {
+                if ($CertInfo) {
+                    foreach ($LeafCertificate in $CertInfo.LeafCert) {
+                        if (Get-TrustedInstance -Instance $LeafCertificate -Driver:$Driver -UserMode:$UserMode) {
+                            return $true
+                        }
+                    }
+                }
+            }
+            "PcaCertificate" {
+                if ($CertInfo) {
+                    foreach ($PcaCertificate in $CertInfo.PcaCert) {
+                        if (Get-TrustedInstance -Instance $PcaCertificate -Driver:$Driver -UserMode:$UserMode) {
+                            return $true
+                        }
+                    }
+                }
+            }
+            "Publisher" {
+                if ($CertInfo) {
+                    foreach ($LeafCertificate in $CertInfo.LeafCert) {
+                        if ($LeafCertificate.CommonName -and $LeafCertificate.ParentCertTBSHash) {
+                            $TempPublisher = Get-WDACPublisher -LeafCertCN $LeafCertificate.CommonName -PcaCertTBSHash $LeafCertificate.ParentCertTBSHash
+                            if ($TempPublisher) {
+                                if (Get-TrustedInstance -Instance $TempPublisher -Driver:$Driver -UserMode:$UserMode) {
+                                    return $true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "FilePublisher" {
+                if ($CertInfo -and $AppInstance.FileVersion -and ($AppInstance.OriginalFileName -or $AppInstance.InternalName -or $AppInstance.FileDescription -or $AppInstance.ProductName -or $AppInstance.PackageFamilyName)) {
+                    foreach ($LeafCertificate in $CertInfo.LeafCert) {
+                        if ($LeafCertificate.CommonName -and $LeafCertificate.ParentCertTBSHash) {
+                            $TempPublisher = Get-WDACPublisher -LeafCertCN $LeafCertificate.CommonName -PcaCertTBSHash $LeafCertificate.ParentCertTBSHash
+                            if ($TempPublisher.PublisherIndex) {
+                                switch ($SpecificFileNameLevels) {
+                                    "OriginalFileName" {
+                                        if ($AppInstance.OriginalFileName) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.OriginalFileName -SpecificFileNameLevel "OriginalFileName"
+                                            if ($TempFilePublishers) {
+                                                if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "InternalName" {
+                                        if ($AppInstance.InternalName) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.InternalName -SpecificFileNameLevel "InternalName"
+                                            if ($TempFilePublishers) {
+                                                if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "FileDescription" {
+                                        if ($AppInstance.FileDescription) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.FileDescription -SpecificFileNameLevel "FileDescription"
+                                            if ($TempFilePublishers) {
+                                                if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "ProductName" {
+                                        if ($AppInstance.ProductName) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.ProductName -SpecificFileNameLevel "ProductName"
+                                            if ($TempFilePublishers) {
+                                                if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "PackageFamilyName" {
+                                        if ($AppInstance.PackageFamilyName) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.PackageFamilyName -SpecificFileNameLevel "PackageFamilyName"
+                                            if ($TempFilePublishers) {
+                                                if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return $false
     } catch {
         throw $_
     }
