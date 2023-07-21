@@ -164,7 +164,7 @@ filter Register-WDACEvents {
         [string]$Level,
         [ValidateNotNullOrEmpty()]
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
-        [string]$Fallbacks
+        [string[]]$Fallbacks
     )
 
     $AllLevels = $null
@@ -193,6 +193,7 @@ filter Register-WDACEvents {
         if ($Level -or $Fallbacks -and $AllLevels.Count -ge 1) {
         #If it is already trusted at a specified level, no need to add WDACEvent to the database
             if (Get-AppTrustedNoAppEntry -WDACEvent $WDACEvent -AllPossibleLevels $AllLevels) {
+                Write-Verbose "App $($WDACEvent.FilePath) with SHA-256 Flat Hash $($WDACEvent.SHA256FileHash) skipped registration due to meeting a higher level of trust."
                 continue;
             }
         }
