@@ -167,7 +167,19 @@ filter Register-WDACEvents {
         [string]$Fallbacks
     )
 
-    #TODO: Implement Level and Fallbacks
+    $AllLevels = $null
+    if ($Level -or $Fallbacks) {
+        $Fallbacks = $Fallbacks | Where-Object {$_ -ne $Level}
+        $AllLevels = @()
+        if ($Level) {
+            $AllLevels += $Level
+        }
+        if ($Fallbacks -and $Fallbacks.Count -ge 1) {
+            foreach ($Fallback in $Fallbacks) {
+                $AllLevels += $Fallback
+            }
+        }
+    }
 
     $MSI_OR_SCRIPT_PSOBJECT_LENGTH = 14
     
@@ -178,6 +190,13 @@ filter Register-WDACEvents {
 
     foreach ($WDACEvent in $WDACEvents) {
         
+        if ($Level -or $Fallbacks -and $AllLevels.Count -ge 1) {
+        #If it is already trusted at a specified level, no need to add WDACEvent to the database
+            if (Get-AppTrustedNoAppEntry -WDACEvent $WDACEvent -AllPossibleLevels $AllLevels) {
+                continue;
+            }
+        }
+
         if ($WDACEvent.Psobject.Properties.value.count -le ($MSI_OR_SCRIPT_PSOBJECT_LENGTH + 1)) {
         #Case 1: It is an MSI or Script
 

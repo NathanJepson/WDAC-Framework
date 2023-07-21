@@ -2118,17 +2118,21 @@ function Expand-WDACApp {
 
 function Get-AppTrusted {
 #Determines if an app (WDAC event) would be able to run based on the "TrustedDriver" or "TrustedUserMode" attributes of various rule levels
-    [CmdletBinding()]
+    [CmdletBinding(DefaultParameterSetName = 'AppEntryPresent')]
     Param (
         [ValidateNotNullOrEmpty()]
-        [Parameter(Mandatory=$true)]
+        [Parameter(Mandatory=$true,ParameterSetName = 'AppEntryPresent')]
         [Alias("Hash","FlatHash")]
         [string]$SHA256FlatHash,
         [Alias("Levels")]
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         $AllPossibleLevels,
         [switch]$Driver,
-        [switch]$UserMode
+        [switch]$UserMode,
+        [Parameter(Mandatory=$true,ParameterSetName = 'NoAppEntryPresent')]
+        $WDACEvent,
+        [Parameter(ParameterSetName = 'NoAppEntryPresent')]
+        $CertInfoNoAppPresent
     )
 
     if (-not $AllPossibleLevels) {
@@ -2137,12 +2141,22 @@ function Get-AppTrusted {
     $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
 
     try {
-        $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
-        if (-not $AppInstance) {
-            throw "No instance of this app $SHA256FlatHash in the database."
+        if ($WDACEvent) {
+            $AppInstance = $WDACEvent
+            if ($CertInfoNoAppPresent) {
+                $CertInfo = $CertInfoNoAppPresent
+            }
+        } else {
+            $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+            if (-not $AppInstance) {
+                throw "No instance of this app $SHA256FlatHash in the database."
+            }
         }
+
         #TODO -> MSI_OR_SCRIPT APP INSTANCE
-        $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        if (-not $CertInfo -and -not $WDACEvent) {
+            $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        }
 
         if (-not $Driver -and -not $UserMode) {
             if ($AppInstance.SigningScenario -eq "UserMode") {
@@ -2362,6 +2376,71 @@ function Get-AppTrusted {
         }
 
         return $false
+    } catch {
+        throw $_
+    }
+}
+
+function Get-AppTrustedNoAppEntry {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $WDACEvent,
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
+        $AllPossibleLevels,
+        [switch]$Driver,
+        [switch]$UserMode
+    )
+
+    if (-not $AllPossibleLevels) {
+        $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    }
+
+    $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "Hash"}
+    #Since Hash rules are handled by app event entries, this would be redundant, so let's just remove it
+
+    try {
+
+        if (-not $Driver -and -not $UserMode) {
+            if ($WDACEvent.SigningScenario -eq "UserMode") {
+                $UserMode = $true
+            } elseif ($WDACEvent.SigningScenario -eq "Driver") {
+                $Driver = $true
+            } else {
+                $UserMode = $true
+                $Driver = $false
+            }
+        }
+
+
+        $CertInfo = [PSCustomObject]@{
+            LeafCert = @();
+            PcaCert = @()
+        }
+    
+        foreach ($Signer in $WDACEvent.SignerInfo) {
+
+            if (($Signer.PublisherTBSHash -and -not $Signer.IssuerTBSHash) -or (-not $Signer.PublisherTBSHash -and ($Signer.IssuerTBSHash))) {
+            #If there's not a matching publisher and issuer pair, then continue the loop
+                continue;
+            }
+
+            if ($Signer.PublisherTBSHash) {
+                $TempPublisherCert = Get-WDACCertificate -TBSHash $Signer.PublisherTBSHash -ErrorAction Stop
+                if ($TempPublisherCert) {
+                    $CertInfo.LeafCert += $TempPublisherCert
+                }
+                if ($Signer.IssuerTBSHash) {
+                    $TempIssuerCert = Get-WDACCertificate -TBSHash $Signer.IssuerTBSHash -ErrorAction Stop
+                    if ($TempIssuerCert) {
+                        $CertInfo.PcaCert += $TempIssuerCert
+                    }
+                }
+            }
+        }
+
+        return (Get-AppTrusted -AllPossibleLevels $AllPossibleLevels -Driver:$Driver -UserMode:$UserMode -WDACEvent $WDACEvent -CertInfoNoAppPresent $CertInfo -ErrorAction Stop)
     } catch {
         throw $_
     }
