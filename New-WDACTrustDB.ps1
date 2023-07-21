@@ -130,7 +130,7 @@ function New-WDACTrustDB {
         ValidatedSigningLevel Text,
         VerificationError Text,
         FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE CASCADE,
-        FOREIGN KEY(AppIndex) REFERENCES msi_or_script(AppIndex) ON DELETE RESTRICT,
+        FOREIGN KEY(AppIndex) REFERENCES msi_or_script(AppIndex) ON DELETE CASCADE,
         FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE CASCADE,
         PRIMARY KEY(AppIndex,SignatureIndex)
     );
