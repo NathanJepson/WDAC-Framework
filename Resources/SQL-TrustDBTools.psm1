@@ -2366,3 +2366,35 @@ function Get-AppTrusted {
         throw $_
     }
 }
+
+function Get-AppTrustedAllLevels {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [Alias("Hash","FlatHash")]
+        [string]$SHA256FlatHash,
+        [Alias("Levels")]
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
+        $AllPossibleLevels,
+        [switch]$Driver,
+        [switch]$UserMode
+    )
+
+    if (-not $AllPossibleLevels) {
+        $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    }
+
+    $Result = [PSCustomObject]@{}
+    $ResultHashTable = @{}
+
+    foreach ($Level in $AllPossibleLevels) {
+        $ResultHashTable.Add($Level,$false)
+        if (Get-AppTrusted -SHA256FlatHash $SHA256FlatHash -AllPossibleLevels $Level -Driver:$Driver -UserMode:$UserMode) {
+            $ResultHashTable[$Level] = $true
+        }
+    }
+    
+    $Result | Add-Member -NotePropertyMembers $ResultHashTable -PassThru | Out-Null
+    return $Result
+}
