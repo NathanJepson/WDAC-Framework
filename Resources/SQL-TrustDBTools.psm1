@@ -56,6 +56,7 @@ function New-SqliteConnection {
 
     if (-not ($Database)) {
         $TrueDatabase = (Get-LocalStorageJSON)."WorkingDatabase"."Location"
+        #TODO: Handle other location types
         if (-not $TrueDatabase) {
             throw "No valid Database provided."
         }
@@ -704,7 +705,8 @@ function Remove-WDACApp {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "DELETE FROM apps WHERE SHA256FlatHash = @SHA256FlatHash"
+        $Command.CommandText = "PRAGMA foreign_keys=ON;"
+        $Command.Commandtext += "DELETE FROM apps WHERE SHA256FlatHash = @SHA256FlatHash"
         $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Command.ExecuteNonQuery()
