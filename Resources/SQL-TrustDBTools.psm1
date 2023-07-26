@@ -105,6 +105,28 @@ function Compare-Versions {
     return 0; #They are the same version number
 }
 
+function Test-VersionEncompassed {
+#Uses a less-than or equal to and greater-than-or-equal-to relationship
+    [cmdletbinding()]
+    param (
+        [Alias("Version")]
+        $VersionToCheck,
+        [Alias("Min","Minimum")]
+        $MinimumVersion,
+        [Alias("Max","Maximum")]
+        $MaximumVersion
+    )
+
+    $CompareMin = Compare-Versions -Version1 $VersionToCheck -Version2 $MinimumVersion
+    $CompareMax = Compare-Versions -Version1 $VersionToCheck -Version2 $MaximumVersion
+    $Encompasses = $false
+    if (($CompareMin -eq 1 -or $CompareMin -eq 0) -and ($CompareMax -eq -1 -or $CompareMax -eq 0)) {
+        $Encompasses = $true
+    }
+
+    return $Encompasses
+}
+
 function Find-WDACGroup {
     [cmdletbinding()]
     Param ( 
@@ -706,6 +728,7 @@ function Remove-WDACApp {
         }
         $Command = $Connection.CreateCommand()
         $Command.CommandText = "PRAGMA foreign_keys=ON;"
+            #This PRAGMA is needed so that foreign key constraints will work upon deleting
         $Command.Commandtext += "DELETE FROM apps WHERE SHA256FlatHash = @SHA256FlatHash"
         $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
@@ -1632,6 +1655,11 @@ function Add-WDACFilePublisher {
 
 }
 
+function Add-WDACFilePublisherByCriteria {
+    [cmdletbinding()]
+    param ()
+}
+
 function Set-WDACFilePublisherMinimumAllowedVersion {
 #Note, this function only works if just ONE file publisher rule exists for the publisher index / filename / filenamelevel combination.
     [cmdletbinding()]
@@ -2116,6 +2144,119 @@ function Expand-WDACApp {
     }
 }
 
+function Expand-WDACAppV2 {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [switch]$AddPublisher,
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
+        $Levels,
+        [Alias("Certs")]
+        [switch]$GetCerts
+    )
+
+    if (-not $Levels) {
+        $Levels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    }
+    $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
+    
+    if (-not ($Levels -contains "LeafCertificate") -and $GetCerts) {
+        $Levels += "LeafCertificate"
+    }
+    if (-not ($Levels -contains "PcaCertificate") -and $GetCerts) {
+        $Levels += "PcaCertificate"
+    }
+
+    $App = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+    if (-not $App) {
+        return $null
+    }
+
+    $Result = @{}
+    $CertsAndPublishers = @()
+    try {
+        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        if (-not $Signers) {
+            return $null
+        }
+
+        foreach ($Signer in $Signers) {
+            $LeafCertTBSHash = $Signer.CertificateTBSHash
+            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -ErrorAction Stop
+
+            if ($LeafCert.ParentCertTBSHash) {
+                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
+                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                if (-not $Publisher -and $AddPublisher) {
+                #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
+                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop)) {
+                        throw "Trouble adding a publisher to the database."
+                    } else {
+                        $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                    }
+                }
+            }
+
+            $TempDict = @{}
+            #@{SignatureIndex = $Signer.SignatureIndex; SignerInfo = ( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError); LeafCert = $LeafCert; PcaCert = $PcaCert; Publisher = $Publisher; }
+            $TempDict.Add("SignatureIndex",$Signer.SignatureIndex)
+            $TempDict.Add("SignerInfo",( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError))
+            switch ($Levels) {
+                "LeafCertificate" {
+                    $TempDict.Add("LeafCert",$LeafCert)
+                } 
+                "PcaCertificate" {
+                    $TempDict.Add("PcaCertificate",$PcaCertificate)
+                }
+                "Publisher" {
+                    $TempDict.Add("Publisher",$Publisher)
+                } 
+                "FilePublisher" {
+                    if ($Publisher) {
+                        foreach ($FileNameLevel in $SpecificFileNameLevels) {
+                            if ($App.$($FileNameLevel)) {
+                                $FilePublishers = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -ErrorAction Stop
+                                if ($FilePublishers) {
+                                    $TempDict.Add("FilePublishers",$FilePublishers)
+                                    break
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+
+            $CertsAndPublishers += $TempDict
+        }
+
+        if ($Levels -contains "FileName") {
+            foreach ($FileNameLevel in $SpecificFileNameLevels) {
+                if ($App.$($FileNameLevel)) {
+                    $FileName = Get-WDACFileName -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -ErrorAction Stop
+                    if ($FileName) {
+                        $Result.Add("FileName",$FileName)
+                        break
+                    }
+                }
+            }
+        }
+        if ($Levels -contains "LeafCertificate" -or $Levels -contains "PcaCertificate" -or $Levels -contains "Publisher" -or $Levels -contains "FilePublisher") {
+            $CertsAndPublishers = $CertsAndPublishers | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
+            $Result.Add("CertsAndPublishers",$CertsAndPublishers)
+        }
+        if ($Levels -contains "Hash") {
+            $Result.Add("Hash",$App)
+        }
+
+        $ResultObj = $Result | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
+        return $ResultObj
+    } catch {
+        throw $_
+    }
+}
+
 function Get-AppTrusted {
 #Determines if an app (WDAC event) would be able to run based on the "TrustedDriver" or "TrustedUserMode" attributes of various rule levels
     [CmdletBinding(DefaultParameterSetName = 'AppEntryPresent')]
@@ -2477,3 +2618,4 @@ function Get-AppTrustedAllLevels {
     $Result | Add-Member -NotePropertyMembers $ResultHashTable -PassThru | Out-Null
     return $Result
 }
+
