@@ -181,7 +181,6 @@ function New-WDACGroup_SQL {
 function Get-WDACGroups {
     [cmdletbinding()]
     Param (
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -231,7 +230,6 @@ function Get-MAXAppIndexID {
     [cmdletbinding()]
     Param ( 
         [switch]$isMSIorScript,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -288,7 +286,6 @@ function Find-WDACApp {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -333,7 +330,6 @@ function Get-WDACApp {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -415,7 +411,6 @@ function Get-WDACAppSigners {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [int]$AppIndex,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -530,7 +525,6 @@ function Get-WDACAppSignersByFlatHash {
 function Get-WDACAppsToSetTrust {
     [cmdletbinding()]
     param(
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -654,7 +648,6 @@ function Add-WDACApp {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [int]$AppIndex,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -715,7 +708,6 @@ function Remove-WDACApp {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -751,7 +743,6 @@ function Find-WDACCertificate {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$TBSHash,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -797,7 +788,6 @@ function Get-WDACCertificate {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$TBSHash,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -875,7 +865,6 @@ function Add-WDACCertificate {
         $ParentCertTBSHash,
         $NotValidBefore,
         $NotValidAfter,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -966,7 +955,6 @@ function Find-WDACPolicy {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyGUID,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1011,7 +999,6 @@ function Find-WDACPolicyByName {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyName,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1057,7 +1044,6 @@ function Find-WDACPolicyByID {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyID,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1167,7 +1153,6 @@ function Get-WDACPolicy {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyGUID,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
     $result = $null
@@ -1222,7 +1207,6 @@ function Get-WDACPolicy {
 function Get-WDACPoliciesGUIDandName {
     [cmdletbinding()]
     Param (
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1278,7 +1262,6 @@ function Get-WDACPublisher {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PcaCertTBSHash,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1345,7 +1328,6 @@ function Get-WDACPublisherByPublisherIndex {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [int]$PublisherIndex,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1425,7 +1407,6 @@ function Add-WDACPublisher {
         $DeferredPolicyIndex,
         $Comment,
         $BlockingPolicyID,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
     $NoConnectionProvided = $false
@@ -1605,7 +1586,6 @@ function Add-WDACFilePublisher {
         [string]$FileName,
         [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
         $SpecificFileNameLevel="OriginalFileName",
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1716,7 +1696,6 @@ function Get-WDACDevice {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$DeviceName,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1774,7 +1753,6 @@ function Add-WDACDevice {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$AllowedGroup,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1814,7 +1792,6 @@ function Add-WDACPolicyAssignment {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyGUID,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1994,7 +1971,6 @@ function Add-WDACFileName {
         $DeferredPolicyIndex,
         $Comment,
         $BlockingPolicyID,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -2044,7 +2020,6 @@ function Get-WDACFileName {
         [string]$FileName,
         [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
         $SpecificFileNameLevel="OriginalFileName",
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -2259,7 +2234,6 @@ function Add-NewPublishersFromAppSigners {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
-        [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
