@@ -468,7 +468,8 @@ function Get-WDACAppSigners {
 function Get-WDACAppSignersByFlatHash {
     [cmdletbinding()]
     param(
-        [string]$SHA256FlatHash
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
     $result = $null
@@ -2678,7 +2679,7 @@ function Get-AppTrustedAllLevels {
 
     foreach ($Level in $AllPossibleLevels) {
         $ResultHashTable.Add($Level,$false)
-        if (Get-AppTrusted -SHA256FlatHash $SHA256FlatHash -AllPossibleLevels $Level -Driver:$Driver -UserMode:$UserMode -Connection $Connection) {
+        if (Get-AppTrusted -SHA256FlatHash $SHA256FlatHash -AllPossibleLevels $Level -Driver:$Driver -UserMode:$UserMode -Connection $Connection -ErrorAction Stop) {
             $ResultHashTable[$Level] = $true
         }
     }

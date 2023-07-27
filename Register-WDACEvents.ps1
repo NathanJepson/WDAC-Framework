@@ -169,7 +169,9 @@ filter Register-WDACEvents {
 
     $AllLevels = $null
     if ($Level -or $Fallbacks) {
-        $Fallbacks = $Fallbacks | Where-Object {$_ -ne $Level}
+        if ($Fallbacks -and $Level) {
+            $Fallbacks = $Fallbacks | Where-Object {$_ -ne $Level}
+        }
         $AllLevels = @()
         if ($Level) {
             $AllLevels += $Level
