@@ -2080,26 +2080,27 @@ function Expand-WDACApp {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
-        [switch]$AddPublisher
+        [switch]$AddPublisher,
+        [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
     $Result = @()
     try {
-        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
         if (-not $Signers) {
             return $null
         }
 
         foreach ($Signer in $Signers) {
             $LeafCertTBSHash = $Signer.CertificateTBSHash
-            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -ErrorAction Stop
+            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -Connection $Connection -ErrorAction Stop
 
             if ($LeafCert.ParentCertTBSHash) {
-                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
-                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
+                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop
                 if (-not $Publisher -and $AddPublisher) {
                 #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
-                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop)) {
+                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop)) {
                         throw "Trouble adding a publisher to the database."
                     }
                 }
@@ -2125,7 +2126,8 @@ function Expand-WDACAppV2 {
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         $Levels,
         [Alias("Certs")]
-        [switch]$GetCerts
+        [switch]$GetCerts,
+        [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
     if (-not $Levels) {
@@ -2140,7 +2142,7 @@ function Expand-WDACAppV2 {
         $Levels += "PcaCertificate"
     }
 
-    $App = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+    $App = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
     if (-not $App) {
         return $null
     }
@@ -2148,24 +2150,24 @@ function Expand-WDACAppV2 {
     $Result = @{}
     $CertsAndPublishers = @()
     try {
-        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
         if (-not $Signers) {
             return $null
         }
 
         foreach ($Signer in $Signers) {
             $LeafCertTBSHash = $Signer.CertificateTBSHash
-            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -ErrorAction Stop
+            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -Connection $Connection -ErrorAction Stop
 
             if ($LeafCert.ParentCertTBSHash) {
-                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
-                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
+                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop
                 if (-not $Publisher -and $AddPublisher) {
                 #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
-                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop)) {
+                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop)) {
                         throw "Trouble adding a publisher to the database."
                     } else {
-                        $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                        $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop
                     }
                 }
             }
@@ -2188,7 +2190,7 @@ function Expand-WDACAppV2 {
                     if ($Publisher) {
                         foreach ($FileNameLevel in $SpecificFileNameLevels) {
                             if ($App.$($FileNameLevel)) {
-                                $FilePublishers = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -ErrorAction Stop
+                                $FilePublishers = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -Connection $Connection -ErrorAction Stop
                                 if ($FilePublishers) {
                                     $TempDict.Add("FilePublishers",$FilePublishers)
                                     break
@@ -2205,7 +2207,7 @@ function Expand-WDACAppV2 {
         if ($Levels -contains "FileName") {
             foreach ($FileNameLevel in $SpecificFileNameLevels) {
                 if ($App.$($FileNameLevel)) {
-                    $FileName = Get-WDACFileName -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -ErrorAction Stop
+                    $FileName = Get-WDACFileName -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -Connection $Connection -ErrorAction Stop
                     if ($FileName) {
                         $Result.Add("FileName",$FileName)
                         break
@@ -2284,7 +2286,8 @@ function Get-AppTrusted {
         [Parameter(Mandatory=$true,ParameterSetName = 'NoAppEntryPresent')]
         $WDACEvent,
         [Parameter(ParameterSetName = 'NoAppEntryPresent')]
-        $CertInfoNoAppPresent
+        $CertInfoNoAppPresent,
+        [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
     if (-not $AllPossibleLevels) {
@@ -2299,7 +2302,7 @@ function Get-AppTrusted {
                 $CertInfo = $CertInfoNoAppPresent
             }
         } else {
-            $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+            $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
             if (-not $AppInstance) {
                 throw "No instance of this app $SHA256FlatHash in the database."
             }
@@ -2307,7 +2310,7 @@ function Get-AppTrusted {
 
         #TODO -> MSI_OR_SCRIPT APP INSTANCE
         if (-not $CertInfo -and -not $WDACEvent) {
-            $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+            $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
         }
 
         if (-not $Driver -and -not $UserMode) {
@@ -2379,7 +2382,7 @@ function Get-AppTrusted {
                     switch ($SpecificFileNameLevels) {
                         "OriginalFileName" {
                             if ($AppInstance.OriginalFileName) {
-                                $TempFileName = Get-WDACFileName -FileName $AppInstance.OriginalFileName
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.OriginalFileName -Connection $Connection -ErrorAction Stop
                                 if ($TempFileName) {
                                     if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
                                         return $true
@@ -2389,7 +2392,7 @@ function Get-AppTrusted {
                         }
                         "InternalName" {
                             if ($AppInstance.InternalName) {
-                                $TempFileName = Get-WDACFileName -FileName $AppInstance.InternalName -SpecificFileNameLevel "InternalName"
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.InternalName -SpecificFileNameLevel "InternalName" -Connection $Connection -ErrorAction Stop
                                 if ($TempFileName) {
                                     if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
                                         return $true
@@ -2399,7 +2402,7 @@ function Get-AppTrusted {
                         }
                         "FileDescription" {
                             if ($AppInstance.FileDescription) {
-                                $TempFileName = Get-WDACFileName -FileName $AppInstance.FileDescription -SpecificFileNameLevel "FileDescription"
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.FileDescription -SpecificFileNameLevel "FileDescription" -Connection $Connection -ErrorAction Stop
                                 if ($TempFileName) {
                                     if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
                                         return $true
@@ -2409,7 +2412,7 @@ function Get-AppTrusted {
                         }
                         "ProductName" {
                             if ($AppInstance.ProductName) {
-                                $TempFileName = Get-WDACFileName -FileName $AppInstance.ProductName -SpecificFileNameLevel "ProductName"
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.ProductName -SpecificFileNameLevel "ProductName" -Connection $Connection -ErrorAction Stop
                                 if ($TempFileName) {
                                     if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
                                         return $true
@@ -2419,7 +2422,7 @@ function Get-AppTrusted {
                         }
                         "PackageFamilyName" {
                             if ($AppInstance.PackageFamilyName) {
-                                $TempFileName = Get-WDACFileName -FileName $AppInstance.PackageFamilyName -SpecificFileNameLevel "PackageFamilyName"
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.PackageFamilyName -SpecificFileNameLevel "PackageFamilyName" -Connection $Connection -ErrorAction Stop
                                 if ($TempFileName) {
                                     if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
                                         return $true
@@ -2452,7 +2455,7 @@ function Get-AppTrusted {
                 if ($CertInfo) {
                     foreach ($LeafCertificate in $CertInfo.LeafCert) {
                         if ($LeafCertificate.CommonName -and $LeafCertificate.ParentCertTBSHash) {
-                            $TempPublisher = Get-WDACPublisher -LeafCertCN $LeafCertificate.CommonName -PcaCertTBSHash $LeafCertificate.ParentCertTBSHash
+                            $TempPublisher = Get-WDACPublisher -LeafCertCN $LeafCertificate.CommonName -PcaCertTBSHash $LeafCertificate.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
                             if ($TempPublisher) {
                                 if (Get-TrustedInstance -Instance $TempPublisher -Driver:$Driver -UserMode:$UserMode) {
                                     return $true
@@ -2466,12 +2469,12 @@ function Get-AppTrusted {
                 if ($CertInfo -and $AppInstance.FileVersion -and ($AppInstance.OriginalFileName -or $AppInstance.InternalName -or $AppInstance.FileDescription -or $AppInstance.ProductName -or $AppInstance.PackageFamilyName)) {
                     foreach ($LeafCertificate in $CertInfo.LeafCert) {
                         if ($LeafCertificate.CommonName -and $LeafCertificate.ParentCertTBSHash) {
-                            $TempPublisher = Get-WDACPublisher -LeafCertCN $LeafCertificate.CommonName -PcaCertTBSHash $LeafCertificate.ParentCertTBSHash
+                            $TempPublisher = Get-WDACPublisher -LeafCertCN $LeafCertificate.CommonName -PcaCertTBSHash $LeafCertificate.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
                             if ($TempPublisher.PublisherIndex) {
                                 switch ($SpecificFileNameLevels) {
                                     "OriginalFileName" {
                                         if ($AppInstance.OriginalFileName) {
-                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.OriginalFileName -SpecificFileNameLevel "OriginalFileName"
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.OriginalFileName -SpecificFileNameLevel "OriginalFileName" -Connection $Connection -ErrorAction Stop
                                             if ($TempFilePublishers) {
                                                 if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
                                                     return $true
@@ -2481,7 +2484,7 @@ function Get-AppTrusted {
                                     }
                                     "InternalName" {
                                         if ($AppInstance.InternalName) {
-                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.InternalName -SpecificFileNameLevel "InternalName"
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.InternalName -SpecificFileNameLevel "InternalName" -Connection $Connection -ErrorAction Stop
                                             if ($TempFilePublishers) {
                                                 if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
                                                     return $true
@@ -2491,7 +2494,7 @@ function Get-AppTrusted {
                                     }
                                     "FileDescription" {
                                         if ($AppInstance.FileDescription) {
-                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.FileDescription -SpecificFileNameLevel "FileDescription"
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.FileDescription -SpecificFileNameLevel "FileDescription" -Connection $Connection -ErrorAction Stop
                                             if ($TempFilePublishers) {
                                                 if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
                                                     return $true
@@ -2501,7 +2504,7 @@ function Get-AppTrusted {
                                     }
                                     "ProductName" {
                                         if ($AppInstance.ProductName) {
-                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.ProductName -SpecificFileNameLevel "ProductName"
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.ProductName -SpecificFileNameLevel "ProductName" -Connection $Connection -ErrorAction Stop
                                             if ($TempFilePublishers) {
                                                 if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
                                                     return $true
@@ -2511,7 +2514,7 @@ function Get-AppTrusted {
                                     }
                                     "PackageFamilyName" {
                                         if ($AppInstance.PackageFamilyName) {
-                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.PackageFamilyName -SpecificFileNameLevel "PackageFamilyName"
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.PackageFamilyName -SpecificFileNameLevel "PackageFamilyName" -Connection $Connection -ErrorAction Stop
                                             if ($TempFilePublishers) {
                                                 if (Get-TrustedInstanceFilePublishers -FilePublishers $TempFilePublishers -Driver:$Driver -UserMode:$UserMode -FileVersion $AppInstance.FileVersion) {
                                                     return $true
@@ -2542,7 +2545,8 @@ function Get-AppTrustedNoAppEntry {
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         $AllPossibleLevels,
         [switch]$Driver,
-        [switch]$UserMode
+        [switch]$UserMode,
+        [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
     if (-not $AllPossibleLevels) {
@@ -2579,12 +2583,12 @@ function Get-AppTrustedNoAppEntry {
             }
 
             if ($Signer.PublisherTBSHash) {
-                $TempPublisherCert = Get-WDACCertificate -TBSHash $Signer.PublisherTBSHash -ErrorAction Stop
+                $TempPublisherCert = Get-WDACCertificate -TBSHash $Signer.PublisherTBSHash -Connection $Connection -ErrorAction Stop
                 if ($TempPublisherCert) {
                     $CertInfo.LeafCert += $TempPublisherCert
                 }
                 if ($Signer.IssuerTBSHash) {
-                    $TempIssuerCert = Get-WDACCertificate -TBSHash $Signer.IssuerTBSHash -ErrorAction Stop
+                    $TempIssuerCert = Get-WDACCertificate -TBSHash $Signer.IssuerTBSHash -Connection $Connection -ErrorAction Stop
                     if ($TempIssuerCert) {
                         $CertInfo.PcaCert += $TempIssuerCert
                     }
@@ -2592,7 +2596,7 @@ function Get-AppTrustedNoAppEntry {
             }
         }
 
-        return (Get-AppTrusted -AllPossibleLevels $AllPossibleLevels -Driver:$Driver -UserMode:$UserMode -WDACEvent $WDACEvent -CertInfoNoAppPresent $CertInfo -ErrorAction Stop)
+        return (Get-AppTrusted -AllPossibleLevels $AllPossibleLevels -Driver:$Driver -UserMode:$UserMode -WDACEvent $WDACEvent -CertInfoNoAppPresent $CertInfo -Connection $Connection -ErrorAction Stop)
     } catch {
         throw $_
     }
@@ -2609,7 +2613,8 @@ function Get-AppTrustedAllLevels {
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         $AllPossibleLevels,
         [switch]$Driver,
-        [switch]$UserMode
+        [switch]$UserMode,
+        [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
     if (-not $AllPossibleLevels) {
@@ -2621,7 +2626,7 @@ function Get-AppTrustedAllLevels {
 
     foreach ($Level in $AllPossibleLevels) {
         $ResultHashTable.Add($Level,$false)
-        if (Get-AppTrusted -SHA256FlatHash $SHA256FlatHash -AllPossibleLevels $Level -Driver:$Driver -UserMode:$UserMode) {
+        if (Get-AppTrusted -SHA256FlatHash $SHA256FlatHash -AllPossibleLevels $Level -Driver:$Driver -UserMode:$UserMode -Connection $Connection) {
             $ResultHashTable[$Level] = $true
         }
     }
@@ -2629,4 +2634,3 @@ function Get-AppTrustedAllLevels {
     $Result | Add-Member -NotePropertyMembers $ResultHashTable -PassThru | Out-Null
     return $Result
 }
-
