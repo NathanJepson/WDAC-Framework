@@ -2257,6 +2257,47 @@ function Expand-WDACAppV2 {
     }
 }
 
+function Add-NewPublishersFromAppSigners {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        if (-not $Signers) {
+            return $null
+        }
+
+        foreach ($Signer in $Signers) {
+            $LeafCertTBSHash = $Signer.CertificateTBSHash
+            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -ErrorAction Stop
+
+            if ($LeafCert.ParentCertTBSHash) {
+                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
+                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                
+                if (-not ($Publisher)) {
+                    if ($Connection) {
+                        if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -Connection $Connection -ErrorAction Stop)) {
+                            throw "Trouble adding a publisher to the database."
+                        } 
+                    }
+                    elseif (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop)) {
+                        throw "Trouble adding a publisher to the database."
+                    } 
+                }
+            }
+        }
+    } catch {
+        throw $_
+    }
+}
+
 function Get-AppTrusted {
 #Determines if an app (WDAC event) would be able to run based on the "TrustedDriver" or "TrustedUserMode" attributes of various rule levels
     [CmdletBinding(DefaultParameterSetName = 'AppEntryPresent')]

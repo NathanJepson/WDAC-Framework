@@ -151,7 +151,7 @@ filter Register-WDACEvents {
     Get-WDACEvents -RemoteMachine PC2,PC3 -SignerInformation -CheckWhqlStatus | Register-WDACEvents -Verbose
 
     .EXAMPLE
-    Get-WDACEvents | Register-WDACEvents -NoOut
+    Get-WDACEvents | Register-WDACEvents -NoOut -Level FilePublisher -Fallbacks Publisher,Hash
     #>
 
     [CmdletBinding()]
@@ -204,6 +204,9 @@ filter Register-WDACEvents {
             continue; #TODO - Implement Function
             try {
                 Register-MSIorScriptEvent -WDACEvent $WDACEvent -ErrorAction Stop
+                if ($AllLevels -contains "Publisher" -or $AllLevels -contains "FilePublisher") {
+                    #TODO - Implement add new publishers
+                }
             } catch {
                 Write-Verbose $_
             }
@@ -212,6 +215,9 @@ filter Register-WDACEvents {
         #Case 2: Else it is an executable, dll, driver, etc.
             try {
                 Register-PEEvent -WDACEvent $WDACEvent -ErrorAction Stop
+                if ($AllLevels -contains "Publisher" -or $AllLevels -contains "FilePublisher") {
+                    Add-NewPublishersFromAppSigners -SHA256FlatHash $WDACEvent.SHA256FileHash -ErrorAction Stop
+                }
             } catch {
                 Write-Verbose $_
                 Write-Verbose "Failed to add this event (or its signers): $WDACEvent"
