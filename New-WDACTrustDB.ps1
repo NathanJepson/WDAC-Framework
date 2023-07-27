@@ -169,7 +169,6 @@ function New-WDACTrustDB {
         Revoked Integer DEFAULT 0 NOT NULL,
         Deferred Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
-        PublisherTBSHash Text NOT NULL,
         AllowedPolicyID Text,
         DeferredPolicyIndex Integer,
         Comment Text,

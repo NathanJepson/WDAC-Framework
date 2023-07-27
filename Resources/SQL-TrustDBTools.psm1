@@ -1421,9 +1421,6 @@ function Add-WDACPublisher {
         [bool]$Revoked = $false,
         [bool]$Deferred = $false,
         [bool]$Blocked = $false,
-        [ValidateNotNullOrEmpty()]
-        [Parameter(Mandatory=$true)]
-        [string]$PublisherTBSHash,
         $AllowedPolicyID,
         $DeferredPolicyIndex,
         $Comment,
@@ -1439,7 +1436,7 @@ function Add-WDACPublisher {
         }
         $Command = $Connection.CreateCommand()
 
-        $Command.Commandtext = "INSERT INTO publishers (LeafCertCN,PcaCertTBSHash,Untrusted,TrustedDriver,TrustedUserMode,Staged,Revoked,Deferred,Blocked,PublisherTBSHash,AllowedPolicyID,DeferredPolicyIndex,Comment,BlockingPolicyID,PublisherIndex) values (@LeafCertCN,@PcaCertTBSHash,@Untrusted,@TrustedDriver,@TrustedUserMode,@Staged,@Revoked,@Deferred,@Blocked,@PublisherTBSHash,@AllowedPolicyID,@DeferredPolicyIndex,@Comment,@BlockingPolicyID,(SELECT IFNULL(Max(PublisherIndex), 0) + 1 FROM publishers))"
+        $Command.Commandtext = "INSERT INTO publishers (LeafCertCN,PcaCertTBSHash,Untrusted,TrustedDriver,TrustedUserMode,Staged,Revoked,Deferred,Blocked,AllowedPolicyID,DeferredPolicyIndex,Comment,BlockingPolicyID,PublisherIndex) values (@LeafCertCN,@PcaCertTBSHash,@Untrusted,@TrustedDriver,@TrustedUserMode,@Staged,@Revoked,@Deferred,@Blocked,@AllowedPolicyID,@DeferredPolicyIndex,@Comment,@BlockingPolicyID,(SELECT IFNULL(Max(PublisherIndex), 0) + 1 FROM publishers))"
             $Command.Parameters.AddWithValue("LeafCertCN",$LeafCertCN) | Out-Null
             $Command.Parameters.AddWithValue("PcaCertTBSHash",$PcaCertTBSHash) | Out-Null
             $Command.Parameters.AddWithValue("Untrusted",$Untrusted) | Out-Null
@@ -1449,7 +1446,6 @@ function Add-WDACPublisher {
             $Command.Parameters.AddWithValue("Revoked",$Revoked) | Out-Null
             $Command.Parameters.AddWithValue("Deferred",$Deferred) | Out-Null
             $Command.Parameters.AddWithValue("Blocked",$Blocked) | Out-Null
-            $Command.Parameters.AddWithValue("PublisherTBSHash",$PublisherTBSHash) | Out-Null
             $Command.Parameters.AddWithValue("AllowedPolicyID",$AllowedPolicyID) | Out-Null
             $Command.Parameters.AddWithValue("DeferredPolicyIndex",$DeferredPolicyIndex) | Out-Null
             $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
@@ -1917,7 +1913,7 @@ function Expand-WDACAppDeprecated {
                 $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
                 if (-not $Publisher -and $AddPublisher) {
                 #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
-                    if (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop) {
+                    if (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop) {
                         $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
                     } else {
                         throw "Trouble adding a publisher to the database."
@@ -2128,7 +2124,7 @@ function Expand-WDACApp {
                 $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
                 if (-not $Publisher -and $AddPublisher) {
                 #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
-                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop)) {
+                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop)) {
                         throw "Trouble adding a publisher to the database."
                     }
                 }
@@ -2191,7 +2187,7 @@ function Expand-WDACAppV2 {
                 $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
                 if (-not $Publisher -and $AddPublisher) {
                 #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
-                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop)) {
+                    if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop)) {
                         throw "Trouble adding a publisher to the database."
                     } else {
                         $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
@@ -2283,11 +2279,11 @@ function Add-NewPublishersFromAppSigners {
                 
                 if (-not ($Publisher)) {
                     if ($Connection) {
-                        if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -Connection $Connection -ErrorAction Stop)) {
+                        if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop)) {
                             throw "Trouble adding a publisher to the database."
                         } 
                     }
-                    elseif (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -PublisherTBSHash $LeafCertTBSHash -ErrorAction Stop)) {
+                    elseif (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop)) {
                         throw "Trouble adding a publisher to the database."
                     } 
                 }
