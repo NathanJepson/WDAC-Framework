@@ -655,6 +655,60 @@ function Get-WDACAppSigningScenario {
 
 }
 
+function Get-WDACAppUntrustedStatus {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select Untrusted from apps WHERE SHA256FlatHash = @FlatHash"
+        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                if ($Reader["Untrusted"]) {
+                    if ( ([bool]$Reader["Untrusted"])) {
+                        return $true
+                    } else {
+                        return $false
+                    }
+                } else {
+                    return $false
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $false
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Add-WDACApp {
     [cmdletbinding()]
     Param ( 
@@ -2232,9 +2286,9 @@ function Expand-WDACAppV2 {
             switch ($Levels) {
                 "LeafCertificate" {
                     $TempDict.Add("LeafCert",$LeafCert)
-                } 
+                }
                 "PcaCertificate" {
-                    $TempDict.Add("PcaCertificate",$PcaCertificate)
+                    $TempDict.Add("PcaCertificate",$PcaCert)
                 }
                 "Publisher" {
                     $TempDict.Add("Publisher",$Publisher)
