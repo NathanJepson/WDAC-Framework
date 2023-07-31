@@ -246,7 +246,7 @@ function New-WDACTrustDB {
     CREATE TABLE policy_versioning_options (
         PolicyGUID Text PRIMARY KEY,
         VersioningType Integer NOT NULL,
-        FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
+        FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE CASCADE
     );
 
     CREATE TABLE groups (
