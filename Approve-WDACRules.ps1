@@ -281,7 +281,6 @@ function Approve-WDACRules {
     .PARAMETER AdvancedVersioning
     Gives more advanced versioning options when conveying trust.
     This runs the cmdlet as if VersioningType was never set and ignores VersioningType values from the database.
-    This will also prevent VersioningTypes from being written to the database.
 
     .PARAMETER IgnoreErrors
     Do not terminate the function based on error count--and ignore the all-or-nothing behavior of updating trust in the database.
