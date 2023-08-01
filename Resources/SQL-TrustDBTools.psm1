@@ -2230,7 +2230,6 @@ function Expand-WDACAppV2 {
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
         [switch]$AddPublisher,
-        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         $Levels,
         [Alias("Certs")]
         [switch]$GetCerts,
@@ -2239,6 +2238,12 @@ function Expand-WDACAppV2 {
 
     if (-not $Levels) {
         $Levels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    } else {
+        foreach ($LevelProvided in $Levels) {
+            if (-not (@("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher") -contains $LevelProvided)) {
+                throw "Please provide one or more of the following levels: Hash,FilePath,FileName,LeafCertificate,PcaCertificate,Publisher,FilePublisher"
+            }
+        }
     }
     $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
     
@@ -2386,7 +2391,6 @@ function Get-AppTrusted {
         [Alias("Hash","FlatHash")]
         [string]$SHA256FlatHash,
         [Alias("Levels")]
-        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         $AllPossibleLevels,
         [switch]$Driver,
         [switch]$UserMode,
@@ -2399,6 +2403,12 @@ function Get-AppTrusted {
 
     if (-not $AllPossibleLevels) {
         $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    } else {
+        foreach ($LevelProvided in $AllPossibleLevels) {
+            if (-not (@("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher") -contains $LevelProvided)) {
+                throw "Please provide one or more of the following levels: Hash,FilePath,FileName,LeafCertificate,PcaCertificate,Publisher,FilePublisher"
+            }
+        }
     }
     $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
 
@@ -2649,7 +2659,6 @@ function Get-AppTrustedNoAppEntry {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         $WDACEvent,
-        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         $AllPossibleLevels,
         [switch]$Driver,
         [switch]$UserMode,
@@ -2658,6 +2667,12 @@ function Get-AppTrustedNoAppEntry {
 
     if (-not $AllPossibleLevels) {
         $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    } else {
+        foreach ($LevelProvided in $AllPossibleLevels) {
+            if (-not (@("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher") -contains $LevelProvided)) {
+                throw "Please provide one or more of the following levels: Hash,FilePath,FileName,LeafCertificate,PcaCertificate,Publisher,FilePublisher"
+            }
+        }
     }
 
     $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "Hash"}
@@ -2717,7 +2732,6 @@ function Get-AppTrustedAllLevels {
         [Alias("Hash","FlatHash")]
         [string]$SHA256FlatHash,
         [Alias("Levels")]
-        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         $AllPossibleLevels,
         [switch]$Driver,
         [switch]$UserMode,
@@ -2726,6 +2740,12 @@ function Get-AppTrustedAllLevels {
 
     if (-not $AllPossibleLevels) {
         $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    } else {
+        foreach ($LevelProvided in $AllPossibleLevels) {
+            if (-not (@("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher") -contains $LevelProvided)) {
+                throw "Please provide one or more of the following levels: Hash,FilePath,FileName,LeafCertificate,PcaCertificate,Publisher,FilePublisher"
+            }
+        }
     }
 
     $Result = [PSCustomObject]@{}

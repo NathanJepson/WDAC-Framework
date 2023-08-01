@@ -37,7 +37,7 @@ function Get-LevelPrompt {
 
     Write-Host ($Prompt + ": (" + ($Levels -join ",") + ")")
     while ($true) {
-        $InputString = Read-Host
+        $InputString = Read-Host -Prompt "Option Selection"
         if (-not ($Levels -contains $InputString)) {
             Write-Host ("Not a valid option. Please supply one of these options: (" + ($Levels -join ",") + ")")
         } else {
@@ -52,21 +52,20 @@ function Get-WDACConferredTrust {
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         $Prompt,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         $AppInfo,
         $CertInfoAndMisc,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         $AppTrustLevels
     )
 
-    if ($AppTrustLevels) {
-        foreach ($TrustLevel in $AppTrustLevels) {
-            if ($TrustLevel.PSObject.Properties.Value) {
-                Write-Warning "This app is already trusted at a separate rule level."
-                break
-            }
-        }
+    $Options = "([Y] (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher Info); [T] (View Trust for this App for Respective Rule Levels))"
+    $TrustedLevels = ($AppTrustLevels.PSObject.Properties | Where-Object {$_.Value -eq $true} | Select-Object Name).Name
+    if ($TrustedLevels) {
+        Write-Warning "App is already trusted at a separate rule level."
     }
-
-    $Options = "([Y] (Yes) [N] (NO) [S] (SKIP) [B] (BLOCK) [A or E] (Expand / View App Info) [C] (Expand / View Certificate + Publisher Info) [T] (View Trust for this App for Respective Rule Levels))"
 
     Write-Host ($Prompt + ": " + $Options)
     while ($true) {
@@ -74,6 +73,11 @@ function Get-WDACConferredTrust {
         if ($InputString.ToLower() -eq "y") {
             return $true
         } elseif ($InputString.ToLower() -eq "n") {
+            if ($TrustedLevels) {
+                Write-Host "Cannot untrust an app which is already trusted at a separate rule level." -BackgroundColor Red
+                Write-Host ("Options: " + $Options)
+                continue
+            }
             return $false
         } elseif ($InputString.ToLower() -eq "s") {
             $AppsToSkip.Add($AppInfo.SHA256FlatHash,$true)
@@ -83,9 +87,14 @@ function Get-WDACConferredTrust {
             Write-Host ("Options: " + $Options)
         }
         elseif ($InputString.ToLower() -eq "c") {
-            foreach ($Signer in $CertInfoAndMisc) {
-                $Signer | Select-Object SignatureIndex, SignerInfo, LeafCert, PcaCertificate | Format-List -Property * | Out-Host
+            if ($CertInfoAndMisc) {
+                foreach ($Signer in $CertInfoAndMisc) {
+                    $Signer | Select-Object SignatureIndex, SignerInfo, LeafCert, PcaCertificate | Format-List -Property * | Out-Host
+                }
+            } else {
+                Write-Host "No associated certificate information."
             }
+            
             Write-Host ("Options: " + $Options)
         }
         elseif ($InputString.ToLower() -eq "t") {
@@ -97,6 +106,49 @@ function Get-WDACConferredTrust {
         }
         else {
             Write-Host ("Not a valid option. Select one of these options: " + $Options)
+        }
+    }
+}
+
+function Get-RuleToSignerMapping {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $Signers,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Prompt
+    )
+
+    $Options = "[A] (ALL of them); "
+
+    foreach ($Signer in $Signers) {
+        $Options += "[$($Signer.SignatureIndex)] (Signature Index $($Signer.SignatureIndex)); "
+    }
+
+    foreach ($Signer in $Signers) {
+        $Signer | Select-Object SignatureIndex, SignerInfo, LeafCert, PcaCertificate | Format-List -Property * | Out-Host
+    }
+
+    Write-Host ( $Prompt + ": " + $Options )
+    while ($true) {
+        $InputString = Read-Host -Prompt "Option Selection"
+        if ($InputString -eq "a") {
+            return "a"
+        } else {
+            $NotFound = $true
+            foreach ($Signer in $Signers) {
+                if ($Signer.SignatureIndex -eq $InputString) {
+                    $NotFound = $false
+                }
+            }
+            if ($NotFound) {
+                Write-Host ("Not a valid option. Select one of these options: " + $Options)
+                continue
+            } else {
+                return $InputString
+            }
         }
     }
 }
@@ -117,6 +169,29 @@ function Write-WDACConferredTrust {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+}
+
+function Restore-ProvidedLevelsOrder {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $Levels,
+        [Alias("OriginalLevels")]
+        $ProvidedLevels
+    )
+
+    if (-not $ProvidedLevels) {
+        return $Levels
+    } else {
+        $Result = @()
+        foreach ($Level in $ProvidedLevels) {
+            if ($Levels -contains $Level) {
+                $Result += $Level
+            }
+        }
+        return $Result
+    }
 }
 
 function Read-WDACConferredTrust {
@@ -149,29 +224,31 @@ function Read-WDACConferredTrust {
         $AppTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:($AppInfo.SigningScenario -eq "Driver") -UserMode:($AppInfo.SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop
         $FileName = ($AppInfo.FirstDetectedPath + $AppInfo.FileName)
 
-        ### DO YOU TRUST IT? #######################
+
+        ### DO YOU TRUST IT? #######################################################
         $IsTrusted = Get-WDACConferredTrust -Prompt "Do you trust the app $FileName with SHA256 Flat Hash $SHA256FlatHash ?" -AppInfo $AppInfo -CertInfoAndMisc $CertInfoAndMisc.CertsAndPublishers -AppTrustLevels $AppTrustLevels
         if ($AppsToSkip[$SHA256FlatHash]) {
             return;
         } elseif (-not $IsTrusted -and -not $AppsToBlock[$SHA256FlatHash]) {
         #This case handles when a user selects "N", meaning they don't trust the app
 
-            #TODO: Set the "Untrusted" var in the database
+            #TODO: Set the "Untrusted" var in the database (in the apps table)
             #TODO Write-WDACConferredTrust
             return;
         }
-        ############################################
-
+        ############################################################################
         
+
         ### HOW DO YOU TRUST IT? (AT WHAT LEVEL) ###################################
         $LevelToTrustAt = $null
-        if ($Levels -and $MultiRuleMode -and (-not $Levels.Count -eq 1)) {
+        if ($Levels -and $MultiRuleMode -and ($Levels.Count -gt 1)) {
             $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels $Levels
         } elseif (-not $Levels) {
-            $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at??"
+            $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?"
         } elseif ($Levels.Count -gt 1) {
             foreach ($Level in $Levels) {
-                if (-not $AppTrustLevels.$($Level)) {
+            #I'm not even sure that this for loop is necessary, might delete it later and replace with $LevelToTrustAt = $Levels[0]
+                if ($AppTrustLevels.$($Level) -eq $false) {
                     $LevelToTrustAt = $Level;
                     break;
                 } 
@@ -180,7 +257,8 @@ function Read-WDACConferredTrust {
         #The case that there is only one level
             $LevelToTrustAt = $Levels[0]
             if ($MultiRuleMode) {
-                if (-not (Get-YesOrNoPrompt -Prompt "Would you like to set this Trust (OR BLOCK) action at the level of $LevelToTrustAt?")) {
+                if (-not (Get-YesOrNoPrompt -Prompt "Would you like to set this Trust (OR BLOCK) action at the level of $LevelToTrustAt ?")) {
+                    $AppsToSkip.Add($SHA256FlatHash,$true)
                     return;
                 }
             }
@@ -188,11 +266,31 @@ function Read-WDACConferredTrust {
         ############################################################################################################
 
 
-        ### HOW DO YOU TRUST IT? (TRUSTED FOR WHAT POLICY) ##################
+        ### WHICH SIGNER IS APPLIED THIS TRUST? (WHEN APPLICABLE) ##################################################
+        $RuleSignerMapping = $null
+        if (@("Publisher","FilePublisher","LeafCertificate","PcaCertificate") -contains $LevelToTrustAt) {
+            if ((($CertInfoAndMisc.CertsAndPublishers | Select-Object SignatureIndex).SignatureIndex).Count -gt 1) {
+                $RuleSignerMapping = Get-RuleToSignerMapping -Signers $CertInfoAndMisc.CertsAndPublishers -Prompt "Which signer would you like to apply a rule of $LevelToTrustAt to?"
+            } else {
+                $RuleSignerMapping = $CertInfoAndMisc.CertsAndPublishers[0] | Select-Object SignatureIndex
+            }
+        }
+        ############################################################################################################
 
-        Write-Host "Congrats!" #FIXME
+        $ResultantPolicies = @()
+        ### HOW DO YOU TRUST IT? (TRUSTED FOR WHAT POLICY) #########################################################
+        
+
+
+
 
         ############################################################################################################
+        if ($ResultantPolicies.Count -gt 1) {
+            if (-not (Get-YesOrNoPrompt -Prompt "WARNING: This rule will get applied to more than one policy: $($ResultantPolicies -join ",") `n Do you wish to continue?")) {
+                $AppsToSkip.Add($SHA256FlatHash,$true)
+                return
+            }
+        }
 
     } catch {
         throw $_
@@ -356,10 +454,6 @@ function Approve-WDACRules {
             throw "Cannot provide fallbacks without providing a level. (This would be the preferred or default level.)"
         }
 
-        if ($MultiRuleMode -and -not $Level -and -not $Fallbacks) {
-            throw "MultiRuleMode is only allowed when Level and Fallbacks are specified."
-        }
-
         if ($ModifyUniversalVersioning -and -not $VersioningType) {
             throw "When ModifyUniversalVersioning is set, a VersioningType must also be provided."
         }
@@ -459,23 +553,32 @@ function Approve-WDACRules {
 
                     $SigningScenario = $Event.SigningScenario
                     if ($SigningScenario) {
-                        if ($AllLevels -and (Get-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
-                        #This indicates that the app is already trusted at a higher level
-                            if ($MultiRuleMode -and $AllLevels.Count -ge 1) {
+                        if ((Get-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                        #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
+                            if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
                                 $MiscLevels = @()
-                                $AppTrustAllLevels = (Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {-not $_.Value} | Select-Object Name
+                                $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
+                                $AppTrustAllLevels = Restore-ProvidedLevelsOrder -Levels $AppTrustAllLevels -ProvidedLevels $AllLevels
+                                #^This restores the original order the user provided the levels and fallbacks
                                 foreach ($AppTrustLevel in $AppTrustAllLevels) {
                                 #This checks for if there are any remaining untrusted levels for which to use MultiRuleMode
-                                    $MiscLevels += $AppTrustLevel.Name
+                                    if ($AllLevels -and ($AllLevels -contains $AppTrustLevel)) {
+                                        $MiscLevels += $AppTrustLevel
+                                    } elseif (-not $AllLevels) {
+                                        $MiscLevels += $AppTrustLevel
+                                    }
                                 }
                                 if ($MiscLevels.Count -ge 1) {
-                                    Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName.";
-                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -MultiRuleMode -Connection $Connection -ErrorAction Stop
+                                    Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
+                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -MultiRuleMode -Connection $Connection -ErrorAction Stop;
                                     continue;
                                 }
                             }
-                            Write-Verbose "Higher level of trust already achieved for this app: $FileName with hash $AppHash"
-                            continue;
+                            if ((Get-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                            #The difference between this if statement and the one above is this one provides the AllLevels parameter
+                                Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
+                                continue;
+                            }
                         }
                     }
 
