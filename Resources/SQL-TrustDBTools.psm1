@@ -1360,6 +1360,87 @@ function Get-WDACPoliciesGUIDandName {
     }
 }
 
+function Get-WDACPolicyAssignments {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$GroupName,
+        [switch]$IncludeGroupName,
+        [switch]$IncludePolicyName,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        if ($IncludePolicyName) {
+            $Command.Commandtext = "Select GroupName,policies.PolicyGUID,PolicyName From policy_assignments INNER JOIN policies on policy_assignments.PolicyGUID = policies.PolicyGUID Where GroupName = @GroupName;"
+        } else {
+            $Command.Commandtext = "Select * from policy_assignments WHERE GroupName = @GroupName"
+        }
+        $Command.Parameters.AddWithValue("GroupName",$GroupName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                if ($IncludePolicyName) {
+                    if ($IncludeGroupName) {
+                        $result += [PSCustomObject]@{
+                            GroupName = $GroupName
+                            PolicyGUID = $Reader["PolicyGUID"]
+                            PolicyName = $Reader["PolicyName"]
+                        }
+                    } else {
+                        $result += [PSCustomObject]@{
+                            PolicyGUID = $Reader["PolicyGUID"]
+                            PolicyName = $Reader["PolicyName"]
+                        }
+                    }
+                } else {
+                    if ($IncludeGroupName) {
+                        $result += [PSCustomObject]@{
+                            GroupName = $GroupName
+                            PolicyGUID = $Reader["PolicyGUID"]
+                        }
+                    } else {
+                        $result += [PSCustomObject]@{
+                            PolicyGUID = $Reader["PolicyGUID"]
+                        }
+                    }
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Get-WDACPublisher {
     [cmdletbinding()]
     param (
