@@ -21,6 +21,9 @@ function Register-WDACGroup {
     For each policy id supplied, an entry is added to the policy_assignments.
     If there are no policy ids or GroupName supplied, then the user is prompted for which one they would like.
     
+    Author: Nathan Jepson
+    License: MIT License
+    
     .PARAMETER PolicyID
     PolicyID or PolicyIDs that you would like to be linked to the GroupName. (These are GUIDs, not those other custom Policy IDs.)
 
@@ -140,6 +143,9 @@ function Register-WDACWorkstation {
     .DESCRIPTION
     This function checks what groups exist in the database, and whether a group is or isn't provided, the function prompts for a valid one. 
     Then, it will add an entry to the Devices table with the DeviceName and AllowedGroup attribute.
+
+    Author: Nathan Jepson
+    License: MIT License
     
     .PARAMETER WorkstationName
     Name of workstation or multiple workstations. Device names must be hostnames that can be used to start a Remote-PSSession (WinRM). 
@@ -228,6 +234,9 @@ function Register-WDACWorkstationAdHoc {
 
     .DESCRIPTION
     TODO
+
+    Author: Nathan Jepson
+    License: MIT License
 
     .EXAMPLE
     TODO
