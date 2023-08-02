@@ -1376,6 +1376,63 @@ function Get-WDACPoliciesById {
     }
 }
 
+function Get-WDACPolicyByName {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyName,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from policies WHERE PolicyName = @PolicyName"
+        $Command.Parameters.AddWithValue("PolicyName",$PolicyName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [PSCustomObject]@{
+                    PolicyGUID = $Reader["PolicyGUID"];
+                    PolicyID = $Reader["PolicyID"];
+                    PolicyHash = $Reader["PolicyHash"];
+                    PolicyName = $Reader["PolicyName"];
+                    PolicyVersion = $Reader["PolicyVersion"];
+                    ParentPolicyGUID = $Reader["ParentPolicyGUID"];
+                    BaseOrSupplemental = [bool]$Reader["BaseOrSupplemental"];
+                    IsSigned = [bool]$Reader["IsSigned"];
+                    AuditMode = [bool]$Reader["AuditMode"];
+                    IsPillar = [bool]$Reader["IsPillar"];
+                    OriginLocation = $Reader["OriginLocation"];
+                    OriginLocationType = $Reader["OriginLocationType"]
+                }
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Get-WDACPoliciesGUIDandName {
     [cmdletbinding()]
     Param (
