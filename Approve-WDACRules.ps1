@@ -213,6 +213,7 @@ function Read-WDACConferredTrust {
         $VersioningType,
         [switch]$AdvancedVersioning,
         [switch]$MultiRuleMode,
+        [switch]$ApplyRuleEachSigner,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
@@ -226,6 +227,7 @@ function Read-WDACConferredTrust {
 
 
         ### DO YOU TRUST IT? #######################################################
+        
         $IsTrusted = Get-WDACConferredTrust -Prompt "Do you trust the app $FileName with SHA256 Flat Hash $SHA256FlatHash ?" -AppInfo $AppInfo -CertInfoAndMisc $CertInfoAndMisc.CertsAndPublishers -AppTrustLevels $AppTrustLevels
         if ($AppsToSkip[$SHA256FlatHash]) {
             return;
@@ -236,6 +238,7 @@ function Read-WDACConferredTrust {
             #TODO Write-WDACConferredTrust
             return;
         }
+        
         ############################################################################
         
 
@@ -267,26 +270,30 @@ function Read-WDACConferredTrust {
 
 
         ### WHICH SIGNER IS APPLIED THIS TRUST? (WHEN APPLICABLE) ##################################################
-        $RuleSignerMapping = $null
-        if (@("Publisher","FilePublisher","LeafCertificate","PcaCertificate") -contains $LevelToTrustAt) {
-            if ((($CertInfoAndMisc.CertsAndPublishers | Select-Object SignatureIndex).SignatureIndex).Count -gt 1) {
-                $RuleSignerMapping = Get-RuleToSignerMapping -Signers $CertInfoAndMisc.CertsAndPublishers -Prompt "Which signer would you like to apply a rule of $LevelToTrustAt to?"
-            } else {
-                $RuleSignerMapping = $CertInfoAndMisc.CertsAndPublishers[0] | Select-Object SignatureIndex
+        if ($ApplyRuleEachSigner) {
+            $RuleSignerMapping = "a"
+        } else {
+            $RuleSignerMapping = $null
+            if (@("Publisher","FilePublisher","LeafCertificate","PcaCertificate") -contains $LevelToTrustAt) {
+                if ((($CertInfoAndMisc.CertsAndPublishers | Select-Object SignatureIndex).SignatureIndex).Count -gt 1) {
+                    $RuleSignerMapping = Get-RuleToSignerMapping -Signers $CertInfoAndMisc.CertsAndPublishers -Prompt "Which signer would you like to apply a rule of $LevelToTrustAt to?"
+                } else {
+                    $RuleSignerMapping = $CertInfoAndMisc.CertsAndPublishers[0] | Select-Object SignatureIndex
+                }
             }
         }
         ############################################################################################################
 
         $ResultantPolicies = @()
         ### HOW DO YOU TRUST IT? (TRUSTED FOR WHAT POLICY) #########################################################
-        
+
 
 
 
 
         ############################################################################################################
         if ($ResultantPolicies.Count -gt 1) {
-            if (-not (Get-YesOrNoPrompt -Prompt "WARNING: This rule will get applied to more than one policy: $($ResultantPolicies -join ",") `n Do you wish to continue?")) {
+            if (-not (Get-YesOrNoPrompt -Prompt "WARNING: This rule will get applied to more than one policy: $([string]($ResultantPolicies -join ",")) `n Do you wish to continue?")) {
                 $AppsToSkip.Add($SHA256FlatHash,$true)
                 return
             }
@@ -399,6 +406,10 @@ function Approve-WDACRules {
     .PARAMETER ResetUntrusted
     Reset the untrusted flag for every "untrusted" app in the database (this doesn't reset flags for blocked or revoked)
 
+    .PARAMETER ApplyRuleEachSigner
+    when this flag is set, anytime the user specifies that they want a WDAC rule level involving a certificate -- such a rule will be created for each signer automatically without prompting the user.
+    (Applies to PcaCertificate, LeafCertificate, Publisher, and FilePublisher rules)
+
     .INPUTS
     [PSCustomObject] Result of Register-WDACEvents (OPTIONAL)
 
@@ -446,7 +457,8 @@ function Approve-WDACRules {
         [Alias("MultiMode","MultiLevel","MultiLevelMode")]
         [switch]$MultiRuleMode,
         [Alias("Reset")]
-        [switch]$ResetUntrusted
+        [switch]$ResetUntrusted,
+        [switch]$ApplyRuleEachSigner
     )
 
     begin {
@@ -570,7 +582,7 @@ function Approve-WDACRules {
                                 }
                                 if ($MiscLevels.Count -ge 1) {
                                     Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
-                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -MultiRuleMode -Connection $Connection -ErrorAction Stop;
+                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop;
                                     continue;
                                 }
                             }
@@ -582,7 +594,7 @@ function Approve-WDACRules {
                         }
                     }
 
-                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -Connection $Connection -ErrorAction Stop
+                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop
 
                 } catch {
                     Write-Warning "Could not apply trust action to the database for this app: $($AppHash)."
