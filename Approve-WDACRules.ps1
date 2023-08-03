@@ -224,7 +224,59 @@ function Get-ChosenPolicy {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    try {
+        $AllPolicyInfo = $null
 
+        if ($PolicyList) {
+            $AllPolicyInfo = Get-AllWDACPoliciesAndAllInfo -Connection $Connection -ErrorAction Stop | Where-Object {$PolicyList -contains $_.PolicyGUID}
+        } else {
+            $AnyAssignments = $false
+            $GroupNames = Get-WDACGroups -Connection $Connection -ErrorAction Stop
+            $GroupsWithAssignments = @()
+            foreach ($Group in $GroupNames) {
+                if ($null -ne (Get-WDACPolicyAssignments -GroupName $Group.GroupName -Connection $Connection -ErrorAction Stop)) {
+                    $AnyAssignments = $true
+                    $GroupsWithAssignments += $Group.GroupName
+                }
+            }
+
+            if ($AnyAssignments) {
+            #Since some policies have been assigned by group, we'll have the user filter by group first
+                $SelectedGroup = Read-Host "Filter policies--to link trust with--by groups that have policies assigned: ($(($GroupsWithAssignments -join ",")))"
+                While (-not ($GroupsWithAssignments -contains $SelectedGroup)) {
+                    $SelectedGroup = Read-Host "Please choose a group that has policies assigned: ($(($GroupsWithAssignments -join ",")))"
+                }
+
+                $GroupAssignments = Get-WDACPolicyAssignments -GroupName $SelectedGroup -Connection $Connection -ErrorAction Stop
+                $PolicyList = @()
+                foreach ($GroupAssignment in $GroupAssignments) {
+                    $PolicyList += $GroupAssignment.PolicyGUID
+                }
+
+                $AllPolicyInfo = Get-AllWDACPoliciesAndAllInfo -Connection $Connection -ErrorAction Stop | Where-Object {$PolicyList -contains $_.PolicyGUID}
+
+            } else {
+                $AllPolicyInfo = Get-AllWDACPoliciesAndAllInfo -Connection $Connection -ErrorAction Stop
+            }
+        }
+
+        Write-Host $Prompt
+        $IndexCounter = 0
+        foreach ($PolicyObject in $AllPolicyInfo) {
+            $PolicyObject | Add-Member -NotePropertyName PolicyIndex -NotePropertyValue $IndexCounter
+            $IndexCounter += 1
+        }
+        $AllPolicyInfo | Select-Object PolicyIndex,PolicyGUID,PolicyID,PolicyName,PolicyVersion | Out-Host
+        $IndexSelection = Read-Host -Prompt "PolicyIndex Number"
+        while ($null -eq (($AllPolicyInfo | Where-Object {$_.PolicyIndex -eq $IndexSelection} | Select-Object PolicyIndex).PolicyIndex)) {
+            $IndexSelection = Read-Host -Prompt "Please Select an actual PolicyIndex"
+        }
+        return (($AllPolicyInfo | Where-Object {$_.PolicyIndex -eq $IndexSelection} | Select-Object PolicyGUID).PolicyGUID)
+
+    } catch {
+        throw $_
+    }
+    
 }
 
 function Get-ChosenSigningScenario {
@@ -383,25 +435,32 @@ function Read-WDACConferredTrust {
             }
         }
         if ($PolicyGUID) {
-            $ResultantPolicies += $PolicyGUID
+            foreach ($TempPolicyGUID in $PolicyGUID) {
+                $ResultantPolicies += $TempPolicyGUID
+            }
         }
         if ($PolicyID) {
-            $PolicyInstances = Get-WDACPoliciesById -PolicyID $PolicyID -Connection $Connection -ErrorAction Stop | Select-Object PolicyGUID
-            foreach ($PolicyInstance in $PolicyInstances) {
-                $ResultantPolicies += $PolicyInstance.PolicyGUID
+            foreach ($TempPolicyID in $PolicyID) {
+                $PolicyInstances = Get-WDACPoliciesById -PolicyID $TempPolicyID -Connection $Connection -ErrorAction Stop | Select-Object PolicyGUID
+                foreach ($PolicyInstance in $PolicyInstances) {
+                    $ResultantPolicies += $PolicyInstance.PolicyGUID
+                }
             }
         }
         if ($PolicyName) {
-            $PolicyInstance2 = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection -ErrorAction Stop | Select-Object PolicyGUID
-            $ResultantPolicies += $PolicyInstance2.PolicyGUID
+            foreach ($TempPolicyName in $PolicyName) {
+                $PolicyInstance2 = Get-WDACPolicyByName -PolicyName $TempPolicyName -Connection $Connection -ErrorAction Stop | Select-Object PolicyGUID
+                $ResultantPolicies += $PolicyInstance2.PolicyGUID
+            }
         }
 
         if ($ResultantPolicies.Count -gt 1) {
-            $PolicyToApplyRuleTo = Get-ChosenPolicy -PolicyList $ResultantPolicies -Prompt "What policy do you want to apply this new rule to?" -Connection $Connection
+            $PolicyToApplyRuleTo = Get-ChosenPolicy -PolicyList $ResultantPolicies -Prompt "`nWhat policy do you want to apply this new rule to?" -Connection $Connection
         } elseif ($ResultantPolicies.Count -eq 1) {
             $PolicyToApplyRuleTo = $ResultantPolicies[0]
+            Write-Verbose "Rule will be applied to policy $PolicyToApplyRuleTo "
         } else {
-            $PolicyToApplyRuleTo = Get-ChosenPolicy -Prompt "What policy do you want to apply this new rule to?" -Connection $Connection
+            $PolicyToApplyRuleTo = Get-ChosenPolicy -Prompt "`nWhat policy do you want to apply this new rule to?" -Connection $Connection
         }
         ############################################################################################################
 
@@ -453,8 +512,6 @@ function Read-WDACConferredTrust {
     } catch {
         throw $_
     }
-    
-    return $PotentialRuleInfo
 }
 
 function Approve-WDACRules {
@@ -494,16 +551,16 @@ function Approve-WDACRules {
     What backup rule levels to apply trust at if needed. See "Level". (If not provided, the dialogue box will NOT prompt the user for fallbacks.)
 
     .PARAMETER GroupName
-    When this is provided, only policies linked with a particular group will be considered for linking trust.
+    When this is provided, policies linked with this particular group will be considered for linking trust.
 
     .PARAMETER PolicyName
-    When this is provided, rules that are trusted will be automatically applied to the policy with this name! 
+    When this is provided, the policy (or policies) associated with that name(s) will be considered for linking trust.
 
     .PARAMETER PolicyGUID
-    When this is provided, rules that are trusted will be automatically applied to the policy with this GUID! 
+    When this is provided, this policy (or policies) will be considered for linking trust.
 
     .PARAMETER PolicyID
-    When this is provided, only policies which match this provided PolicyID will be considered for linking trust.
+    When this is provided, policies which match this provided PolicyID (or PolicyIDs) will be considered for linking trust.
 
     .PARAMETER OverrideUserorKernelDefaults
     This overrides the default behavior of looking at SigningScenario (for the words "Driver" or "UserMode") when deciding to trust on User Mode or Kernel Mode
@@ -589,9 +646,9 @@ function Approve-WDACRules {
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         [string[]]$Fallbacks,
         [string]$GroupName,
-        [string]$PolicyName,
-        [string]$PolicyGUID,
-        [string]$PolicyID,
+        [string[]]$PolicyName,
+        [string[]]$PolicyGUID,
+        [string[]]$PolicyID,
         [Alias("NoDefault","Override")]
         [switch]$OverrideUserorKernelDefaults,
         [ValidateSet(0,1,2,3,4,6,7,8,9,10)]
@@ -651,18 +708,24 @@ function Approve-WDACRules {
                 }
             }
             if ($PolicyName) {
-                if (-not (Find-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop)) {
-                    throw "There are no policies by this policy name: $PolicyName in the database."
+                foreach ($TempPolicyName in $PolicyName) {
+                    if (-not (Find-WDACPolicyByName -PolicyName $TempPolicyName -ErrorAction Stop)) {
+                        throw "There are no policies by this policy name: $TempPolicyName in the database."
+                    }
                 }
             }
             if ($PolicyGUID) {
-                if (-not (Find-WDACPolicy -PolicyGUID $PolicyGUID -ErrorAction Stop)) {
-                    throw "There are no policies in the database with this GUID: $PolicyGUID ."
+                foreach ($TempPolicyGUID in $PolicyGUID) {
+                    if (-not (Find-WDACPolicy -PolicyGUID $TempPolicyGUID -ErrorAction Stop)) {
+                        throw "There are no policies in the database with this GUID: $TempPolicyGUID ."
+                    }
                 }
             }
             if ($PolicyID) {
-                if (-not (Find-WDACPolicyByID -PolicyID $PolicyID -ErrorAction Stop)) {
-                    throw "There are no policies with ID $PolicyID in the database. It's worth noting that PolicyID is NOT the same as PolicyGUID."
+                foreach ($TempPolicyID in $PolicyID) {
+                    if (-not (Find-WDACPolicyByID -PolicyID $TempPolicyID -ErrorAction Stop)) {
+                        throw "There are no policies with ID $TempPolicyID in the database. It's worth noting that PolicyID is NOT the same as PolicyGUID."
+                    }
                 }
             }
         } catch {
