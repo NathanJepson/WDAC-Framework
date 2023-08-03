@@ -230,6 +230,7 @@ function New-WDACTrustDB {
         PublisherIndex Integer NOT NULL,
         VersioningType Integer NOT NULL,
         MinimumAllowedVersionPivot Text,
+        MinimumTolerableMinimum Text,
         PRIMARY KEY(PublisherIndex,FileName)
     );
 
@@ -239,6 +240,7 @@ function New-WDACTrustDB {
         PolicyGUID Text NOT NULL,
         SpecificFileNameLevel Text,
         MinimumAllowedVersionPivot Text,
+        MinimumTolerableMinimum Text,
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         PRIMARY KEY (FileName,PublisherIndex,PolicyGUID)
     );
