@@ -1,5 +1,7 @@
 $AppsToSkip = @{}
 $AppsToBlock = @{}
+$AppsToPurge = @{}
+$AppComments = @{}
 function Get-YesOrNoPrompt {
     [CmdletBinding()]
     Param (
@@ -61,7 +63,7 @@ function Get-WDACConferredTrust {
         $AppTrustLevels
     )
 
-    $Options = "([Y] (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher Info); [T] (View Trust for this App for Respective Rule Levels))"
+    $Options = "([Y] (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [/ or COMM] (Add a comment about the app); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher Info); [T] (View Trust for this App for Respective Rule Levels))"
     $TrustedLevels = ($AppTrustLevels.PSObject.Properties | Where-Object {$_.Value -eq $true} | Select-Object Name).Name
     if ($TrustedLevels) {
         Write-Warning "App is already trusted at a separate rule level."
@@ -103,6 +105,17 @@ function Get-WDACConferredTrust {
         } elseif ($InputString.ToLower() -eq "b") {
             $AppsToBlock.Add($AppInfo.SHA256FlatHash,$true)
             return $false
+        } elseif ($InputString -eq "/" -or $InputString.ToLower() -eq "comm") {
+            if ($AppComments[$AppInfo.SHA256FlatHash]) {
+                if (-not (Get-YesOrNoPrompt -Prompt "There is already a comment for this app. Overwrite previous comment?")) {
+                    continue
+                }
+                $TempComment = Read-Host -Prompt "Overwrite previous comment"
+                $AppComments[$AppInfo.SHA256FlatHash] = $TempComment
+                continue
+            }
+            $TempComment = Read-Host -Prompt "Enter your comment about this app"
+            $AppComments.Add($AppInfo.SHA256FlatHash,$TempComment)
         }
         else {
             Write-Host ("Not a valid option. Select one of these options: " + $Options)
@@ -156,13 +169,18 @@ function Get-RuleToSignerMapping {
 function Write-WDACConferredTrust {
     [CmdletBinding()]
     Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$PrimaryKeyPart1,
         [string]$PrimaryKeyPart2,
-        [bool]$Untrusted,
-        [bool]$TrustedDriver,
-        [bool]$TrustedUserMode,
+        [switch]$Untrusted,
+        [switch]$TrustedDriver,
+        [switch]$TrustedUserMode,
+        [switch]$Block,
         [string]$Comment,
-        [string]$AllowedPolicyID,
+        [string]$PolicyID,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$Level,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
@@ -194,6 +212,52 @@ function Restore-ProvidedLevelsOrder {
     }
 }
 
+function Get-ChosenPolicy {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $Prompt,
+        $PolicyList,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+
+}
+
+function Get-ChosenSigningScenario {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $Prompt,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $UserModeAppTrustLevels,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $KernelModeAppTrustLevels
+    )
+
+    Write-Host ($Prompt + " (UserMode / Driver / U (Show User Mode Trust for this App) / K or D (Show Kernel mode Trust for this App) ): ")
+    while ($true) {
+        $InputString = Read-Host -Prompt "Option Selection"
+        if ($InputString.ToLower() -eq "usermode") {
+            return "UserMode"
+        } elseif ($InputString.ToLower() -eq "driver") {
+            return "Driver"
+        } elseif ($InputString.ToLower() -eq "k" -or $InputString.ToLower() -eq "d") {
+            $KernelModeAppTrustLevels | Out-Host
+        } elseif ($InputString.ToLower() -eq "u") {
+            $UserModeAppTrustLevels | Out-Host
+        } else {
+            Write-Host "Not a valid option. Please supply UserMode or Driver (Additional Options: U (Show User Mode Trust for this App) / K or D (Show Kernel mode Trust for this App))."
+        }
+    }
+}
+
 function Read-WDACConferredTrust {
 #NOTE: This function also adds File Publishers to the database!
 
@@ -209,9 +273,10 @@ function Read-WDACConferredTrust {
         $PolicyGUID,
         $PolicyID,
         [switch]$OverrideUserorKernelDefaults,
-        [ValidateSet(0,1,2,3,4,6,7,8,9,10,12,13,14,15,16)]
+        [ValidateSet(0,1,2,3,4,6,7,8,9,10)]
         $VersioningType,
         [switch]$AdvancedVersioning,
+        [switch]$ApplyVersioningToEntirePolicy,
         [switch]$MultiRuleMode,
         [switch]$ApplyRuleEachSigner,
         [Parameter(Mandatory=$true)]
@@ -222,9 +287,22 @@ function Read-WDACConferredTrust {
     try {
         $AppInfo = Get-WDACApp -Sha256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
         $CertInfoAndMisc = Expand-WDACAppV2 -SHA256FlatHash $SHA256FlatHash -Levels $Levels -GetCerts -Connection $Connection -ErrorAction Stop
-        $AppTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:($AppInfo.SigningScenario -eq "Driver") -UserMode:($AppInfo.SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop
+        $AppTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver:($AppInfo.SigningScenario -eq "Driver") -UserMode:($AppInfo.SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop
         $FileName = ($AppInfo.FirstDetectedPath + $AppInfo.FileName)
 
+        if ( (-not $CertInfoAndMisc.CertsAndPublishers) -and $Levels) {
+        #If this app has no signers
+            $Levels = $Levels | Where-Object {$_ -ne "LeafCertificate"}
+            $Levels = $Levels | Where-Object {$_ -ne "PcaCertificate"}
+            $Levels = $Levels | Where-Object {$_ -ne "Publisher"}
+            $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
+
+            if ((-not $Levels) -or $Levels.Count -le 0) {
+                Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash) at the specified levels. Skipping."
+                $AppsToSkip.Add($SHA256FlatHash,$true)
+                return;
+            }
+        }
 
         ### DO YOU TRUST IT? #######################################################
         
@@ -247,7 +325,12 @@ function Read-WDACConferredTrust {
         if ($Levels -and $MultiRuleMode -and ($Levels.Count -gt 1)) {
             $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels $Levels
         } elseif (-not $Levels) {
-            $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?"
+            if (-not $CertInfoAndMisc.CertsAndPublishers) {
+            #The case that there are no associated signers for this app
+                $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels (@("Hash","FilePath","FileName"))
+            } else {
+                $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?"
+            }
         } elseif ($Levels.Count -gt 1) {
             foreach ($Level in $Levels) {
             #I'm not even sure that this for loop is necessary, might delete it later and replace with $LevelToTrustAt = $Levels[0]
@@ -266,15 +349,21 @@ function Read-WDACConferredTrust {
                 }
             }
         }
+
+
+        if ($LevelToTrustAt -eq "FilePath") {
+            #Wittle-down the FilePath rule however the user wants
+            #TODO: Implement a function to narrow down the FilePath rule however the user wants
+        }
         ############################################################################################################
 
 
         ### WHICH SIGNER IS APPLIED THIS TRUST? (WHEN APPLICABLE) ##################################################
-        if ($ApplyRuleEachSigner) {
-            $RuleSignerMapping = "a"
-        } else {
-            $RuleSignerMapping = $null
-            if (@("Publisher","FilePublisher","LeafCertificate","PcaCertificate") -contains $LevelToTrustAt) {
+        $RuleSignerMapping = $null
+        if (@("Publisher","FilePublisher","LeafCertificate","PcaCertificate") -contains $LevelToTrustAt) {
+            if ($ApplyRuleEachSigner) {
+                $RuleSignerMapping = "a"
+            } else {
                 if ((($CertInfoAndMisc.CertsAndPublishers | Select-Object SignatureIndex).SignatureIndex).Count -gt 1) {
                     $RuleSignerMapping = Get-RuleToSignerMapping -Signers $CertInfoAndMisc.CertsAndPublishers -Prompt "Which signer would you like to apply a rule of $LevelToTrustAt to?"
                 } else {
@@ -285,18 +374,80 @@ function Read-WDACConferredTrust {
         ############################################################################################################
 
         $ResultantPolicies = @()
+        $PolicyToApplyRuleTo = $null
         ### HOW DO YOU TRUST IT? (TRUSTED FOR WHAT POLICY) #########################################################
-
-
-
-
-
-        ############################################################################################################
-        if ($ResultantPolicies.Count -gt 1) {
-            if (-not (Get-YesOrNoPrompt -Prompt "WARNING: This rule will get applied to more than one policy: $([string]($ResultantPolicies -join ",")) `n Do you wish to continue?")) {
-                $AppsToSkip.Add($SHA256FlatHash,$true)
-                return
+        if ($GroupName) {
+            $PolicyAssignments = Get-WDACPolicyAssignments -GroupName $GroupName -Connection $Connection -ErrorAction Stop | Select-Object PolicyGUID
+            foreach ($PolicyGUIDInstance in $PolicyAssignments) {
+                $ResultantPolicies += $PolicyGUIDInstance.PolicyGUID
             }
+        }
+        if ($PolicyGUID) {
+            $ResultantPolicies += $PolicyGUID
+        }
+        if ($PolicyID) {
+            $PolicyInstances = Get-WDACPoliciesById -PolicyID $PolicyID -Connection $Connection -ErrorAction Stop | Select-Object PolicyGUID
+            foreach ($PolicyInstance in $PolicyInstances) {
+                $ResultantPolicies += $PolicyInstance.PolicyGUID
+            }
+        }
+        if ($PolicyName) {
+            $PolicyInstance2 = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection -ErrorAction Stop | Select-Object PolicyGUID
+            $ResultantPolicies += $PolicyInstance2.PolicyGUID
+        }
+
+        if ($ResultantPolicies.Count -gt 1) {
+            $PolicyToApplyRuleTo = Get-ChosenPolicy -PolicyList $ResultantPolicies -Prompt "What policy do you want to apply this new rule to?" -Connection $Connection
+        } elseif ($ResultantPolicies.Count -eq 1) {
+            $PolicyToApplyRuleTo = $ResultantPolicies[0]
+        } else {
+            $PolicyToApplyRuleTo = Get-ChosenPolicy -Prompt "What policy do you want to apply this new rule to?" -Connection $Connection
+        }
+        ############################################################################################################
+
+
+        ### DO WE TRUST IT AT USERMODE OR KERNEL MODE? #############################################################
+        $SigningLevelToTrustRuleAt = $null
+        $SigningScenario = $AppInfo.SigningScenario
+        if ($LevelToTrustAt -eq "FilePath") {
+        #FilePath rules can only be applied to user-mode binaries
+            $SigningLevelToTrustRuleAt = "UserMode"
+        } elseif ($OverrideUserorKernelDefaults) {
+            $UserModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -UserMode -Connection $Connection -ErrorAction Stop
+            $KernelModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver -Connection $Connection -ErrorAction Stop
+            $SigningLevelToTrustRuleAt = Get-ChosenSigningScenario -Prompt "What Signing level do you trust this application at?" -UserModeAppTrustLevels $UserModeTrustLevels -KernelModeAppTrustLevels $KernelModeTrustLevels
+        } else {
+            if ($SigningScenario -eq "UserMode") {
+                $SigningLevelToTrustRuleAt = "UserMode"
+            } elseif ($SigningScenario -eq "Driver") {
+                $SigningLevelToTrustRuleAt = "Driver"
+            } else {
+                $SigningLevelToTrustRuleAt = "UserMode"
+            }
+        }
+        ############################################################################################################
+
+        ### GET COMMENT ############################################################################################
+        $Comment = $null
+        if ($AppComments[$SHA256FlatHash]) {
+            $Comment = $AppComments[$SHA256FlatHash]
+        } elseif ($RequireComment -and (-not $AppComments[$SHA256FlatHash])) {
+            $Comment = Read-Host -Prompt "Enter your comment about this app"
+        }
+        ############################################################################################################
+
+        if ($SigningLevelToTrustRuleAt -eq "UserMode") {
+            #TODO: Write-WDACConferredTrust
+
+        } elseif ($SigningLevelToTrustRuleAt -eq "Driver") {
+            #TODO: Write-WDACConferredTrust
+
+        }
+
+        $AppsToSkip.Add($SHA256FlatHash,$true)
+        if ($LevelToTrustAt.ToLower() -ne "hash") {
+        #The apps table is used to represent hash rules, so they are not purged from the database right now
+            $AppsToPurge.Add($SHA256FlatHash,$true)
         }
 
     } catch {
@@ -362,26 +513,20 @@ function Approve-WDACRules {
     .PARAMETER VersioningType
     OPTIONAL: Supply an integer for different versioning behavior for file publishers. These will be written to the database (as publisher index + file name combinations)
     NOTE: VersioningTypes are written to the database when specified with this parameter (or the parameter AlwaysSetMinimumVersions is set)
-    NOTE: Options 0-5 deal with the "file_publisher_options" table, options 6-11 deal with the "policy_file_publisher_options" table and options 12-17 write to the "policy_versioning_options" table
+    NOTE: Options 0-5 deal with the "file_publisher_options" table, options 6-11 deal with the "policy_file_publisher_options" table
 
-        0 - GLOBAL SET MINIMUM - For a particular publisher index + file name combination, prompt the user for a [fixed] MinimumFileVersion that will be applied anytime the combination appears
+        0 - GLOBAL SET MINIMUM - For a particular publisher index + file name combination, prompt the user for a [fixed] MinimumFileVersion that will be applied anytime the combination appears (applied to ALL policies)
         1 - GLOBAL DECREMENT MINIMUM - For a particular publisher index + file name combination, replace the MinimumFileVersion with a new one anytime a lower one appears for all appearances of the combination
-        2 - GLOBAL ALWAYS SPECIFY - Regardless of which policies have a file publisher rule set, always ask the user for a specific MinimumFileVersion to apply for any instance of the publisher index + file name combination.
+        2 - GLOBAL ALWAYS SPECIFY - Anytime a new FileVersion is encountered for a publisher index + file name combination, prompt the user whether they want to change the MinimumFileVersion (applied to this combination for ALL policies)
         3 - GLOBAL INCREMENT MINIMUM - For a particular publisher index + file name combination, replace the MinimumFileVersion with a new one anytime a GREATER one appears for all appearances of the combination
         4 - GLOBAL 0.0.0.0 MINIMUM - Exactly like option 0, but 0.0.0.0 will always be set to be the MinimumFileVersion without prompting the user
-        5 - [MISC OPTION NOT YET IMPLEMENTED]
-        6 - EACH POLICY SET MINIMUM - Prompt the user whether they want a [fixed] MinimumFileVersion for each time a new publisher index + file name combination for each individual policy. 
+        5 - GLOBAL DECREMENT MINIMUM NOT EXCEEDING MINIMUM_TOLERABLE_MINIMUM - Similar to option 1, but each time the MinimumFileVersion is replaced with a lower encountered file version, it cannot go lower than a MinimumTolerableMinimum specified by the user.
+        6 - EACH POLICY SET MINIMUM - Prompt the user whether they want a [fixed] MinimumFileVersion for each time a new publisher index + file name combination is encountered for each individual policy. 
         7 - EACH POLICY DECREMENT MINIMUM - For each policy, specify whether that policy should replace MinimumFileVersion with a lower one anytime a lower one is encountered
-        8 - EACH POLICY ALWAYS SPECIFY - The exact same as option 2, the only difference being that when the user specifies the desired versioning for one policy, that file name + publisher index combination will be ignored for the rest of the session
+        8 - EACH POLICY ALWAYS SPECIFY - Similar to option 2, but anytime a new publisher index + file name combination is encountered for EACH POLICY, the user will be prompted if they want to change the MinimumFileVersion
         9 - EACH POLICY INCREMENT MINIMUM - For each policy, specify whether that policy should replace MinimumFileVersion with a HIGHER one anytime a higher one is encountered
         10 - EACH POLICY 0.0.0.0 Minimum - Exactly like option 6, but the MinimumFileVersion will always be set to 0.0.0.0 without prompting the user
-        11 - [MISC OPTION NOT YET IMPLEMENTED]
-        12 - Like Option 0 and 6, but the VersioningType will be applied to the entire policy--not dependent on File Name + Publisher Index Combination
-        13 - Like Option 1 and 7, but the VersioningType will be applied to the entire policy--not dependent on File Name + Publisher Index Combination
-        14 - Like Option 2 and 8, but the VersioningType will be applied to the entire policy--not dependent on File Name + Publisher Index Combination
-        15 - Like Option 3 and 9, but the VersioningType will be applied to the entire policy--not dependent on File Name + Publisher Index Combination
-        16 - Like Option 4 and 10, but the VersioningType will be applied to the entire policy--not dependent on File Name + Publisher Index Combination
-        17 - [MISC OPTION NOT YET IMPLEMENTED]
+        11 - EACH POLICY DECREMENT MINIMUM NOT EXCEEDING MINIMUM_TOLERABLE_MINIMUM - Similar to option 7, but each time the MinimumFileVersion is replaced with a lower encountered file version, it cannot go lower than a MinimumTolerableMinimum specified by the user (which must be specified for each policy)
 
     .PARAMETER AdvancedVersioning
     Gives more advanced versioning options when conveying trust.
@@ -397,6 +542,10 @@ function Approve-WDACRules {
     .PARAMETER ModifyUniversalVersioning
     Modify the GlobalVersioningType in Resources/LocalStorage.json to reflect that value provided by VersioningType
     NOTE: This VersioningType will be applied to ANY file publisher rule imaginable -- until the value is set back to an empty string "".
+
+    .PARAMETER ApplyVersioningTypeToEntirePolicy
+    When a VersioningType is specified with VersioningType, and each time a new policy is encountered, the VersioningType is written to the policy_versioning_options table.
+    This means that the VersioningType will be applied to all new file name + publisher index combinations for the entire policy.
 
     .PARAMETER MultiRuleMode
     Even if an app is already trusted at the specified levels, this option allows you to check to see if you can allow the app at another level--for example, 
@@ -445,7 +594,7 @@ function Approve-WDACRules {
         [string]$PolicyID,
         [Alias("NoDefault","Override")]
         [switch]$OverrideUserorKernelDefaults,
-        [ValidateSet(0,1,2,3,4,6,7,8,9,10,12,13,14,15,16)]
+        [ValidateSet(0,1,2,3,4,6,7,8,9,10)]
         $VersioningType,
         [switch]$AdvancedVersioning,
         [Alias("Ignore")]
@@ -454,6 +603,8 @@ function Approve-WDACRules {
         [switch]$MSIorScripts,
         [Alias("UniversalVersioning","UniversalReset")]
         [switch]$ModifyUniversalVersioning,
+        [Alias("EachPolicyVersioning","PolicyVersioning","ApplyEntirePolicy")]
+        [switch]$ApplyVersioningToEntirePolicy,
         [Alias("MultiMode","MultiLevel","MultiLevelMode")]
         [switch]$MultiRuleMode,
         [Alias("Reset")]
@@ -468,6 +619,10 @@ function Approve-WDACRules {
 
         if ($ModifyUniversalVersioning -and -not $VersioningType) {
             throw "When ModifyUniversalVersioning is set, a VersioningType must also be provided."
+        }
+
+        if ((($GroupName) -and ($PolicyName -or $PolicyGUID -or $PolicyID)) -or (($PolicyName) -and ($GroupName -or $PolicyGUID -or $PolicyID)) -or (($PolicyGUID) -and ($GroupName -or $PolicyName -or $PolicyID)) -or (($PolicyID) -and ($GroupName -or $PolicyGUID -or $PolicyName))) {
+            Write-Warning "When more than of these options (GroupName, PolicyName, PolicyGUID, or PolicyID) are selected, the user will be prompted to select which policy a rule should be applied to."
         }
 
         $AllLevels = $null
@@ -488,6 +643,32 @@ function Approve-WDACRules {
     }
 
     process {
+        
+        try {
+            if ($GroupName) {
+                if (-not (Get-WDACPolicyAssignments -GroupName $GroupName -ErrorAction Stop)) {
+                    throw "There are no policies assigned to this group name. Please assign policies to a group using the Register-WDACGroup cmdlet."
+                }
+            }
+            if ($PolicyName) {
+                if (-not (Find-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop)) {
+                    throw "There are no policies by this policy name: $PolicyName in the database."
+                }
+            }
+            if ($PolicyGUID) {
+                if (-not (Find-WDACPolicy -PolicyGUID $PolicyGUID -ErrorAction Stop)) {
+                    throw "There are no policies in the database with this GUID: $PolicyGUID ."
+                }
+            }
+            if ($PolicyID) {
+                if (-not (Find-WDACPolicyByID -PolicyID $PolicyID -ErrorAction Stop)) {
+                    throw "There are no policies with ID $PolicyID in the database. It's worth noting that PolicyID is NOT the same as PolicyGUID."
+                }
+            }
+        } catch {
+            throw $_
+        }
+
         if ($ModifyUniversalVersioning) {
             try {
                 Set-ValueLocalStorageJSON -Key "GlobalVersioningType" -Value $VersioningType -ErrorAction Stop
@@ -498,7 +679,8 @@ function Approve-WDACRules {
 
         try {
             $TempVersioningNum = (Get-LocalStorageJSON -ErrorAction Stop)."GlobalVersioningType"
-            if ($TempVersioningNum) {
+            if ($TempVersioningNum -and -not $VersioningType) {
+            #GlobalVersioningType is only used if the user hasn't specifically specified one when running the cmdlet
                 $VersioningType = $TempVersioningNum
             }
         } catch {
@@ -582,7 +764,7 @@ function Approve-WDACRules {
                                 }
                                 if ($MiscLevels.Count -ge 1) {
                                     Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
-                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop;
+                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop;
                                     continue;
                                 }
                             }
@@ -594,13 +776,40 @@ function Approve-WDACRules {
                         }
                     }
 
-                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop
+                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -AdvancedVersioning:$AdvancedVersioning -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop
 
                 } catch {
                     Write-Warning "Could not apply trust action to the database for this app: $($AppHash)."
                     Write-Verbose $_
                     $ErrorCount += 1
                     continue
+                }
+            }
+
+            if ($Purge) {
+                foreach ($Event in $Events) {
+                    
+                    if ($ErrorCount -ge 4 -and -not $IgnoreErrors) {
+                        throw "Error count exceeding acceptable amount. Terminating."
+                    }
+
+                    try {
+                        if ($Event.SHA256FileHash) {
+                            #Case info is piped into the Approve-WDACRules cmdlet
+                                $AppHash = $Event.SHA256FileHash
+                            } else {
+                            #Case info if retrieved from the database
+                                $AppHash = $Event.SHA256FlatHash
+                            }
+                        if ($AppsToPurge[$AppHash]) {
+                            Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
+                        }
+                    } catch {
+                        Write-Warning "Could not purge this app from the database: $($AppHash)."
+                        Write-Verbose $_
+                        $ErrorCount += 1
+                        continue
+                    }
                 }
             }
         } catch {
