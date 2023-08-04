@@ -299,9 +299,7 @@ function New-WDACTrustDB {
         DeviceName Text PRIMARY KEY,
         AllowedGroup Text,
         UpdateDeferring Integer DEFAULT 0,
-        DeferredPolicyIndex Integer,
-        FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT,
-        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT
+        FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT
     );
 
     CREATE TABLE deferred_policies (
@@ -317,6 +315,14 @@ function New-WDACTrustDB {
         IsPillar Integer DEFAULT 0 NOT NULL,
         OriginLocation Text NOT NULL,
         OriginLocationType Text NOT NULL
+    );
+
+    CREATE TABLE deferred_policies_assignments (
+        DeferredPolicyIndex Integer NOT NULL,
+        DeviceName Text NOT NULL,
+        FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
+        FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE RESTRICT,
+        PRIMARY KEY(DeferredPolicyIndex,DeviceName)
     );
 '@    
     $Database = Join-Path -Path $Destination -ChildPath $DBName
