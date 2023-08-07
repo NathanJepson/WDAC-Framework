@@ -3023,3 +3023,222 @@ function Get-AppTrustedAllLevels {
     $Result | Add-Member -NotePropertyMembers $ResultHashTable -PassThru | Out-Null
     return $Result
 }
+
+function Update-WDACTrust {
+#This only sets non-enabled values to enabled
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$PrimaryKey1,
+        $PrimaryKey2,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Level,
+        [bool]$UserMode,
+        [bool]$Driver,
+        [bool]$Block,
+        [bool]$Untrusted,
+        [bool]$MSIorScripts,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        switch ($Level) {
+    
+            "Hash" {
+                if ($MSIorScripts) {
+                    #TODO
+                } else {
+                    if ($UserMode) {
+                        $Command = $Connection.CreateCommand()
+                        $Command.Commandtext = "UPDATE apps SET TrustedUserMode = 1 WHERE Sha256FlatHash = @Sha256FlatHash"
+                        $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                        $Command.ExecuteNonQuery()
+                    }
+                    if ($Driver) {
+                        $Command = $Connection.CreateCommand()
+                        $Command.Commandtext = "UPDATE apps SET TrustedDriver = 1 WHERE Sha256FlatHash = @Sha256FlatHash"
+                        $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                        $Command.ExecuteNonQuery()
+                    }
+                    if ($Block) {
+                        $Command = $Connection.CreateCommand()
+                        $Command.Commandtext = "UPDATE apps SET Blocked = 1 WHERE Sha256FlatHash = @Sha256FlatHash"
+                        $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                        $Command.ExecuteNonQuery()
+                    } 
+                    if ($Untrusted) {
+                        $Command = $Connection.CreateCommand()
+                        $Command.Commandtext = "UPDATE apps SET Untrusted = 1 WHERE Sha256FlatHash = @Sha256FlatHash"
+                        $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                        $Command.ExecuteNonQuery()
+                    }
+                }
+            }
+    
+            "Publisher" {
+                if ($UserMode) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE publishers SET TrustedUserMode = 1 WHERE PublisherIndex = @PublisherIndex"
+                    $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Driver) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE publishers SET TrustedDriver = 1 WHERE PublisherIndex = @PublisherIndex"
+                    $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Block) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE publishers SET Blocked = 1 WHERE PublisherIndex = @PublisherIndex"
+                    $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Untrusted) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE publishers SET Untrusted = 1 WHERE PublisherIndex = @PublisherIndex"
+                    $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+            }
+    
+            "FilePublisher" {
+                if ($UserMode) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_publishers SET TrustedUserMode = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+                    $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Driver) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+                    $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Block) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+                    $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Untrusted) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+                    $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+            }
+    
+            "LeafCertificate" {
+                if ($UserMode) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE certificates SET TrustedUserMode = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Driver) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Block) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Untrusted) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+            }
+    
+            "PcaCertificate" {
+                if ($UserMode) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE certificates SET TrustedUserMode = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Driver) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Block) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Untrusted) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+            }
+    
+            "FilePath" {
+                #TODO
+                #Write-Verbose "FilePath rules have not yet been implemented."
+            }
+    
+            "FileName" {
+                if ($UserMode) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET TrustedUserMode = 1 WHERE FileName = @FileName"
+                    $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Driver) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE FileName = @FileName"
+                    $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Block) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE FileName = @FileName"
+                    $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+                if ($Untrusted) {
+                    $Command = $Connection.CreateCommand()
+                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE FileName = @FileName"
+                    $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+            }
+            
+        }
+
+           
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
