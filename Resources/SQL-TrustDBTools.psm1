@@ -2982,10 +2982,18 @@ function Clear-AllWDACSkipped {
         $AllMSIorScriptHashes = Get-MSIorScriptAllHashes -Connection $Connection -ErrorAction Stop
 
         foreach ($Hash in $AllAppHashes) {
-            Set-WDACSkipped -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoSkip -ErrorAction Stop
+            if (Get-WDACAppSkippedStatus -SHA256FlatHash $Hash -Connection $Connection -ErrorAction Stop) {
+                if (-not (Set-WDACSkipped -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoSkip -ErrorAction Stop)) {
+                    throw "Coud not clear skipped status for $Hash "
+                }
+            }
         }
         foreach ($Hash in $AllMSIorScriptHashes) {
-            Set-WDACSkipped -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoSkip -ErrorAction Stop
+            if (Get-MSIorScriptSkippedStatus -SHA256FlatHash $Hash -Connection $Connection -ErrorAction Stop) {
+                if (-not (Set-WDACSkipped -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoSkip -ErrorAction Stop)) {
+                    throw "Could not clear skipped status for $Hash "
+                }
+            }
         }
 
         if ($NoConnectionProvided -and $Connection) {
