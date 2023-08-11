@@ -280,6 +280,152 @@ function Get-MAXAppIndexID {
     }
 }
 
+function Find-MSIorScript {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from msi_or_script WHERE SHA256FlatHash = @FlatHash"
+        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $_
+    }
+}
+
+function Get-MSIorScriptAllHashes {
+    [cmdletbinding()]
+    Param ( 
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from msi_or_script"
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $Result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    SHA256FlatHash = $Reader["SHA256FlatHash"];
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Get-MSIorScriptSkippedStatus {
+[cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select Skipped from msi_or_script WHERE SHA256FlatHash = @FlatHash"
+        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                if ($Reader["Skipped"]) {
+                    if ( ([bool]$Reader["Skipped"])) {
+                        return $true
+                    } else {
+                        return $false
+                    }
+                } else {
+                    return $false
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $false
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Find-WDACApp {
     [cmdletbinding()]
     Param ( 
@@ -383,6 +529,54 @@ function Get-WDACApp {
                     AppIndex = ($Reader["AppIndex"]);
                     RequestedSigningLevel = $Reader["RequestedSigningLevel"];
                     ValidatedSigningLevel = $Reader["ValidatedSigningLevel"]
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Get-WDACAppsAllHashes {
+    [cmdletbinding()]
+    Param ( 
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from apps"
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $Result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    SHA256FlatHash = $Reader["SHA256FlatHash"];
                 }
             }
         }
@@ -681,6 +875,60 @@ function Get-WDACAppUntrustedStatus {
             if($Reader.Read()) {
                 if ($Reader["Untrusted"]) {
                     if ( ([bool]$Reader["Untrusted"])) {
+                        return $true
+                    } else {
+                        return $false
+                    }
+                } else {
+                    return $false
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $false
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Get-WDACAppSkippedStatus {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select Skipped from apps WHERE SHA256FlatHash = @FlatHash"
+        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                if ($Reader["Skipped"]) {
+                    if ( ([bool]$Reader["Skipped"])) {
                         return $true
                     } else {
                         return $false
@@ -2000,9 +2248,26 @@ function Add-WDACFilePublisher {
 
 }
 
-function Add-WDACFilePublisherByCriteria {
+function Update-WDACFilePublisherByCriteria {
     [cmdletbinding()]
-    param ()
+    param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $FileName,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $PublisherIndex,
+        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
+        $SpecificFileNameLevel="OriginalFileName",
+        $VersioningType,
+        [switch]$ApplyVersioningToEntirePolicy,
+        [switch]$AdvancedVersioning,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$PolicyID
+    )
+
+    
 }
 
 function Set-WDACFilePublisherMinimumAllowedVersion {
@@ -2387,8 +2652,7 @@ function Get-WDACFileName {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$FileName,
-        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
-        $SpecificFileNameLevel="OriginalFileName",
+        $SpecificFileNameLevel,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -2401,9 +2665,13 @@ function Get-WDACFileName {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from file_names WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
+        if ($SpecificFileNameLevel) {
+            $Command.Commandtext = "Select * from file_names WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
+            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from file_names WHERE FileName = @FileName"
+        }
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
-        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -2641,6 +2909,96 @@ function Add-NewPublishersFromAppSigners {
         }
     } catch {
         throw $_
+    }
+}
+
+function Set-WDACSkipped {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection,
+        [switch]$UndoSkip
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        
+        $Command = $Connection.CreateCommand()
+
+        if (Find-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection) {
+            if ($UndoSkip) {
+                $Command.Commandtext = "UPDATE apps SET Skipped = 0 WHERE SHA256FlatHash = @SHA256FlatHash"
+            } else {
+                $Command.Commandtext = "UPDATE apps SET Skipped = 1 WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+        }
+        elseif (Find-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection) {
+            if ($UndoSkip) {
+                $Command.Commandtext = "UPDATE msi_or_script SET Skipped = 0 WHERE SHA256FlatHash = @SHA256FlatHash"
+            } else {
+                $Command.Commandtext = "UPDATE msi_or_script SET Skipped = 1 WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+        } else {
+            if ($NoConnectionProvided -and $Connection) {
+                $Connection.close()
+            }
+            return
+        }
+
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Clear-AllWDACSkipped {
+    [CmdletBinding()]
+    Param (
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $AllAppHashes = Get-WDACAppsAllHashes -Connection $Connection -ErrorAction Stop
+        $AllMSIorScriptHashes = Get-MSIorScriptAllHashes -Connection $Connection -ErrorAction Stop
+
+        foreach ($Hash in $AllAppHashes) {
+            Set-WDACSkipped -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoSkip -ErrorAction Stop
+        }
+        foreach ($Hash in $AllMSIorScriptHashes) {
+            Set-WDACSkipped -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoSkip -ErrorAction Stop
+        }
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
     }
 }
 
@@ -3032,6 +3390,7 @@ function Update-WDACTrust {
         [ValidateNotNullOrEmpty()]
         [string]$PrimaryKey1,
         $PrimaryKey2,
+        $PrimaryKey3,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [string]$Level,
@@ -3112,30 +3471,34 @@ function Update-WDACTrust {
             "FilePublisher" {
                 if ($UserMode) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_publishers SET TrustedUserMode = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_publishers SET TrustedUserMode = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                    $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Driver) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                    $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Block) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                    $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Untrusted) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                    $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
             }

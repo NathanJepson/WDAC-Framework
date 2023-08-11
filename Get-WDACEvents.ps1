@@ -203,6 +203,13 @@ function Get-WDACEvents {
     
     process {
 
+        try {
+        #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used
+            Clear-AllWDACSkipped -ErrorAction Stop
+        } catch {
+            Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules."
+        }
+
         #Check whether WDACAuditing should be copied if SkipModuleCheck is not set and we are running on remote machines
         if (-not $SkipModuleCheck -and $RemoteMachine) {
             try {

@@ -49,6 +49,26 @@ function Get-LevelPrompt {
     }
 }
 
+function Get-SpecificFileNameLevelPrompt {
+    [CmdletBinding()]
+    Param (
+        [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
+        [string[]]$Levels
+    )
+
+    if (-not $Levels) {
+        $Levels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
+    }
+
+    Write-Host ("Select a SpecificFileNameLevel: (" + ($Levels -Join ",") + ")")
+    $SpecificFileNameLevel = Read-Host -Prompt "Option Selection"
+    while (-not ($Levels -contains $SpecificFileNameLevel)) {
+        $SpecificFileNameLevel = Read-Host -Prompt "Not a valid selection. Please select one of these options: ($(($Levels -Join ",")))"
+    }
+
+    return $SpecificFileNameLevel
+}
+
 function Get-WDACConferredTrust {
     [CmdletBinding()]
     Param (
@@ -61,12 +81,12 @@ function Get-WDACConferredTrust {
         $CertInfoAndMisc,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
-        $AppTrustLevels
+        $AppTrustLevels,
+        $SpecificFileNameLevelList
     )
 
     $Options = "([Y] (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [/ or COMM] (Add a comment about the app); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher Info); [T] (View Trust for this App for Respective Rule Levels); [V] (Change Specific FileName Level))"
     $TrustedLevels = ($AppTrustLevels.PSObject.Properties | Where-Object {$_.Value -eq $true} | Select-Object Name).Name
-    $SpecificFileNameLevelList = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
 
     if ($TrustedLevels) {
         Write-Warning "App is already trusted at a separate rule level."
@@ -120,11 +140,11 @@ function Get-WDACConferredTrust {
             $TempComment = Read-Host -Prompt "Enter your comment about this app"
             $AppComments.Add($AppInfo.SHA256FlatHash,$TempComment)
         } elseif ($InputString.ToLower() -eq "v") {
-            Write-Host ("Select a SpecificFileNameLevel: (" + ($SpecificFileNameLevelList -Join ",") + ")")
-            $SpecificFileNameLevel = Read-Host -Prompt "Option Selection"
-            while (-not ($SpecificFileNameLevelList -contains $SpecificFileNameLevel)) {
-                $SpecificFileNameLevel = Read-Host -Prompt "Not a valid selection. Please select one of these options: ($(($SpecificFileNameLevelList -Join ",")))"
+            if ($SpecificFileNameLevelList.Count -le 0 -or (-not $SpecificFileNameLevelList)) {
+                Write-Host "Unable to change SpecificFileNameLevel, as these properties of the app entry are not set: `"OriginalFileName`",`"InternalName`",`"FileDescription`",`"ProductName`",`"PackageFamilyName`""
+                continue
             }
+            $SpecificFileNameLevel = Get-SpecificFileNameLevelPrompt -Levels $SpecificFileNameLevelList
             $SpecificFileNameLevels.Add($AppInfo.SHA256FlatHash,$SpecificFileNameLevel)
             Write-Host ($Prompt + ": " + $Options)
         }
@@ -197,19 +217,65 @@ function Write-WDACConferredTrust {
         [string]$Level,
         $VersioningType,
         [switch]$ApplyVersioningToEntirePolicy,
+        [switch]$AdvancedVersioning,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
-    if ($Untrusted) {
-        #TODO
-        return
+    try {
+        if ($Untrusted -and ($Level -eq "Hash")) {
+            #This will only write to the apps table (assumed that only a hash entry has 'untrusted' written to it)
+                
+            if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "Hash" -Untrusted $Untrusted.ToBool() -Connection $Connection -ErrorAction Stop)) {
+                throw "Unable to update trust for app with hash $PrimaryKeyPart1 ."
+            }
+            return
+        }
+
+        switch ($Level) {
+            "Hash" {
+                if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "Hash" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update trust for hash rule with hash $PrimaryKeyPart1 for policy $PolicyID ."
+                }
+            }
+            "Publisher" {
+                if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "Publisher" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update trust for publisher rule with publisher index $PrimaryKeyPart1 for policy $PolicyID ."
+                }
+            }
+            "FilePublisher" {
+                
+            }
+            "LeafCertificate" {
+                if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "LeafCertificate" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update trust for LeafCertificate rule with TBSHash $PrimaryKeyPart1 for policy $PolicyID ."
+                }
+            }
+            "PcaCertificate" {
+                if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "PcaCertificate" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update trust for PcaCertificate rule with TBSHash $PrimaryKeyPart1 for policy $PolicyID ."
+                }
+            }
+            "FilePath" {
+                #TODO
+            }
+            "FileName" {
+                $FileNameRule = Get-WDACFileName -FileName $PrimaryKeyPart1 -Connection $Connection -ErrorAction Stop
+                if ($null -eq $FileNameRule) {
+                    Add-WDACFileName -FileName $PrimaryKeyPart1 -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop
+                }
+                if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "FileName" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update trust for FileName rule with name $PrimaryKeyPart1 and SpecificFileNameLevel $SpecificFileNameLevel for policy $PolicyID ."
+                }
+            }
+        }
+
+
+
+    } catch {
+        throw $_
     }
-
-
-
-
 }
 
 function Restore-ProvidedLevelsOrder {
@@ -374,14 +440,33 @@ function Read-WDACConferredTrust {
             if ((-not $Levels) -or $Levels.Count -le 0) {
                 Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash) at the specified levels. Skipping."
                 $AppsToSkip.Add($SHA256FlatHash,$true)
+                Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue
                 return;
             }
         }
 
+        $SpecificFileNameLevelList = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
+        $ResultingSpecificFileNameLevelList = @()
+        foreach ($FileNameLevel in $SpecificFileNameLevelList) {
+            if (($AppInfo.$($FileNameLevel))) {
+                $ResultingSpecificFileNameLevelList += $FileNameLevel
+            }
+        }
+        if ($ResultingSpecificFileNameLevelList.Count -le 0 -and $Levels) {
+            $Levels = $Levels | Where-Object {$_ -ne "FileName"}
+
+            if ((-not $Levels) -or $Levels.Count -le 0) {
+                Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash) at the specified levels. Skipping."
+                $AppsToSkip.Add($SHA256FlatHash,$true)
+                Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue
+                return;
+            }
+        }
         ### DO YOU TRUST IT? #######################################################
         
-        $IsTrusted = Get-WDACConferredTrust -Prompt "Do you trust the app $FileName with SHA256 Flat Hash $SHA256FlatHash ?" -AppInfo $AppInfo -CertInfoAndMisc $CertInfoAndMisc.CertsAndPublishers -AppTrustLevels $AppTrustLevels
+        $IsTrusted = Get-WDACConferredTrust -Prompt "Do you trust the app $FileName with SHA256 Flat Hash $SHA256FlatHash ?" -AppInfo $AppInfo -CertInfoAndMisc $CertInfoAndMisc.CertsAndPublishers -AppTrustLevels $AppTrustLevels -SpecificFileNameLevelList $ResultingSpecificFileNameLevelList
         if ($AppsToSkip[$SHA256FlatHash]) {
+            Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue
             return;
         } elseif (-not $IsTrusted -and -not $AppsToBlock[$SHA256FlatHash]) {
         #This case handles when a user selects "N", meaning they don't trust the app
@@ -399,9 +484,17 @@ function Read-WDACConferredTrust {
         } elseif (-not $Levels) {
             if (-not $CertInfoAndMisc.CertsAndPublishers) {
             #The case that there are no associated signers for this app
-                $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels (@("Hash","FilePath","FileName"))
+                if ($ResultingSpecificFileNameLevelList.Count -le 0) {
+                    $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels (@("Hash","FilePath"))
+                } else {
+                    $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels (@("Hash","FilePath","FileName"))
+                }
             } else {
-                $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?"
+                if ($ResultingSpecificFileNameLevelList.Count -le 0) {
+                    $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels (@("Hash","FilePath","LeafCertificate","PcaCertificate","Publisher"))
+                } else {
+                    $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?"
+                }
             }
         } elseif ($Levels.Count -gt 1) {
             foreach ($Level in $Levels) {
@@ -417,11 +510,11 @@ function Read-WDACConferredTrust {
             if ($MultiRuleMode) {
                 if (-not (Get-YesOrNoPrompt -Prompt "Would you like to set this Trust (OR BLOCK) action at the level of $LevelToTrustAt ?")) {
                     $AppsToSkip.Add($SHA256FlatHash,$true)
+                    Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue
                     return;
                 }
             }
         }
-
 
         if ($LevelToTrustAt -eq "FilePath") {
             #Wittle-down the FilePath rule however the user wants
@@ -483,7 +576,14 @@ function Read-WDACConferredTrust {
             $PolicyToApplyRuleTo = Get-ChosenPolicy -Prompt "`nWhat policy do you want to apply this new rule to?" -Connection $Connection
         }
         ############################################################################################################
-
+        
+        if ($AppInfo.BlockingPolicyID -eq $PolicyToApplyRuleTo -and ($AppsToBlock[$SHA256FlatHash]) -and (-not $IsTrusted)) {
+        #If the user wants an app to be blocked, but the app entry already had the BlockingPolicyID attribute, then we exit the function
+            Write-Warning "The app is already blocked according to this policy. Skipping trust granting actions for this app and continuing script execution."
+            $AppsToSkip.Add($SHA256FlatHash,$true)
+            Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue
+            return
+        }
 
         ### DO WE TRUST IT AT USERMODE OR KERNEL MODE? #############################################################
         $SigningLevelToTrustRuleAt = $null
@@ -520,6 +620,10 @@ function Read-WDACConferredTrust {
             $SpecificFileNameLevel = $SpecificFileNameLevels[$SHA256FlatHash]
         }
 
+        if ((-not $SpecificFileNameLevels[$SHA256FlatHash]) -and $SpecificFileNameLevel -eq "OriginalFileName" -and (-not $AppInfo.OriginalFileName) -and ($LevelToTrustAt -eq "FilePublisher" -or $LevelToTrustAt -eq "FileName")) {
+            Get-SpecificFileNameLevelPrompt -Levels $ResultingSpecificFileNameLevelList
+        }
+
         $LeafCertCNs = @{}
         $LeafCertTBSHashes = @{}
         $PcaCertTBSHashes = @{}
@@ -538,33 +642,33 @@ function Read-WDACConferredTrust {
 
         switch ($LevelToTrustAt) {
             "Hash" {
-                Write-WDACConferredTrust -PrimaryKeyPart1 $SHA256FlatHash -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                Write-WDACConferredTrust -PrimaryKeyPart1 $SHA256FlatHash -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -Connection $Connection
             }
             "Publisher" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if ($RuleSignerMapping -eq $Signer.SignatureIndex -or ($RuleSignerMapping.ToLower() -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -Connection $Connection
                     }
                 }
             }
             "FilePublisher" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if ($RuleSignerMapping -eq $Signer.SignatureIndex -or ($RuleSignerMapping.ToLower() -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 $AppInfo.$($SpecificFileNameLevel) -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 $AppInfo.$($SpecificFileNameLevel) -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -Connection $Connection
                     }
                 }
             }
             "LeafCertificate" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if ($RuleSignerMapping -eq $Signer.SignatureIndex -or ($RuleSignerMapping.ToLower() -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $LeafCertTBSHashes[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $LeafCertTBSHashes[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -Connection $Connection
                     }
                 }
             }
             "PcaCertificate" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if ($RuleSignerMapping -eq $Signer.SignatureIndex -or ($RuleSignerMapping.ToLower() -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $PcaCertTBSHashes[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $PcaCertTBSHashes[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -Connection $Connection
                     }
                 }
             }
@@ -573,11 +677,13 @@ function Read-WDACConferredTrust {
                 Write-Verbose "FilePath rules have not yet been implemented."
             }
             "FileName" {
-                Write-WDACConferredTrust -PrimaryKeyPart1 $AppInfo.$($SpecificFileNameLevel) -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                Write-WDACConferredTrust -PrimaryKeyPart1 $AppInfo.$($SpecificFileNameLevel) -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -Connection $Connection
             }
         }
 
         $AppsToSkip.Add($SHA256FlatHash,$true)
+        Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue
+
         if ($LevelToTrustAt.ToLower() -ne "hash") {
         #The apps table is used to represent hash rules, so they are not purged from the database right now
             $AppsToPurge.Add($SHA256FlatHash,$true)
@@ -744,6 +850,12 @@ function Approve-WDACRules {
     )
 
     begin {
+
+        $HasPipelineInput = $false
+        if ($Events) {
+            $HasPipelineInput = $true
+        }
+
         if ($Fallbacks -and -not $Level) {
             throw "Cannot provide fallbacks without providing a level. (This would be the preferred or default level.)"
         }
@@ -774,6 +886,17 @@ function Approve-WDACRules {
     }
 
     process {
+
+        if (-not $HasPipelineInput) {
+            #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0
+            #If there is pipeline input, using Clear-AllWDACSkipped will clear Skipped property prematurely (since Register-WDACEvents is a filter function).
+            #...So only run this block of code if there is NO pipeline input
+            try {
+                Clear-AllWDACSkipped -ErrorAction Stop
+            } catch {
+                throw "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
+            }
+        }
         
         try {
             if ($GroupName) {
@@ -882,6 +1005,14 @@ function Approve-WDACRules {
                         continue;
                     }
 
+                    if ( (Get-MSIorScriptSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) -or (Get-WDACAppSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue)) {
+                        continue;
+                    }
+
+                    ########TODO: Update file versions in this main loop if the file publisher is already trusted
+
+                    ########END TODO
+
                     $SigningScenario = $Event.SigningScenario
                     if ($SigningScenario) {
                         if ((Get-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
@@ -961,6 +1092,16 @@ function Approve-WDACRules {
     }
 
     end {
+        if (-not $HasPipelineInput) {
+        #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
+        #If there is pipeline input, using Clear-AllWDACSkipped will clear Skipped property prematurely (since Register-WDACEvents is a filter function).
+        #...So only run this block of code if there is NO pipeline input
+            try {
+                Clear-AllWDACSkipped -ErrorAction Stop
+            } catch {
+                Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
+            }
+        }
         if ($Transaction) {
             $Transaction.Rollback()
         }
