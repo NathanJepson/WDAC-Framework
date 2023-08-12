@@ -2974,10 +2974,6 @@ function Clear-AllWDACSkipped {
     )
 
     try {
-        if (-not $Connection) {
-            $Connection = New-SQLiteConnection -ErrorAction Stop
-            $NoConnectionProvided = $true
-        }
         $AllAppHashes = Get-WDACAppsAllHashes -Connection $Connection -ErrorAction Stop
         $AllMSIorScriptHashes = Get-MSIorScriptAllHashes -Connection $Connection -ErrorAction Stop
 
@@ -2996,17 +2992,8 @@ function Clear-AllWDACSkipped {
             }
         }
 
-        if ($NoConnectionProvided -and $Connection) {
-            $Connection.close()
-        }
-
     } catch {
-        $theError = $_
-        if ($NoConnectionProvided -and $Connection) {
-            $Connection.close()
-        }
-
-        throw $theError
+        throw $_
     }
 }
 
