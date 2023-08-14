@@ -2264,7 +2264,8 @@ function Update-WDACFilePublisherByCriteria {
         [switch]$AdvancedVersioning,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
-        [string]$PolicyID
+        [string]$PolicyID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
     
@@ -3474,7 +3475,7 @@ function Update-WDACTrust {
                 }
                 if ($Driver) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                    $Command.Commandtext = "UPDATE file_publishers SET TrustedDriver = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
                     $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
@@ -3482,7 +3483,7 @@ function Update-WDACTrust {
                 }
                 if ($Block) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                    $Command.Commandtext = "UPDATE file_publishers SET Blocked = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
                     $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
@@ -3490,7 +3491,7 @@ function Update-WDACTrust {
                 }
                 if ($Untrusted) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                    $Command.Commandtext = "UPDATE file_publishers SET Untrusted = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
                     $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
@@ -3507,19 +3508,19 @@ function Update-WDACTrust {
                 }
                 if ($Driver) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET TrustedDriver = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Block) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET Blocked = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Untrusted) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET Untrusted = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
@@ -3534,19 +3535,19 @@ function Update-WDACTrust {
                 }
                 if ($Driver) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET TrustedDriver = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Block) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET Blocked = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Untrusted) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET Untrusted = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
