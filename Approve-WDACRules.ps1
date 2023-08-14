@@ -218,6 +218,7 @@ function Write-WDACConferredTrust {
         $VersioningType,
         [switch]$ApplyVersioningToEntirePolicy,
         [switch]$AdvancedVersioning,
+        $CurrentVersionNum,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
@@ -245,7 +246,24 @@ function Write-WDACConferredTrust {
                 }
             }
             "FilePublisher" {
-                
+                $NewVersionNum = Update-WDACFilePublisherByCriteria -FileName $PrimaryKeyPart2 -PublisherIndex $PrimaryKeyPart1 -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -PolicyID $PolicyID -AddFilePublisher -CurrentVersioNum $CurrentVersionNum -Connection $Connection
+                #Note: This function will also add the file publisher if it doesn't exist.
+
+                $trusted = $true
+                $TempFilePublisher = Get-WDACFilePublishers -PublisherIndex $PrimaryKeyPart1 -FileName $PrimaryKeyPart2 -MinimumAllowedVersion $NewVersionNum -Connection $Connection
+                if ($TempFilePublisher.Count -gt 1) {
+                    throw "Pulled multiple file publishers from the database for version number $VersioNum and FileName $PrimaryKeyPart2 and PublisherIndex $PublisherIndex"
+                }
+
+                if (($Block -and $TempFilePublisher.Blocked -eq $false) -or ($TrustedDriver -and $TempFilePublisher.TrustedDriver -eq $false) -or ($TrustedUserMode -and $TempFilePublisher.TrustedUserMode -eq $false)) {
+                    $trusted = $false
+                }
+
+                if (-not $trusted) {
+                    if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -PrimaryKey2 $PrimaryKeyPart2 -PrimaryKey3 $NewVersionNum -Level "FilePublisher" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update trust for FilePublisher rule with PublisherIndex $PrimaryKeyPart1 and FileName $PrimaryKeyPart2 and MinimumFileVersion $NewVersionNum for policy $PolicyID ."
+                    }
+                }
             }
             "LeafCertificate" {
                 if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "LeafCertificate" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop)) {
@@ -447,6 +465,17 @@ function Read-WDACConferredTrust {
             }
         }
 
+        if (-not ($AppInfo.FileVersion) -and $Levels) {
+            $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
+
+            if ((-not $Levels) -or $Levels.Count -le 0) {
+                Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash) at the specified levels. Skipping."
+                $AppsToSkip.Add($SHA256FlatHash,$true)
+                Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                return;
+            }
+        }
+
         $SpecificFileNameLevelList = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
         $ResultingSpecificFileNameLevelList = @()
         foreach ($FileNameLevel in $SpecificFileNameLevelList) {
@@ -456,6 +485,7 @@ function Read-WDACConferredTrust {
         }
         if ($ResultingSpecificFileNameLevelList.Count -le 0 -and $Levels) {
             $Levels = $Levels | Where-Object {$_ -ne "FileName"}
+            $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
 
             if ((-not $Levels) -or $Levels.Count -le 0) {
                 Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash ) at the specified levels. Skipping."
@@ -495,7 +525,11 @@ function Read-WDACConferredTrust {
                 if ($ResultingSpecificFileNameLevelList.Count -le 0) {
                     $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels (@("Hash","FilePath","LeafCertificate","PcaCertificate","Publisher"))
                 } else {
-                    $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?"
+                    if ($AppInfo.FileVersion) {
+                        $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?"
+                    } else {
+                        $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels (@("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher"))
+                    }
                 }
             }
         } elseif ($Levels.Count -gt 1) {
@@ -656,7 +690,7 @@ function Read-WDACConferredTrust {
             "FilePublisher" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if ($RuleSignerMapping -eq $Signer.SignatureIndex -or ($RuleSignerMapping -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 $AppInfo.$($SpecificFileNameLevel) -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 $AppInfo.$($SpecificFileNameLevel) -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -AdvancedVersioning:$AdvancedVersioning -CurrentVersionNum $AppInfo.FileVersion -Connection $Connection
                     }
                 }
             }
@@ -751,6 +785,7 @@ function Approve-WDACRules {
 
     .PARAMETER VersioningType
     OPTIONAL: Supply an integer for different versioning behavior for file publishers. These will be written to the database (as publisher index + file name combinations)
+    NOTE: VersioningType only applies to Trust actions, not "Block" actions
     NOTE: VersioningTypes are written to the database when specified with this parameter (or the parameter AlwaysSetMinimumVersions is set)
     NOTE: Options 0-5 deal with the "file_publisher_options" table, options 6-11 deal with the "policy_file_publisher_options" table
 
@@ -1013,12 +1048,13 @@ function Approve-WDACRules {
 
                     ########TODO: Update file versions in this main loop if the file publisher is already trusted
 
-                    ########END TODO
-
                     $SigningScenario = $Event.SigningScenario
                     if ($SigningScenario) {
                         if ((Get-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
                         #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
+                            
+                            
+
                             if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
                                 $MiscLevels = @()
                                 $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
