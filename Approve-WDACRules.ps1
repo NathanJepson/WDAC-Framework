@@ -788,6 +788,7 @@ function Approve-WDACRules {
     NOTE: VersioningType only applies to Trust actions, not "Block" actions
     NOTE: VersioningTypes are written to the database when specified with this parameter (or the parameter AlwaysSetMinimumVersions is set)
     NOTE: Options 0-5 deal with the "file_publisher_options" table, options 6-11 deal with the "policy_file_publisher_options" table
+        policy_file_publisher_options has priority over file_publisher_options
 
         0 - GLOBAL SET MINIMUM - For a particular publisher index + file name combination, prompt the user for a [fixed] MinimumFileVersion that will be applied anytime the combination appears (applied to ALL policies)
         1 - GLOBAL DECREMENT MINIMUM - For a particular publisher index + file name combination, replace the MinimumFileVersion with a new one anytime a lower one appears for all appearances of the combination
@@ -830,7 +831,7 @@ function Approve-WDACRules {
     Reset the untrusted flag for every "untrusted" app in the database (this doesn't reset flags for blocked or revoked)
 
     .PARAMETER ApplyRuleEachSigner
-    when this flag is set, anytime the user specifies that they want a WDAC rule level involving a certificate -- such a rule will be created for each signer automatically without prompting the user.
+    When this flag is set, anytime the user specifies that they want a WDAC rule level involving a certificate -- such a rule will be created for each signer automatically without prompting the user.
     (Applies to PcaCertificate, LeafCertificate, Publisher, and FilePublisher rules)
 
     .INPUTS
