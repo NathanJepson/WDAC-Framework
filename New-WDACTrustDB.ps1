@@ -228,7 +228,6 @@ function New-WDACTrustDB {
 
     CREATE TABLE file_publisher_options (
         FileName Text NOT NULL,
-        SpecificFileNameLevel Text,
         PublisherIndex Integer NOT NULL,
         VersioningType Integer NOT NULL,
         MinimumAllowedVersionPivot Text,
@@ -240,7 +239,6 @@ function New-WDACTrustDB {
         FileName Text NOT NULL,
         PublisherIndex Integer NOT NULL,
         PolicyGUID Text NOT NULL,
-        SpecificFileNameLevel Text,
         MinimumAllowedVersionPivot Text,
         MinimumTolerableMinimum Text,
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
