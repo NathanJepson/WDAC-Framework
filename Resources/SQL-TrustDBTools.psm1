@@ -10,6 +10,12 @@ if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-
     Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
 }
 
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\File-Publisher-Helpers.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\File-Publisher-Helpers.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\File-Publisher-Helpers.psm1")
+}
+
 function Import-SQLite {
     [CmdletBinding()]
     param (
@@ -1243,11 +1249,12 @@ function Add-WDACCertificate {
             $Connection.close()
         }
     } catch {
+        $theError = $_
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
 
-        throw $_
+        throw $theError
     }
 
 }
@@ -2070,7 +2077,7 @@ function Get-WDACFilePublishers {
     param (
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
-        [string]$PublisherIndex,
+        [int]$PublisherIndex,
         $FileName,
         $MinimumAllowedVersion,
         $MaximumAllowedVersion,
@@ -2177,12 +2184,92 @@ function Get-WDACFilePublishers {
     }
 }
 
+function Get-WDACFilePublishersDefinitive {
+#This is similar Get-WDACFilePublishers but doesn't consider SpecificFileNameLevel, and doesn't consider MaximumAllowedVersion
+#FileName is also required in this function
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$PublisherIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $FileName,
+        $MinimumAllowedVersion,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        if ($MinimumAllowedVersion) {
+            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+            $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+        }
+        $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        if ($Reader.HasRows) {
+            $result = @()
+        }
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result += [PSCustomObject]@{
+                    PublisherIndex = $Reader["PublisherIndex"];
+                    Untrusted = [bool]$Reader["Untrusted"];
+                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
+                    TrustedUserMode = [bool]$Reader["TrustedUserMode"];
+                    Staged = [bool]$Reader["Staged"];
+                    Revoked = [bool]$Reader["Revoked"];
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    AllowedPolicyID = ($Reader["AllowedPolicyID"]);
+                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
+                    Comment = $Reader["Comment"];
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                    MinimumAllowedVersion = $VersionNumMinTmp;
+                    MaximumAllowedVersion = $VersionNumMaxTmp;
+                    FileName = $Reader["FileName"];
+                    SpecificFileNameLevel = $Reader["SpecificFileNameLevel"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Add-WDACFilePublisher {
     [cmdletbinding()]
     param (
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
-        [string]$PublisherIndex,
+        [int]$PublisherIndex,
         [bool]$Untrusted = $false,
         [bool]$TrustedDriver = $false,
         [bool]$TrustedUserMode = $false,
@@ -2248,6 +2335,39 @@ function Add-WDACFilePublisher {
 
 }
 
+function Update-WDACFilePublisherByCriteriaHelper {
+    [cmdletbinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $FileName,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [int]$PublisherIndex,
+        $VersioningType,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $CurrentVersionNum,
+        [switch]$AdvancedVersioning,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    ###### ADVANCED VERSIONING IF PROVIDED ##########################
+    if ($AdvancedVersioning) {
+
+        return;
+    }
+    ###########################################################################################
+    
+    ###### CHECK FOR POLICY FILE PUBLISHER OPTIONS ##################
+
+    ###### CHECK FOR FILE PUBLISHER OPTIONS #########################
+
+    ###### USE THE POLICY'S VersioningType or the PROVIDED VersioningType if NO OTHER ENTRIES ######
+
+    ###### USE ADVANCED VERSIONING IF NOT OTHER ENTRIES OR VersioningType ######
+}
+
 function Update-WDACFilePublisherByCriteria {
     [cmdletbinding()]
     param (
@@ -2256,7 +2376,7 @@ function Update-WDACFilePublisherByCriteria {
         $FileName,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
-        $PublisherIndex,
+        [int]$PublisherIndex,
         [ValidateSet("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")]
         $SpecificFileNameLevel="OriginalFileName",
         $VersioningType,
@@ -2265,10 +2385,37 @@ function Update-WDACFilePublisherByCriteria {
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [string]$PolicyID,
+        [switch]$AddFilePublisher,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $CurrentVersionNum,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
-
     
+
+    ###### FIRST CHECK FOR FILE PUBLISHSER ENTRIES WITH TRUST AND POLICY ID SET #################
+    if (-not $AddFilePublisher) {
+        $FilePublishersTemp = Get-WDACFilePublishersDefinitive -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection
+    
+        return;
+    }
+    ###########################################################################################
+
+
+    ###### ADVANCED VERSIONING IF PROVIDED ####################################################
+    if ($AdvancedVersioning -and $AddFilePublisher -and $PolicyID) {
+
+        return;
+    }
+    ###########################################################################################
+
+    ###### Write VersioningTypes and new FilePublishers to Database ###########################
+    if ($AddFilePublisher -and $PolicyID) {
+
+        return;
+    }
+    ###########################################################################################
+
 }
 
 function Set-WDACFilePublisherMinimumAllowedVersion {
