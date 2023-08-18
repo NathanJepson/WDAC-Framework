@@ -754,7 +754,7 @@ function Read-WDACConferredTrust {
         $AppsToSkip.Add($SHA256FlatHash,$true)
         Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
 
-        if ($LevelToTrustAt.ToLower() -ne "hash") {
+        if (($LevelToTrustAt.ToLower() -ne "hash") -and ($AppTrustLevels.Hash -eq $false)) {
         #The apps table is used to represent hash rules, so they are not purged from the database right now
             $AppsToPurge.Add($SHA256FlatHash,$true)
         }
@@ -1116,6 +1116,10 @@ function Approve-WDACRules {
                             if ((Get-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
                             #The difference between this if statement and the one above is this one provides the AllLevels parameter
                                 Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
+                                $AppTrustAllLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
+                                if (-not ($AppTrustAllLevels.Hash)) {
+                                    $AppsToPurge.Add($SHA256FlatHash,$true)
+                                }
                                 $Transaction.Rollback()
                                 continue;
                             }
