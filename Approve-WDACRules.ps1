@@ -1058,26 +1058,34 @@ function Approve-WDACRules {
 
                     if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                     #Even if the app is piped into the cmdlet it still has to exist in the database.
-                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        if (-not ($AppsToSkip[$AppHash])) {
+                            $AppsToSkip.Add($AppHash,$true)
+                        }
                         $Transaction.Rollback()
                         continue;
                     }
 
                     if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                     #Case the user has already set an untrust action on this app
-                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        if (-not ($AppsToSkip[$AppHash])) {
+                            $AppsToSkip.Add($AppHash,$true)
+                        }
                         $Transaction.Rollback()
                         continue;
                     }
 
                     if ( (Get-MSIorScriptSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) -or (Get-WDACAppSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue)) {
-                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        if (-not ($AppsToSkip[$AppHash])) {
+                            $AppsToSkip.Add($AppHash,$true)
+                        }
                         $Transaction.Rollback()
                         continue;
                     }
 
                     if (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) {
-                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        if (-not ($AppsToSkip[$AppHash])) {
+                            $AppsToSkip.Add($AppHash,$true)
+                        }
                         $Transaction.Rollback()
                         continue;
                     }
@@ -1117,8 +1125,11 @@ function Approve-WDACRules {
                             #The difference between this if statement and the one above is this one provides the AllLevels parameter
                                 Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
                                 $AppTrustAllLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
-                                if (-not ($AppTrustAllLevels.Hash)) {
-                                    $AppsToPurge.Add($SHA256FlatHash,$true)
+                                if ((-not ($AppTrustAllLevels.Hash)) -and (-not $AppsToPurge[$AppHash])) {
+                                    $AppsToPurge.Add($AppHash,$true)
+                                }
+                                if (-not ($AppsToSkip[$AppHash])) {
+                                    $AppsToSkip.Add($AppHash,$true)
                                 }
                                 $Transaction.Rollback()
                                 continue;
