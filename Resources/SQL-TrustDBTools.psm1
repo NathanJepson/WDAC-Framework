@@ -2529,6 +2529,97 @@ function New-WDACFilePublisherByCriteria {
     }
 }
 
+function Update-WDACFilePublisherByCriteriaHelper {
+    [cmdletbinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $FileName,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [int]$PublisherIndex,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$PolicyGUID,
+        $VersioningType,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $CurrentVersionNum,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        $PolicyFilePublisherOptions = Get-PolicyFilePublisherOptions -PolicyGUID $PolicyGUID -FileName $FileName -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
+        $FilePublisherOptions = Get-FilePublisherOptions -FileName $FileName -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
+        $PolicyVersioningOptions = Get-PolicyVersioningOptions -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+        ###### CHECK FOR POLICY FILE PUBLISHER OPTIONS ##################
+        if ($PolicyFilePublisherOptions -and $FilePublisherOptions) {
+        #The versioning type is stored in the file_publisher_options table even if a policy_file_publisher_options entry exists
+            $VersioningType = $FilePublisherOptions.VersioningType
+        }
+        #################################################################
+
+        ###### CHECK FOR FILE PUBLISHER OPTIONS #########################
+        elseif ($FilePublisherOptions) {
+
+        }
+        #################################################################
+
+        ###### USE THE POLICY'S VersioningType or the PROVIDED VersioningType if NO OTHER ENTRIES ######
+        elseif ($PolicyVersioningOptions) {
+
+        }
+        ################################################################################################
+
+        ###### PROMPT FOR PREFERRED VersioningType IF STILL NO VersioningType ######
+        elseif (-not $VersioningType) {
+
+        }
+        ############################################################################
+
+    } catch {
+        throw $_
+    }
+}
+
+function Update-WDACFilePublisherByCriteria {
+    [cmdletbinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SHA256FlatHash,
+        $VersioningType,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    ) 
+
+    try {
+    ###### FIRST CHECK FOR FILE PUBLISHER ENTRIES WITH TRUST AND POLICY ID SET #################
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $WDACApp = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        $CertInfo = (Expand-WDACAppV2 -SHA256FlatHash $SHA256FlatHash -Levels "FilePublisher" -Connection $Connection -ErrorAction Stop | Select-Object CertsAndPublishers).CertsAndPublishers
+
+        $FilePublishersTemp = Get-WDACFilePublishersDefinitive -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection
+        foreach ($FilePublisher in $FilePublishersTemp) {
+            if ($null -ne $FilePublisher.AllowedPolicyID) {
+                Update-WDACFilePublisherByCriteriaHelper -FileName $FileName -PublisherIndex $PublisherIndex -PolicyGUID $FilePublisher.AllowedPolicyID -VersioningType $VersioningType -CurrentVersionNum $CurrentVersionNum -Connection $Connection -ErrorAction Stop
+            }
+        }
+    
+    ###########################################################################################
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
 function Set-WDACFilePublisherMinimumAllowedVersion {
 #Note, this function only works if just ONE file publisher rule exists for the publisher index / filename / filenamelevel combination.
     [cmdletbinding()]
@@ -3088,15 +3179,18 @@ function Expand-WDACAppV2 {
                     $TempDict.Add("Publisher",$Publisher)
                 } 
                 "FilePublisher" {
+                    $FilePublishersList = @{}
                     if ($Publisher) {
                         foreach ($FileNameLevel in $SpecificFileNameLevels) {
                             if ($App.$($FileNameLevel)) {
                                 $FilePublishers = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -Connection $Connection -ErrorAction Stop
                                 if ($FilePublishers) {
-                                    $TempDict.Add("FilePublishers",$FilePublishers)
-                                    break
+                                    $FilePublishersList.Add($FileNameLevel,$FilePublishers)
                                 }
                             }
+                        }
+                        if ($FilePublishersList.Count -ge 1) {
+                            $TempDict.Add("FilePublishers",$FilePublishersList)
                         }
                     }
                 }

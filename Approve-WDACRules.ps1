@@ -455,7 +455,7 @@ function Get-ChosenSigningScenario {
 }
 
 function Read-WDACConferredTrust {
-#NOTE: This function also adds File Publishers to the database!
+#NOTE: This function also adds File Publishers to the database once they are trusted or blocked
 
     [CmdletBinding()]
     Param (
@@ -853,9 +853,10 @@ function Approve-WDACRules {
     This means that the VersioningType will be applied to all file name + publisher index combinations for the entire policy IF NOT ALREADY SET EXPLICITLY.
 
     .PARAMETER MultiRuleMode
-    Even if an app is already trusted at the specified levels, this option allows you to check to see if you can allow the app at another level--for example, 
+    Even if an app is already trusted at separate levels, this option allows you to check to see if you can allow the app at another level--for example, 
     if a file publisher is allowed for one policy and allows an app to run, you can still allow an app by hash for another policy. 
-    (This will prompt the user whether they want to allow the other rule.) Can only be set when Level AND fallbacks are specified. 
+    (This will prompt the user whether they want to allow the other rule.) Can only be set when Level AND fallbacks are specified.
+    Does not apply to "BLOCK" rules.
 
     .PARAMETER ResetUntrusted
     Reset the untrusted flag for every "untrusted" app in the database (this doesn't reset flags for blocked or revoked)
@@ -1087,6 +1088,7 @@ function Approve-WDACRules {
                             $AppsToSkip.Add($AppHash,$true)
                         }
                         $Transaction.Rollback()
+                        Write-Verbose "App $FileName with hash $AppHash skipped due to already being blocked at a separate level."
                         continue;
                     }
 
