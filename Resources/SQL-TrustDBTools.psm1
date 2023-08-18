@@ -2591,7 +2591,9 @@ function Update-WDACFilePublisherByCriteria {
         [string]$SHA256FlatHash,
         $VersioningType,
         [System.Data.SQLite.SQLiteConnection]$Connection
-    ) 
+    )
+
+    $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
 
     try {
     ###### FIRST CHECK FOR FILE PUBLISHER ENTRIES WITH TRUST AND POLICY ID SET #################
@@ -2601,15 +2603,23 @@ function Update-WDACFilePublisherByCriteria {
         }
 
         $WDACApp = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
-        $CertInfo = (Expand-WDACAppV2 -SHA256FlatHash $SHA256FlatHash -Levels "FilePublisher" -Connection $Connection -ErrorAction Stop | Select-Object CertsAndPublishers).CertsAndPublishers
+        if ($WDACApp.FileVersion) {
+            $CertInfo = (Expand-WDACAppV2 -SHA256FlatHash $SHA256FlatHash -Levels "FilePublisher" -Connection $Connection -ErrorAction Stop | Select-Object CertsAndPublishers).CertsAndPublishers
 
-        $FilePublishersTemp = Get-WDACFilePublishersDefinitive -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection
-        foreach ($FilePublisher in $FilePublishersTemp) {
-            if ($null -ne $FilePublisher.AllowedPolicyID) {
-                Update-WDACFilePublisherByCriteriaHelper -FileName $FileName -PublisherIndex $PublisherIndex -PolicyGUID $FilePublisher.AllowedPolicyID -VersioningType $VersioningType -CurrentVersionNum $CurrentVersionNum -Connection $Connection -ErrorAction Stop
+            foreach ($Signer in $CertInfo) {
+                foreach ($FileNameLevel in $SpecificFileNameLevels) {
+                    if ($Signer.FilePublishers.$($FileNameLevel)) {
+                        $TempFilePublishers = $Signer.FilePublishers.$($FileNameLevel)
+                        foreach ($TempFilePublisher in $TempFilePublishers) {
+                            if ($TempFilePublisher.AllowedPolicyID) {
+                                Update-WDACFilePublisherByCriteriaHelper -FileName $TempFilePublisher.FileName -PublisherIndex $TempFilePublisher.PublisherIndex -PolicyGUID $TempFilePublisher.AllowedPolicyID -VersioningType $VersioningType -CurrentVersionNum $WDACApp.FileVersion -Connection $Connection -ErrorAction Stop
+                            }
+                        }
+                    }
+                }
             }
         }
-    
+        
     ###########################################################################################
     } catch {
         $theError = $_
