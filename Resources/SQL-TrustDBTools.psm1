@@ -2541,12 +2541,13 @@ function Update-WDACFilePublisherByCriteriaHelper {
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [string]$PolicyGUID,
-        $VersioningType,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         $CurrentVersionNum,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
+
+    $VersioningType = $null
 
     try {
         $PolicyFilePublisherOptions = Get-PolicyFilePublisherOptions -PolicyGUID $PolicyGUID -FileName $FileName -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
@@ -2589,7 +2590,6 @@ function Update-WDACFilePublisherByCriteria {
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [string]$SHA256FlatHash,
-        $VersioningType,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -2612,7 +2612,7 @@ function Update-WDACFilePublisherByCriteria {
                         $TempFilePublishers = $Signer.FilePublishers.$($FileNameLevel)
                         foreach ($TempFilePublisher in $TempFilePublishers) {
                             if ($TempFilePublisher.AllowedPolicyID) {
-                                Update-WDACFilePublisherByCriteriaHelper -FileName $TempFilePublisher.FileName -PublisherIndex $TempFilePublisher.PublisherIndex -PolicyGUID $TempFilePublisher.AllowedPolicyID -VersioningType $VersioningType -CurrentVersionNum $WDACApp.FileVersion -Connection $Connection -ErrorAction Stop
+                                Update-WDACFilePublisherByCriteriaHelper -FileName $TempFilePublisher.FileName -PublisherIndex $TempFilePublisher.PublisherIndex -PolicyGUID $TempFilePublisher.AllowedPolicyID -CurrentVersionNum $WDACApp.FileVersion -Connection $Connection -ErrorAction Stop
                             }
                         }
                     }
