@@ -240,7 +240,7 @@ function Write-WDACConferredTrust {
             #This will only write to the apps table (assumed that only a hash entry has 'untrusted' written to it)
                 
             if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "Hash" -Untrusted $Untrusted.ToBool() -Connection $Connection -ErrorAction Stop)) {
-                throw "Unable to update trust for app with hash $PrimaryKeyPart1 ."
+                throw "Unable to set `"Untrusted`" status for app with hash $PrimaryKeyPart1 ."
             }
             return
         }
@@ -1058,17 +1058,26 @@ function Approve-WDACRules {
 
                     if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                     #Even if the app is piped into the cmdlet it still has to exist in the database.
+                        $AppsToSkip.Add($SHA256FlatHash,$true)
                         $Transaction.Rollback()
                         continue;
                     }
 
                     if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                     #Case the user has already set an untrust action on this app
+                        $AppsToSkip.Add($SHA256FlatHash,$true)
                         $Transaction.Rollback()
                         continue;
                     }
 
                     if ( (Get-MSIorScriptSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) -or (Get-WDACAppSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue)) {
+                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        $Transaction.Rollback()
+                        continue;
+                    }
+
+                    if (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) {
+                        $AppsToSkip.Add($SHA256FlatHash,$true)
                         $Transaction.Rollback()
                         continue;
                     }
