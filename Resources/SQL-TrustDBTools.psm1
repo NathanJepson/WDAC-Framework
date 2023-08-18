@@ -3977,7 +3977,6 @@ function Update-WDACTrustPoliciesAndComment {
             }
         }
 
-           
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
@@ -3990,4 +3989,263 @@ function Update-WDACTrustPoliciesAndComment {
 
         throw $theError
     }
+}
+
+function Test-AppBlocked {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [Alias("Hash","FlatHash")]
+        [string]$SHA256FlatHash,
+        [Alias("Levels")]
+        $AllPossibleLevels,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    if (-not $AllPossibleLevels) {
+        $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    } else {
+        foreach ($LevelProvided in $AllPossibleLevels) {
+            if (-not (@("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher") -contains $LevelProvided)) {
+                throw "Please provide one or more of the following levels: Hash,FilePath,FileName,LeafCertificate,PcaCertificate,Publisher,FilePublisher"
+            }
+        }
+    }
+    $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
+
+    try {
+        $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+
+        function Get-BlockedInstanceFilePublishers {
+            [CmdletBinding()]
+            Param (
+                [ValidateNotNullOrEmpty()]
+                [Parameter(Mandatory=$true)]
+                $FilePublishers,
+                [ValidateNotNullOrEmpty()]
+                [Parameter(Mandatory=$true)]
+                $FileVersion
+            )
+
+            foreach ($FilePublisher in $FilePublishers) {
+                $CompareMin = Compare-Versions -Version1 $FileVersion -Version2 $FilePublisher.MinimumAllowedVersion
+                $CompareMax = Compare-Versions -Version1 $FileVersion -Version2 $FilePublisher.MaximumAllowedVersion
+                $Encompasses = $false
+                if (($CompareMin -eq 1 -or $CompareMin -eq 0) -and ($CompareMax -eq -1 -or $CompareMax -eq 0)) {
+                    $Encompasses = $true
+                }
+
+                if ($Encompasses -and ($FilePublisher.Blocked -eq $true)) {
+                    return $true
+                }
+            }
+        }
+
+        switch ($AllPossibleLevels) {
+            "Hash" {
+                if ($AppInstance.Blocked -eq $true) {
+                    return $true
+                }
+            }
+            "FilePath" {<#TODO#>}
+            "FileName" {
+                if ($AppInstance.OriginalFileName -or $AppInstance.InternalName -or $AppInstance.FileDescription -or $AppInstance.ProductName -or $AppInstance.PackageFamilyName) {
+                    switch ($SpecificFileNameLevels) {
+
+                        "OriginalFileName" {
+                            if ($AppInstance.OriginalFileName) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.OriginalFileName -Connection $Connection -ErrorAction Stop
+                                if ($TempFileName) {
+                                    if ($TempFileName.Blocked -eq $true) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                        "InternalName" {
+                            if ($AppInstance.InternalName) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.InternalName -SpecificFileNameLevel "InternalName" -Connection $Connection -ErrorAction Stop
+                                if ($TempFileName) {
+                                    if ($TempFileName.Blocked -eq $true) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                        "FileDescription" {
+                            if ($AppInstance.FileDescription) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.FileDescription -SpecificFileNameLevel "FileDescription" -Connection $Connection -ErrorAction Stop
+                                if ($TempFileName) {
+                                    if ($TempFileName.Blocked -eq $true) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                        "ProductName" {
+                            if ($AppInstance.ProductName) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.ProductName -SpecificFileNameLevel "ProductName" -Connection $Connection -ErrorAction Stop
+                                if ($TempFileName) {
+                                    if ($TempFileName.Blocked -eq $true) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                        "PackageFamilyName" {
+                            if ($AppInstance.PackageFamilyName) {
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.PackageFamilyName -SpecificFileNameLevel "PackageFamilyName" -Connection $Connection -ErrorAction Stop
+                                if ($TempFileName) {
+                                    if ($TempFileName.Blocked -eq $true) {
+                                        return $true
+                                    }
+                                }
+                            }
+                        }
+                    }
+                } 
+            }
+            "LeafCertificate" {
+                if ($CertInfo) {
+                    foreach ($LeafCertificate in $CertInfo.LeafCert) {
+                        if ($LeafCertificate.Blocked -eq $true) {
+                            return $true
+                        }
+                    }
+                }
+            }
+            "PcaCertificate" {
+                if ($CertInfo) {
+                    foreach ($PcaCertificate in $CertInfo.PcaCert) {
+                        if ($PcaCertificate.Blocked -eq $true) {
+                            return $true
+                        }
+                    }
+                }
+            }
+            "Publisher" {
+                if ($CertInfo) {
+                    foreach ($LeafCertificate in $CertInfo.LeafCert) {
+                        if ($LeafCertificate.CommonName -and $LeafCertificate.ParentCertTBSHash) {
+                            $TempPublisher = Get-WDACPublisher -LeafCertCN $LeafCertificate.CommonName -PcaCertTBSHash $LeafCertificate.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
+                            if ($TempPublisher) {
+                                if ($TempPublisher.Blocked -eq $true) {
+                                    return $true
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+            "FilePublisher" {
+                if ($CertInfo -and $AppInstance.FileVersion -and ($AppInstance.OriginalFileName -or $AppInstance.InternalName -or $AppInstance.FileDescription -or $AppInstance.ProductName -or $AppInstance.PackageFamilyName)) {
+                    foreach ($LeafCertificate in $CertInfo.LeafCert) {
+                        if ($LeafCertificate.CommonName -and $LeafCertificate.ParentCertTBSHash) {
+                            $TempPublisher = Get-WDACPublisher -LeafCertCN $LeafCertificate.CommonName -PcaCertTBSHash $LeafCertificate.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
+                            if ($TempPublisher.PublisherIndex) {
+                                switch ($SpecificFileNameLevels) {
+                                    "OriginalFileName" {
+                                        if ($AppInstance.OriginalFileName) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.OriginalFileName -SpecificFileNameLevel "OriginalFileName" -Connection $Connection -ErrorAction Stop
+                                            if ($TempFilePublishers) {
+                                                if (Get-BlockedInstanceFilePublishers -FilePublishers $TempFilePublishers -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "InternalName" {
+                                        if ($AppInstance.InternalName) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.InternalName -SpecificFileNameLevel "InternalName" -Connection $Connection -ErrorAction Stop
+                                            if ($TempFilePublishers) {
+                                                if (Get-BlockedInstanceFilePublishers -FilePublishers $TempFilePublishers -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "FileDescription" {
+                                        if ($AppInstance.FileDescription) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.FileDescription -SpecificFileNameLevel "FileDescription" -Connection $Connection -ErrorAction Stop
+                                            if ($TempFilePublishers) {
+                                                if (Get-BlockedInstanceFilePublishers -FilePublishers $TempFilePublishers -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "ProductName" {
+                                        if ($AppInstance.ProductName) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.ProductName -SpecificFileNameLevel "ProductName" -Connection $Connection -ErrorAction Stop
+                                            if ($TempFilePublishers) {
+                                                if (Get-BlockedInstanceFilePublishers -FilePublishers $TempFilePublishers -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                    "PackageFamilyName" {
+                                        if ($AppInstance.PackageFamilyName) {
+                                            $TempFilePublishers = Get-WDACFilePublishers -PublisherIndex $TempPublisher.PublisherIndex -FileName $AppInstance.PackageFamilyName -SpecificFileNameLevel "PackageFamilyName" -Connection $Connection -ErrorAction Stop
+                                            if ($TempFilePublishers) {
+                                                if (Get-BlockedInstanceFilePublishers -FilePublishers $TempFilePublishers -FileVersion $AppInstance.FileVersion) {
+                                                    return $true
+                                                }
+                                            }
+                                        }
+                                    }
+                                }
+                            }
+                        }
+                    }
+                }
+            }
+        }
+
+        return $false
+    } catch {
+        throw $_
+    }
+}
+
+function Test-AppBlockedStatusAllLevels {
+    [CmdletBinding()]
+    Param (   
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [Alias("Hash","FlatHash")]
+        [string]$SHA256FlatHash,
+        [Alias("Levels")]
+        $AllPossibleLevels,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    if (-not $AllPossibleLevels) {
+        $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    } else {
+        foreach ($LevelProvided in $AllPossibleLevels) {
+            if (-not (@("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher") -contains $LevelProvided)) {
+                throw "Please provide one or more of the following levels: Hash,FilePath,FileName,LeafCertificate,PcaCertificate,Publisher,FilePublisher"
+            }
+        }
+    }
+
+    try {
+        $Result = [PSCustomObject]@{}
+        $ResultHashTable = @{}
+    
+        foreach ($Level in $AllPossibleLevels) {
+            $ResultHashTable.Add($Level,$false)
+            if (Test-AppBlocked -SHA256FlatHash $SHA256FlatHash -AllPossibleLevels $Level -Connection $Connection -ErrorAction Stop) {
+                $ResultHashTable[$Level] = $true
+            }
+        }
+        
+        $Result | Add-Member -NotePropertyMembers $ResultHashTable -PassThru | Out-Null
+        return $Result
+    } catch {
+        throw $_
+    }   
 }
