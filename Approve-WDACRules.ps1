@@ -252,12 +252,20 @@ function Write-WDACConferredTrust {
                         throw "Unable to update trust for hash rule with hash $PrimaryKeyPart1 for policy $PolicyID ."
                     }
                 }
+
+                if (-not (Update-WDACTrustPoliciesAndComment -PrimaryKey1 $PrimaryKeyPart1 -Level "Hash" -Block $Block.ToBool() -PolicyGUID $PolicyID -Comment $Comment -Connection $Connection -ErrorAction Stop)) {
+                    throw "Could not update policy GUID and / or comment for this new hash rule."
+                }
             }
             "Publisher" {
                 foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "Publisher" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
                         throw "Unable to update trust for publisher rule with publisher index $PrimaryKeyPart1 for policy $PolicyID ."
                     }
+                }
+
+                if (-not (Update-WDACTrustPoliciesAndComment -PrimaryKey1 $PrimaryKeyPart1 -Level "Publisher" -Block $Block.ToBool() -PolicyGUID $PolicyID -Comment $Comment -Connection $Connection -ErrorAction Stop)) {
+                    throw "Could not update policy GUID and / or comment for this new publisher rule."
                 }
             }
             "FilePublisher" {
@@ -279,12 +287,20 @@ function Write-WDACConferredTrust {
                         throw "Unable to update trust for LeafCertificate rule with TBSHash $PrimaryKeyPart1 for policy $PolicyID ."
                     }
                 }
+
+                if (-not (Update-WDACTrustPoliciesAndComment -PrimaryKey1 $PrimaryKeyPart1 -Level "LeafCertificate" -Block $Block.ToBool() -PolicyGUID $PolicyID -Comment $Comment -Connection $Connection -ErrorAction Stop)) {
+                    throw "Could not update policy GUID and / or comment for this new LeafCertificate rule."
+                }
             }
             "PcaCertificate" {
                 foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "PcaCertificate" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
                         throw "Unable to update trust for PcaCertificate rule with TBSHash $PrimaryKeyPart1 for policy $PolicyID ."
                     }
+                }
+
+                if (-not (Update-WDACTrustPoliciesAndComment -PrimaryKey1 $PrimaryKeyPart1 -Level "PcaCertificate" -Block $Block.ToBool() -PolicyGUID $PolicyID -Comment $Comment -Connection $Connection -ErrorAction Stop)) {
+                    throw "Could not update policy GUID and / or comment for this new PcaCertificate rule."
                 }
             }
             "FilePath" {
@@ -302,6 +318,10 @@ function Write-WDACConferredTrust {
                     if (-not $Result) {
                         throw "Unable to update trust for FileName rule with name $PrimaryKeyPart1 and SpecificFileNameLevel $SpecificFileNameLevel for policy $PolicyID ."
                     }
+                }
+
+                if (-not (Update-WDACTrustPoliciesAndComment -PrimaryKey1 $PrimaryKeyPart1 -Level "FileName" -Block $Block.ToBool() -PolicyGUID $PolicyID -Comment $Comment -Connection $Connection -ErrorAction Stop)) {
+                    throw "Could not update policy GUID and / or comment for this new FileName rule."
                 }
             }
         }

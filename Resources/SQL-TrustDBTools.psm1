@@ -2374,93 +2374,6 @@ function Get-WDACFilePublisherPreferredVersioning {
     return $VersioningType
 }
 
-function Update-WDACFilePublisherByCriteriaHelper {
-    [cmdletbinding()]
-    param (
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        $FileName,
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [int]$PublisherIndex,
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [string]$PolicyGUID,
-        $VersioningType,
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        $CurrentVersionNum,
-        [System.Data.SQLite.SQLiteConnection]$Connection
-    )
-
-    try {
-        $PolicyFilePublisherOptions = Get-PolicyFilePublisherOptions -PolicyGUID $PolicyGUID -FileName $FileName -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
-        $FilePublisherOptions = Get-FilePublisherOptions -FileName $FileName -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
-        $PolicyVersioningOptions = Get-PolicyVersioningOptions -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-
-        ###### CHECK FOR POLICY FILE PUBLISHER OPTIONS ##################
-        if ($PolicyFilePublisherOptions -and $FilePublisherOptions) {
-        #The versioning type is stored in the file_publisher_options table even if a policy_file_publisher_options entry exists
-            $VersioningType = $FilePublisherOptions.VersioningType
-        }
-        #################################################################
-
-        ###### CHECK FOR FILE PUBLISHER OPTIONS #########################
-        elseif ($FilePublisherOptions) {
-
-        }
-        #################################################################
-
-        ###### USE THE POLICY'S VersioningType or the PROVIDED VersioningType if NO OTHER ENTRIES ######
-        elseif ($PolicyVersioningOptions) {
-
-        }
-        ################################################################################################
-
-        ###### PROMPT FOR PREFERRED VersioningType IF STILL NO VersioningType ######
-        elseif (-not $VersioningType) {
-
-        }
-        ############################################################################
-
-    } catch {
-        throw $_
-    }
-}
-
-function Update-WDACFilePublisherByCriteria {
-    [cmdletbinding()]
-    param (
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        $FileName,
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [int]$PublisherIndex,
-        $VersioningType,
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        $CurrentVersionNum,
-        [System.Data.SQLite.SQLiteConnection]$Connection
-    )
-    
-    try {
-    ###### FIRST CHECK FOR FILE PUBLISHER ENTRIES WITH TRUST AND POLICY ID SET #################
-        if (-not $AddFilePublisher) {
-            $FilePublishersTemp = Get-WDACFilePublishersDefinitive -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection
-            foreach ($FilePublisher in $FilePublishersTemp) {
-                if ($null -ne $FilePublisher.AllowedPolicyID) {
-                    Update-WDACFilePublisherByCriteriaHelper -FileName $FileName -PublisherIndex $PublisherIndex -PolicyGUID $FilePublisher.AllowedPolicyID -VersioningType $VersioningType -CurrentVersionNum $CurrentVersionNum -Connection $Connection -ErrorAction Stop
-                }
-            }
-            return;
-    }
-    ###########################################################################################
-    } catch {
-        throw $_
-    }
-}
-
 function New-WDACFilePublisherByCriteria {
     [cmdletbinding()]
     param (
@@ -3930,6 +3843,138 @@ function Update-WDACTrust {
                 }
             }
             
+        }
+
+           
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Update-WDACTrustPoliciesAndComment {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$PrimaryKey1,
+        $PrimaryKey2,
+        $PrimaryKey3,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Level,
+        [bool]$Block,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$PolicyGUID,
+        $Comment,
+        [bool]$MSIorScripts,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        switch ($Level) {
+            "Hash" {
+                if ($MSIorScripts) {
+                    #TODO
+                } else {
+                    $Command = $Connection.CreateCommand()
+                    if ($Block) {
+                        $Command.Commandtext = "UPDATE apps SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE Sha256FlatHash = @Sha256FlatHash"
+                    } else {
+                        $Command.Commandtext = "UPDATE apps SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE Sha256FlatHash = @Sha256FlatHash"
+                    }
+                    $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+                    $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+                    $Command.ExecuteNonQuery()
+                }
+            }
+    
+            "Publisher" {
+                $Command = $Connection.CreateCommand()
+                if ($Block) {
+                    $Command.Commandtext = "UPDATE publishers SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE PublisherIndex = @PublisherIndex"
+                } else {
+                    $Command.Commandtext = "UPDATE publishers SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE PublisherIndex = @PublisherIndex"
+                }
+                $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+                $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+                $Command.ExecuteNonQuery()
+            }
+    
+            "FilePublisher" {
+                $Command = $Connection.CreateCommand()
+                if ($Block) {
+                    $Command.Commandtext = "UPDATE file_publishers SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                } else {
+                    $Command.Commandtext = "UPDATE file_publishers SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                }
+                $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
+                $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
+                $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
+                $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+                $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+                $Command.ExecuteNonQuery()
+            }
+    
+            "LeafCertificate" {
+                $Command = $Connection.CreateCommand()
+                if ($Block) {
+                    $Command.Commandtext = "UPDATE certificates SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                } else {
+                    $Command.Commandtext = "UPDATE certificates SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                }
+                $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+                $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+                $Command.ExecuteNonQuery()
+            }
+    
+            "PcaCertificate" {
+                $Command = $Connection.CreateCommand()
+                if ($Block) {
+                    $Command.Commandtext = "UPDATE certificates SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                } else {
+                    $Command.Commandtext = "UPDATE certificates SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                }
+                $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
+                $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+                $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+                $Command.ExecuteNonQuery()
+            }
+    
+            "FilePath" {
+                #TODO
+                #Write-Verbose "FilePath rules have not yet been implemented."
+            }
+    
+            "FileName" {
+                $Command = $Connection.CreateCommand()
+                if ($Block) {
+                    $Command.Commandtext = "UPDATE file_names SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE FileName = @FileName"
+                } else {
+                    $Command.Commandtext = "UPDATE file_names SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE FileName = @FileName"
+                }
+                $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+                $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+                $Command.ExecuteNonQuery()
+            }
         }
 
            
