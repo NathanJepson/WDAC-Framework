@@ -2544,6 +2544,9 @@ function Update-WDACFilePublisherByCriteriaHelper {
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         $CurrentVersionNum,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $MinimumVersionNumber,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -2575,7 +2578,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
 
         ###### PROMPT FOR PREFERRED VersioningType IF STILL NO VersioningType ######
         elseif (-not $VersioningType) {
-
+            return;
+            #Only New-WDACFilePublisherByCriteria asks the user for a VersioningType if they have not specified one. This could change in the future.
         }
         ############################################################################
 
@@ -2612,7 +2616,7 @@ function Update-WDACFilePublisherByCriteria {
                         $TempFilePublishers = $Signer.FilePublishers.$($FileNameLevel)
                         foreach ($TempFilePublisher in $TempFilePublishers) {
                             if ($TempFilePublisher.AllowedPolicyID) {
-                                Update-WDACFilePublisherByCriteriaHelper -FileName $TempFilePublisher.FileName -PublisherIndex $TempFilePublisher.PublisherIndex -PolicyGUID $TempFilePublisher.AllowedPolicyID -CurrentVersionNum $WDACApp.FileVersion -Connection $Connection -ErrorAction Stop
+                                Update-WDACFilePublisherByCriteriaHelper -FileName $TempFilePublisher.FileName -PublisherIndex $TempFilePublisher.PublisherIndex -MinimumVersionNumber $TempFilePublisher.MinimumAllowedVersion -PolicyGUID $TempFilePublisher.AllowedPolicyID -CurrentVersionNum $WDACApp.FileVersion -Connection $Connection -ErrorAction Stop
                             }
                         }
                     }

@@ -1083,7 +1083,14 @@ function Approve-WDACRules {
                         continue;
                     }
 
-                    if (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) {
+                    Update-WDACFilePublisherByCriteria -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
+                    #This updates version numbers of file publisher entries based on VersioningTypes in the database
+
+                    $Transaction.Commit()
+                    #This commit() statement is so that changes made by Update-WDACFilePublisherByCriteria can be applied regardless of whether a trust action is successfully made
+                    $Transaction = $Connection.BeginTransaction()
+
+                    if (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
                         if (-not ($AppsToSkip[$AppHash])) {
                             $AppsToSkip.Add($AppHash,$true)
                         }
@@ -1091,12 +1098,6 @@ function Approve-WDACRules {
                         Write-Verbose "App $FileName with hash $AppHash skipped due to already being blocked at a separate level."
                         continue;
                     }
-
-                    ########TODO: Update file versions in this main loop if the file publisher is already trusted
-
-                    $Transaction.Commit()
-                    #This commit() statement is so that changes made by Update-WDACFilePublisherByCriteria can be applied regardless of whether a trust action is successfully made
-                    $Transaction = $Connection.BeginTransaction()
 
                     $SigningScenario = $Event.SigningScenario
                     if ($SigningScenario) {
