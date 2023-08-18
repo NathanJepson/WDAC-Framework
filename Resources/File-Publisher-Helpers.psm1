@@ -10,6 +10,17 @@ if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-
     Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
 }
 
+function Test-ValidVersionNumber {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$VersionNumber
+    )
+
+    return ($VersionNumber -match "^(0|([1-5]\d{4}|[1-9]\d{0,3}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]))(0|(\.([1-5]\d{4}|[1-9]\d{0,3}|6[0-4]\d{3}|65[0-4]\d{2}|655[0-2]\d|6553[0-5]|0))){3}$")
+}
+
 function Compare-Versions {
     #Source: https://www.geeksforgeeks.org/compare-two-version-numbers/
         Param(
@@ -117,9 +128,6 @@ function Add-PolicyFilePublisherOptions {
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [string]$FileName,
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [int]$VersioningType,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -131,11 +139,10 @@ function Add-PolicyFilePublisherOptions {
         }
 
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "INSERT INTO policy_file_publisher_options (PolicyGUID,FileName,PublisherIndex,VersioningType) values (@PolicyGUID,@FileName,@PublisherIndex,@VersioningType)"
+        $Command.Commandtext = "INSERT INTO policy_file_publisher_options (PolicyGUID,FileName,PublisherIndex) values (@PolicyGUID,@FileName,@PublisherIndex)"
             $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
             $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null 
             $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
-            $Command.Parameters.AddWithValue("VersioningType",$VersioningType) | Out-Null
         $Command.ExecuteNonQuery()
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
@@ -510,4 +517,39 @@ function Get-PolicyVersioningOptions {
         }
         throw $theError
     }
+}
+
+function Get-FileVersionPrompt {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$Prompt,
+        $CurrentVersionNum,
+        $FileVersionInfo
+    )
+
+    Write-Host ($Prompt)
+    Write-Host("Enter VersionNumber [OR] `"k`" to use Current App FileVersion [OR] `"0`" for 0.0.0.0 [OR] `"f`" for FilePublisher info")
+    Write-Host("(Version numbers are from 0.0.0.0 to 65535.65535.65535.65535)")
+    $VersionNumber = Read-Host -Prompt "Selection"
+
+    while (-not ( (Test-ValidVersionNumber $VersionNumber) -or ($VersionNumber -eq 0) -or ($VersionNumber -eq "0") -or ($VersionNumber.ToLower() -eq "k"))) {
+        if ($VersionNumber.ToLower() -eq "f") {
+            Write-Host $FileVersionInfo
+            $VersionNumber = Read-Host -Prompt "Selection"
+            continue
+        }
+        Write-Host "Not a valid version number. Enter a version from 0.0.0.0 to 65535.65535.65535.65535"
+        Write-Host "Also, no leading zeroes except for when a number itself is 0."
+        $VersionNumber = Read-Host -Prompt "Selection"
+    }
+
+    if ( ($VersionNumber -eq "0") -or ($VersionNumber -eq 0)) {
+        $VersionNumber = "0.0.0.0"
+    } elseif ($VersionNumber.ToLower() -eq "k") {
+        return $CurrentVersionNum
+    }
+
+    return $VersionNumber
 }
