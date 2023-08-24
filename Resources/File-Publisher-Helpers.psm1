@@ -553,3 +553,41 @@ function Get-FileVersionPrompt {
 
     return $VersionNumber
 }
+
+function Get-FileVersionOldAndNewPrompt {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$Prompt,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PreviousVersionNum,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$CurrentVersionNum,
+        $FileVersionInfo
+    )
+
+    Write-Host ($Prompt)
+    Write-Host("Enter `"k`" to keep previous FileVersion $PreviousVersionNum [OR] `"n`" to use new FileVersion $CurrentVersionNum [OR] `"f`" for FilePublisher info")
+    $VersionNumber = Read-Host -Prompt "Selection"
+
+    while (-not ( ($VersionNumber.ToLower() -eq "n") -or ($VersionNumber.ToLower() -eq "k"))) {
+        Write-Host "Please select `"k`" or `"n`" "
+        $VersionNumber = Read-Host -Prompt "Selection"
+        if ($VersionNumber.ToLower() -eq "f") {
+            Write-Host $FileVersionInfo
+            $VersionNumber = Read-Host -Prompt "Selection"
+            continue
+        }
+    }
+
+    if ($VersionNumber.ToLower() -eq "k") {
+        return $PreviousVersionNum
+    } elseif ($VersionNumber.ToLower() -eq "n") {
+        return $CurrentVersionNum
+    } else {
+        throw "Error 1899300: Please reach out to the developer to fix this issue."
+    }
+}
