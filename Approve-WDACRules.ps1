@@ -872,16 +872,16 @@ function Approve-WDACRules {
     Nothing.
 
     .EXAMPLE
-    TODO: EXAMPLES!
+    Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -SignerInformation -PEEvents | Register-WDACEvents -Level FilePublisher | Approve-WDACRules -VersioningType 11 -OverrideUserorKernelDefaults -Verbose
 
     .EXAMPLE
-    TODO: EXAMPLES!
+    Approve-WDACRules
 
     .EXAMPLE
-    TODO: EXAMPLES!
+    Approve-WDACRules -PolicyGUID "959A0F15-8985-4551-A208-5FFE9EDB3A70" -MultiRuleMode -ApplyRuleEachSigner -Purge -ModifyUniversalVersioning -ResetUntrusted -IgnoreErrors
 
     .EXAMPLE
-    TODO: EXAMPLES!
+    Approve-WDACRules -VersioningType 10 -RequireComment -Level FilePublisher -Fallbacks Publisher,Hash
     #>
 
     [CmdletBinding()]
@@ -1061,6 +1061,9 @@ function Approve-WDACRules {
                     #Even if the app is piped into the cmdlet it still has to exist in the database.
                         if (-not ($AppsToSkip[$AppHash])) {
                             $AppsToSkip.Add($AppHash,$true)
+                            $Transaction.Rollback()
+                            Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                            continue;
                         }
                         $Transaction.Rollback()
                         continue;
@@ -1070,6 +1073,9 @@ function Approve-WDACRules {
                     #Case the user has already set an untrust action on this app
                         if (-not ($AppsToSkip[$AppHash])) {
                             $AppsToSkip.Add($AppHash,$true)
+                            $Transaction.Rollback()
+                            Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                            continue;
                         }
                         $Transaction.Rollback()
                         continue;
@@ -1078,6 +1084,9 @@ function Approve-WDACRules {
                     if ( (Get-MSIorScriptSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) -or (Get-WDACAppSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue)) {
                         if (-not ($AppsToSkip[$AppHash])) {
                             $AppsToSkip.Add($AppHash,$true)
+                            $Transaction.Rollback()
+                            Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                            continue;
                         }
                         $Transaction.Rollback()
                         continue;
@@ -1135,6 +1144,9 @@ function Approve-WDACRules {
                                     $AppsToSkip.Add($AppHash,$true)
                                 }
                                 $Transaction.Rollback()
+                                if ($AppsToSkip[$AppHash]) {
+                                    Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                                }
                                 continue;
                             }
                         }

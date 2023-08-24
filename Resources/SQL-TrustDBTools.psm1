@@ -2072,6 +2072,110 @@ function Add-WDACPublisher {
     }
 }
 
+function Update-WDACFilePublisherMinimumAllowedVersion {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$PublisherIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FileName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$MinimumAllowedVersion,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [Alias("NewVersion","NewFileVersion","NewMin","NewMinimum","NewMinFileVersion")]
+        [string]$NewMinimumAllowedVersion,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE file_publishers SET MinimumAllowedVersion = @NewMinimumAllowedVersion WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+        $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
+        $Command.Parameters.AddWithValue("NewMinimumAllowedVersion",$NewMinimumAllowedVersion) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Find-WDACFilePublisher {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$PublisherIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FileName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$MinimumAllowedVersion,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from file_publishers WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex AND MinimumAllowedVersion = @MinimumAllowedVersion"
+        $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+   
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Get-WDACFilePublishers {
 #Gets Multiple File Publishers!
     [cmdletbinding()]
@@ -2677,6 +2781,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
     )
 
     $VersioningType = $null
+    $PolicyID = $PolicyGUID
 
     try {
         $PolicyFilePublisherOptions = Get-PolicyFilePublisherOptions -PolicyGUID $PolicyGUID -FileName $FileName -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
@@ -2701,51 +2806,173 @@ function Update-WDACFilePublisherByCriteriaHelper {
 
         switch ($VersioningType) {
             0 {
-                
+                #Global Set Minimum will not prompt the user for a new Minimum File Version
+                return;
             }
             
             1 {
-                
+                if ($FilePublisherOptions) {
+                    if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($FilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        } else {
+                            Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
+                        }
+                    } 
+                }
+                return;
             }
 
             2 {
-                
+                if ($FilePublisherOptions) {
+                    if ($FilePublisherOptions.MinimumAllowedVersionPivot -ne $CurrentVersionNum) {
+                        $NewVersionNumber = Get-FileVersionOldAndNewPrompt -Prompt "New minimum version number encountered for this filename + publisher index combination. " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -PreviousVersionNum ($FilePublisherOptions.MinimumAllowedVersionPivot) -CurrentVersionNum $CurrentVersionNum
+                        
+                        if ($NewVersionNumber -ne $FilePublisherOptions.MinimumAllowedVersionPivot) {
+                            Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                        }
+
+                        if ($NewVersionNumber -ne $FilePublisherOptions.MinimumAllowedVersionPivot -and ($NewVersionNumber -ne $MinimumVersionNumber)) {
+                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
+                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                            } else {
+                                Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $NewVersionNumber -- as there is already an entry with that MinimumAllowedVersion in the database."
+                            }
+                        }
+                    }
+                }
+                return;
             }
 
             3 {
-                
+                if ($FilePublisherOptions) {
+                    if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($FilePublisherOptions.MinimumAllowedVersionPivot)) -eq 1) {
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        } else {
+                            Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
+                        }
+                    } 
+                }
             }
 
             4 {
-                
+                #Assume that the minimum file version is already 0.0.0.0 and return
+                return;
             }
 
             5 {
-                
+                if ($FilePublisherOptions) {
+                    if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($FilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        $TempPivot = $CurrentversionNum
+                    } else {
+                        $TempPivot = $FilePublisherOptions.MinimumAllowedVersionPivot
+                    }
+
+                    if ((Compare-Versions -Version1 $TempPivot -Version2 ($FilePublisherOptions.MinimumTolerableMinimum)) -eq -1) {
+                        $NewVersionNumber = $FilePublisherOptions.MinimumTolerableMinimum
+                    } else {
+                        $NewVersionNumber = $TempPivot
+                    }
+
+                    if ($NewVersionNumber -ne $MinimumVersionNumber) {
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                        } else {
+                            Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
+                        }
+                    }
+                }
+                return;
             }
 
             6 {
-                
+                #EACH POLICY SET MINIMUM will not prompt the user for a new Minimum File Version
+                return;
             }
 
             7 {
-                
+                if ($PolicyFilePublisherOptions) {
+                    if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
+                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        } else {
+                            Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
+                        }
+                    } 
+                }
+                return;
             }
 
             8 {
-                
+                if ($PolicyFilePublisherOptions) {
+                    if ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot -ne $CurrentVersionNum) {
+                        $NewVersionNumber = Get-FileVersionOldAndNewPrompt -Prompt "New minimum version number encountered for this filename + publisher index combination. " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -PreviousVersionNum ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot) -CurrentVersionNum $CurrentVersionNum
+                        
+                        if ($NewVersionNumber -ne $PolicyFilePublisherOptions.MinimumAllowedVersionPivot) {
+                            Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                        }
+                        if ($NewVersionNumber -ne $PolicyFilePublisherOptions.MinimumAllowedVersionPivot -and ($NewVersionNumber -ne $MinimumVersionNumber)) {
+                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
+                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                            } else {
+                                Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $NewVersionNumber -- as there is already an entry with that MinimumAllowedVersion in the database."
+                            }
+                        }
+                    }
+                }
+                return;
             }
 
             9 {
-                
+                if ($FilePublisherOptions -and ( $PolicyFilePublisherOptions)) {
+                    if ($PolicyFilePublisherOptions) {
+                        if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq 1) {
+                            Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
+                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                            } else {
+                                Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
+                            }
+                        } 
+                    }
+                    return;
+                }
             }
 
             10 {
-               
+                #Assume that the minimum file version is already 0.0.0.0 and return
+                return;
             }
 
             11 {
-                
+                if ($PolicyFilePublisherOptions) {
+                    if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
+                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        $TempPivot = $CurrentversionNum
+                    } else {
+                        $TempPivot = $PolicyFilePublisherOptions.MinimumAllowedVersionPivot
+                    }
+
+                    if ((Compare-Versions -Version1 $TempPivot -Version2 ($PolicyFilePublisherOptions.MinimumTolerableMinimum)) -eq -1) {
+                        $NewVersionNumber = $PolicyFilePublisherOptions.MinimumTolerableMinimum
+                    } else {
+                        $NewVersionNumber = $TempPivot
+                    }
+
+                    if ($NewVersionNumber -ne $MinimumVersionNumber) {
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                        } else {
+                            Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
+                        }
+                    }
+                }
+                return;
             }
         }
 
