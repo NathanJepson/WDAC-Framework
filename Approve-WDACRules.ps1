@@ -1142,11 +1142,11 @@ function Approve-WDACRules {
                                 }
                                 if (-not ($AppsToSkip[$AppHash])) {
                                     $AppsToSkip.Add($AppHash,$true)
+                                    $Transaction.Rollback()
+                                    Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                                    continue;
                                 }
                                 $Transaction.Rollback()
-                                if ($AppsToSkip[$AppHash]) {
-                                    Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
-                                }
                                 continue;
                             }
                         }
