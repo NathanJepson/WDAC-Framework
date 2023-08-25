@@ -199,8 +199,8 @@ function New-WDACTrustDB {
         MinimumAllowedVersion Text NOT NULL,
         MaximumAllowedVersion Text,
         FileName Text NOT NULL,
-        SpecificFileNameLevel Text,
-        PRIMARY KEY(PublisherIndex,FileName,MinimumAllowedVersion),
+        SpecificFileNameLevel Text NOT NULL,
+        PRIMARY KEY(PublisherIndex,FileName,MinimumAllowedVersion,SpecificFileNameLevel),
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
@@ -208,8 +208,8 @@ function New-WDACTrustDB {
     );
 
     CREATE TABLE file_names (
-        FileName Text PRIMARY KEY,
-        SpecificFileNameLevel Text,
+        FileName Text NOT NULL,
+        SpecificFileNameLevel Text NOT NULL,
         Untrusted Integer DEFAULT 0 NOT NULL,
         TrustedDriver Integer DEFAULT 0 NOT NULL,
         TrustedUserMode Integer DEFAULT 0 NOT NULL,
@@ -221,6 +221,7 @@ function New-WDACTrustDB {
         DeferredPolicyIndex Integer,
         Comment Text,
         BlockingPolicyID Text,
+        PRIMARY KEY(FileName,SpecificFileNameLevel),
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT

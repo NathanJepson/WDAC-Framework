@@ -275,7 +275,7 @@ function Write-WDACConferredTrust {
                     throw "$NewVersionNumber is not a valid version number. Please reach out to the developer to fix this issue."
                 }
 
-                foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -PrimaryKey2 $PrimaryKeyPart2 -PrimaryKey3 $NewVersionNumber -Level "FilePublisher" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
+                foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -PrimaryKey2 $PrimaryKeyPart2 -PrimaryKey3 $NewVersionNumber -Level "FilePublisher" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
                         throw "Unable to update trust for FilePublisher rule with PublisherIndex $PrimaryKeyPart1 and FileName $PrimaryKeyPart2 and MinimumFileVersion $CurrentVersionNum for policy $PolicyID ."
                     }
@@ -314,13 +314,13 @@ function Write-WDACConferredTrust {
                     }
                 }
 
-                foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "FileName" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
+                foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -PrimaryKey2 $SpecificFileNameLevel -Level "FileName" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
                         throw "Unable to update trust for FileName rule with name $PrimaryKeyPart1 and SpecificFileNameLevel $SpecificFileNameLevel for policy $PolicyID ."
                     }
                 }
 
-                if (-not (Update-WDACTrustPoliciesAndComment -PrimaryKey1 $PrimaryKeyPart1 -Level "FileName" -Block $Block.ToBool() -PolicyGUID $PolicyID -Comment $Comment -Connection $Connection -ErrorAction Stop)) {
+                if (-not (Update-WDACTrustPoliciesAndComment -PrimaryKey1 $PrimaryKeyPart1 -PrimaryKey2 $SpecificFileNameLevel -Level "FileName" -Block $Block.ToBool() -PolicyGUID $PolicyID -Comment $Comment -Connection $Connection -ErrorAction Stop)) {
                     throw "Could not update policy GUID and / or comment for this new FileName rule."
                 }
             }

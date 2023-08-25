@@ -2083,6 +2083,9 @@ function Update-WDACFilePublisherMinimumAllowedVersion {
         [string]$FileName,
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
+        $SpecificFileNameLevel,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
         [string]$MinimumAllowedVersion,
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
@@ -2098,11 +2101,12 @@ function Update-WDACFilePublisherMinimumAllowedVersion {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "UPDATE file_publishers SET MinimumAllowedVersion = @NewMinimumAllowedVersion WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+        $Command.Commandtext = "UPDATE file_publishers SET MinimumAllowedVersion = @NewMinimumAllowedVersion WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
         $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
         $Command.Parameters.AddWithValue("NewMinimumAllowedVersion",$NewMinimumAllowedVersion) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.ExecuteNonQuery()
 
         if ($NoConnectionProvided -and $Connection) {
@@ -2131,6 +2135,8 @@ function Find-WDACFilePublisher {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$MinimumAllowedVersion,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
         $SpecificFileNameLevel,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
@@ -2144,12 +2150,8 @@ function Find-WDACFilePublisher {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        if ($SpecificFileNameLevel) {
-            $Command.Commandtext = "Select * from file_publishers WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
-            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
-        } else {
-            $Command.Commandtext = "Select * from file_publishers WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex AND MinimumAllowedVersion = @MinimumAllowedVersion"
-        }
+        $Command.Commandtext = "Select * from file_publishers WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
         $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
@@ -2296,7 +2298,7 @@ function Get-WDACFilePublishers {
 }
 
 function Get-WDACFilePublishersDefinitive {
-#This is similar Get-WDACFilePublishers but doesn't consider SpecificFileNameLevel, and doesn't consider MaximumAllowedVersion
+#This is similar Get-WDACFilePublishers but doesn't consider MaximumAllowedVersion
 #FileName is also required in this function
     [cmdletbinding()]
     param (
@@ -2306,6 +2308,9 @@ function Get-WDACFilePublishersDefinitive {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         $FileName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $SpecificFileNameLevel,
         $MinimumAllowedVersion,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
@@ -2320,13 +2325,14 @@ function Get-WDACFilePublishersDefinitive {
         }
         $Command = $Connection.CreateCommand()
         if ($MinimumAllowedVersion) {
-            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
             $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
         } else {
-            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+            $Command.Commandtext = "Select * from file_publishers WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
         }
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -2823,8 +2829,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
                 if ($FilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($FilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
                         Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
-                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
-                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         } else {
                             Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
                         }
@@ -2843,8 +2849,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
                         }
 
                         if ($NewVersionNumber -ne $FilePublisherOptions.MinimumAllowedVersionPivot -and ($NewVersionNumber -ne $MinimumVersionNumber)) {
-                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
-                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
+                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                             } else {
                                 Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $NewVersionNumber -- as there is already an entry with that MinimumAllowedVersion in the database."
                             }
@@ -2858,8 +2864,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
                 if ($FilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($FilePublisherOptions.MinimumAllowedVersionPivot)) -eq 1) {
                         Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
-                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
-                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         } else {
                             Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
                         }
@@ -2888,8 +2894,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
                     }
 
                     if ($NewVersionNumber -ne $MinimumVersionNumber) {
-                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
-                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                         } else {
                             Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
                         }
@@ -2907,8 +2913,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
                 if ($PolicyFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
                         Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel  -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
-                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
-                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         } else {
                             Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
                         }
@@ -2926,8 +2932,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
                             Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                         }
                         if ($NewVersionNumber -ne $PolicyFilePublisherOptions.MinimumAllowedVersionPivot -and ($NewVersionNumber -ne $MinimumVersionNumber)) {
-                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
-                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
+                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                             } else {
                                 Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $NewVersionNumber -- as there is already an entry with that MinimumAllowedVersion in the database."
                             }
@@ -2942,8 +2948,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
                     if ($PolicyFilePublisherOptions) {
                         if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq 1) {
                             Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
-                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
-                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                            if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
+                                Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                             } else {
                                 Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
                             }
@@ -2974,8 +2980,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
                     }
 
                     if ($NewVersionNumber -ne $MinimumVersionNumber) {
-                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
-                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
+                            Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                         } else {
                             Write-Warning "Could not update FilePublisher rule with publisher index $PublisherIndex and FileName $FileName to version $CurrentVersionNum -- as there is already an entry with that MinimumAllowedVersion in the database."
                         }
@@ -3420,7 +3426,9 @@ function Get-WDACFileName {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$FileName,
-        $SpecificFileNameLevel,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SpecificFileNameLevel,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -3433,12 +3441,8 @@ function Get-WDACFileName {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        if ($SpecificFileNameLevel) {
-            $Command.Commandtext = "Select * from file_names WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
-            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
-        } else {
-            $Command.Commandtext = "Select * from file_names WHERE FileName = @FileName"
-        }
+        $Command.Commandtext = "Select * from file_names WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
@@ -3885,7 +3889,7 @@ function Get-AppTrusted {
                     switch ($SpecificFileNameLevels) {
                         "OriginalFileName" {
                             if ($AppInstance.OriginalFileName) {
-                                $TempFileName = Get-WDACFileName -FileName $AppInstance.OriginalFileName -Connection $Connection -ErrorAction Stop
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.OriginalFileName -SpecificFileNameLevel "OriginalFileName" -Connection $Connection -ErrorAction Stop
                                 if ($TempFileName) {
                                     if (Get-TrustedInstance -Instance $TempFileName -Driver:$Driver -UserMode:$UserMode -ErrorAction Stop) {
                                         return $true
@@ -4165,10 +4169,15 @@ function Update-WDACTrust {
         [bool]$Block,
         [bool]$Untrusted,
         [bool]$MSIorScripts,
+        $SpecificFileNameLevel,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
     try {
+        if (($Level -eq "FilePublisher") -and (-not $SpecificFileNameLevel)) {
+            throw "Error in Function `"Update-WDACTrust`". SpecificFileNameLevel must be provided if FilePublisher level is specified."
+        }
+
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $NoConnectionProvided = $true
@@ -4237,34 +4246,38 @@ function Update-WDACTrust {
             "FilePublisher" {
                 if ($UserMode) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_publishers SET TrustedUserMode = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                    $Command.Commandtext = "UPDATE file_publishers SET TrustedUserMode = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
                     $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
+                    $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Driver) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_publishers SET TrustedDriver = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                    $Command.Commandtext = "UPDATE file_publishers SET TrustedDriver = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
                     $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
+                    $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Block) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_publishers SET Blocked = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                    $Command.Commandtext = "UPDATE file_publishers SET Blocked = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
                     $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
+                    $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Untrusted) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_publishers SET Untrusted = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion"
+                    $Command.Commandtext = "UPDATE file_publishers SET Untrusted = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
                     $Command.Parameters.AddWithValue("PublisherIndex",$PrimaryKey1) | Out-Null
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey2) | Out-Null
                     $Command.Parameters.AddWithValue("MinimumAllowedVersion",$PrimaryKey3) | Out-Null
+                    $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
             }
@@ -4331,33 +4344,35 @@ function Update-WDACTrust {
             "FileName" {
                 if ($UserMode) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET TrustedUserMode = 1 WHERE FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET TrustedUserMode = 1 WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("SpecificFileNameLevel",$PrimaryKey2) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Driver) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET TrustedDriver = 1 WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("SpecificFileNameLevel",$PrimaryKey2) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Block) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET Blocked = 1 WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("SpecificFileNameLevel",$PrimaryKey2) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Untrusted) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET Untrusted = 1 WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
                     $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
+                    $Command.Parameters.AddWithValue("SpecificFileNameLevel",$PrimaryKey2) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
             }
-            
         }
 
-           
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
@@ -4478,13 +4493,14 @@ function Update-WDACTrustPoliciesAndComment {
             "FileName" {
                 $Command = $Connection.CreateCommand()
                 if ($Block) {
-                    $Command.Commandtext = "UPDATE file_names SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
                 } else {
-                    $Command.Commandtext = "UPDATE file_names SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE FileName = @FileName"
+                    $Command.Commandtext = "UPDATE file_names SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE FileName = @FileName  AND SpecificFileNameLevel = @SpecificFileNameLevel"
                 }
                 $Command.Parameters.AddWithValue("FileName",$PrimaryKey1) | Out-Null
                 $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
                 $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+                $Command.Parameters.AddWithValue("SpecificFileNameLevel",$PrimaryKey2) | Out-Null
                 $Command.ExecuteNonQuery()
             }
         }
@@ -4568,7 +4584,7 @@ function Test-AppBlocked {
 
                         "OriginalFileName" {
                             if ($AppInstance.OriginalFileName) {
-                                $TempFileName = Get-WDACFileName -FileName $AppInstance.OriginalFileName -Connection $Connection -ErrorAction Stop
+                                $TempFileName = Get-WDACFileName -FileName $AppInstance.OriginalFileName -SpecificFileNameLevel "OriginalFileName" -Connection $Connection -ErrorAction Stop
                                 if ($TempFileName) {
                                     if ($TempFileName.Blocked -eq $true) {
                                         return $true
