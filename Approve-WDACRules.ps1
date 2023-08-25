@@ -307,7 +307,7 @@ function Write-WDACConferredTrust {
                 #TODO
             }
             "FileName" {
-                $FileNameRule = Get-WDACFileName -FileName $PrimaryKeyPart1 -Connection $Connection -ErrorAction Stop
+                $FileNameRule = Get-WDACFileName -FileName $PrimaryKeyPart1 -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop
                 if ($null -eq $FileNameRule) {
                     if (-not (Add-WDACFileName -FileName $PrimaryKeyPart1 -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop)) {
                         throw "Unable to add new FileName entry to the trust database."

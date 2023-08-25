@@ -3432,6 +3432,11 @@ function Get-WDACFileName {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
+    if (-not ($SpecificFileNameLevels -contains $SpecificFileNameLevel)) {
+        throw "$SpecificFileNameLevel is not a valid SpecificFileName level."
+    }
+
     $result = $null
     $NoConnectionProvided = $false
 
