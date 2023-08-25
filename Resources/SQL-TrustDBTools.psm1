@@ -2131,6 +2131,7 @@ function Find-WDACFilePublisher {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$MinimumAllowedVersion,
+        $SpecificFileNameLevel,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -2143,7 +2144,12 @@ function Find-WDACFilePublisher {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from file_publishers WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex AND MinimumAllowedVersion = @MinimumAllowedVersion"
+        if ($SpecificFileNameLevel) {
+            $Command.Commandtext = "Select * from file_publishers WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
+            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from file_publishers WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex AND MinimumAllowedVersion = @MinimumAllowedVersion"
+        }
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
         $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
@@ -2449,18 +2455,18 @@ function Get-WDACFilePublisherPreferredVersioning {
     )
 
     $VersioningOptions = @'
-    0 - GLOBAL SET MINIMUM - For a particular publisher index + file name combination, prompt the user for a [fixed] MinimumFileVersion that will be applied anytime the combination appears (applied to ALL policies)
-    1 - GLOBAL DECREMENT MINIMUM - For a particular publisher index + file name combination, replace the MinimumFileVersion with a new one anytime a lower one appears for all appearances of the combination
-    2 - GLOBAL ALWAYS SPECIFY - Anytime a new FileVersion is encountered for a publisher index + file name combination, prompt the user whether they want to change the MinimumFileVersion (applied to this combination for ALL policies)
-    3 - GLOBAL INCREMENT MINIMUM - For a particular publisher index + file name combination, replace the MinimumFileVersion with a new one anytime a GREATER one appears for all appearances of the combination
-    4 - GLOBAL 0.0.0.0 MINIMUM - Exactly like option 0, but 0.0.0.0 will always be set to be the MinimumFileVersion without prompting the user
-    5 - GLOBAL DECREMENT MINIMUM NOT EXCEEDING MINIMUM_TOLERABLE_MINIMUM - Similar to option 1, but each time the MinimumFileVersion is replaced with a lower encountered file version, it cannot go lower than a MinimumTolerableMinimum specified by the user.
-    6 - EACH POLICY SET MINIMUM - Prompt the user whether they want a [fixed] MinimumFileVersion for each time a new publisher index + file name combination is encountered for each individual policy. 
-    7 - EACH POLICY DECREMENT MINIMUM - For each policy, specify whether that policy should replace MinimumFileVersion with a lower one anytime a lower one is encountered
-    8 - EACH POLICY ALWAYS SPECIFY - Similar to option 2, but anytime a new publisher index + file name combination is encountered for EACH POLICY, the user will be prompted if they want to change the MinimumFileVersion
-    9 - EACH POLICY INCREMENT MINIMUM - For each policy, specify whether that policy should replace MinimumFileVersion with a HIGHER one anytime a higher one is encountered
-    10 - EACH POLICY 0.0.0.0 Minimum - Exactly like option 6, but the MinimumFileVersion will always be set to 0.0.0.0 without prompting the user
-    11 - EACH POLICY DECREMENT MINIMUM NOT EXCEEDING MINIMUM_TOLERABLE_MINIMUM - Similar to option 7, but each time the MinimumFileVersion is replaced with a lower encountered file version, it cannot go lower than a MinimumTolerableMinimum specified by the user (which must be specified for each policy)
+    0 - GLOBAL SET MINIMUM - For a particular publisher index + file name + SpecificFileNameLevel combination, prompt the user for a [fixed] MinimumFileVersion that will be applied anytime the combination appears (applied to ALL policies)
+        1 - GLOBAL DECREMENT MINIMUM - For a particular publisher index + file name + SpecificFileNameLevel combination, replace the MinimumFileVersion with a new one anytime a lower one appears for all appearances of the combination
+        2 - GLOBAL ALWAYS SPECIFY - Anytime a new FileVersion is encountered for a publisher index + file name + SpecificFileNameLevel combination, prompt the user whether they want to change the MinimumFileVersion (applied to this combination for ALL policies)
+        3 - GLOBAL INCREMENT MINIMUM - For a particular publisher index + file name + SpecificFileNameLevel combination, replace the MinimumFileVersion with a new one anytime a GREATER one appears for all appearances of the combination
+        4 - GLOBAL 0.0.0.0 MINIMUM - Exactly like option 0, but 0.0.0.0 will always be set to be the MinimumFileVersion without prompting the user
+        5 - GLOBAL DECREMENT MINIMUM NOT EXCEEDING MINIMUM_TOLERABLE_MINIMUM - Similar to option 1, but each time the MinimumFileVersion is replaced with a lower encountered file version, it cannot go lower than a MinimumTolerableMinimum specified by the user.
+        6 - EACH POLICY SET MINIMUM - Prompt the user whether they want a [fixed] MinimumFileVersion for each time a new publisher index + file name + SpecificFileNameLevel combination is encountered for each individual policy. 
+        7 - EACH POLICY DECREMENT MINIMUM - For each policy, specify whether that policy should replace MinimumFileVersion with a lower one anytime a lower one is encountered
+        8 - EACH POLICY ALWAYS SPECIFY - Similar to option 2, but anytime a new publisher index + file name + SpecificFileNameLevel combination is encountered for EACH POLICY, the user will be prompted if they want to change the MinimumFileVersion
+        9 - EACH POLICY INCREMENT MINIMUM - For each policy, specify whether that policy should replace MinimumFileVersion with a HIGHER one anytime a higher one is encountered
+        10 - EACH POLICY 0.0.0.0 Minimum - Exactly like option 6, but the MinimumFileVersion will always be set to 0.0.0.0 without prompting the user
+        11 - EACH POLICY DECREMENT MINIMUM NOT EXCEEDING MINIMUM_TOLERABLE_MINIMUM - Similar to option 7, but each time the MinimumFileVersion is replaced with a lower encountered file version, it cannot go lower than a MinimumTolerableMinimum specified by the user (which must be specified for each policy)
 '@
 
     Write-Host ($Prompt + " (If unsure, select `"8`" or type `"HELP`" for information about VersioningTypes)")
@@ -2504,7 +2510,7 @@ function New-WDACFilePublisherByCriteria {
 
     try {
         $ThePublisher = Get-WDACPublisherByPublisherIndex -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
-        $TempFilePublisherOptions = Get-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection -ErrorAction Stop
+        $TempFilePublisherOptions = Get-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop
         $NewVersionNumber = $null
 
         if ($IsBlocking) {
@@ -2530,7 +2536,7 @@ function New-WDACFilePublisherByCriteria {
         }
 
         if ($VersioningType -gt 5) {
-            $TempPolicyFilePublisherOptions = Get-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection -ErrorAction Stop
+            $TempPolicyFilePublisherOptions = Get-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop
         }
 
         switch ($VersioningType) {
@@ -2541,8 +2547,8 @@ function New-WDACFilePublisherByCriteria {
                 } else {
                     $NewVersionNumber = Get-FileVersionPrompt -Prompt "What fixed Global MinimumVersionNumber would you like to set for this file publisher? " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -CurrentVersionNum $CurrentVersionNum
                     Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $NewVersionNumber -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                    Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 0 -Connection $Connection -ErrorAction Stop | Out-Null
-                    Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                    Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 0 -Connection $Connection -ErrorAction Stop | Out-Null
+                    Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                 }
                 
                 return $NewVersionNumber
@@ -2551,7 +2557,7 @@ function New-WDACFilePublisherByCriteria {
             1 {
                 if ($TempFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($TempFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
-                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
                         return $CurrentVersionNum
                     } else {
@@ -2560,8 +2566,8 @@ function New-WDACFilePublisherByCriteria {
                     }
                 }
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 1 -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 1 -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                 return $CurrentVersionNum
             }
 
@@ -2570,7 +2576,7 @@ function New-WDACFilePublisherByCriteria {
                     if ($TempFilePublisherOptions.MinimumAllowedVersionPivot -ne $CurrentVersionNum) {
                         $NewVersionNumber = Get-FileVersionOldAndNewPrompt -Prompt "New minimum version number encountered for this filename + publisher index combination. " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -PreviousVersionNum ($TempFilePublisherOptions.MinimumAllowedVersionPivot) -CurrentVersionNum $CurrentVersionNum
                         if ($NewVersionNumber -ne $TempFilePublisherOptions.MinimumAllowedVersionPivot) {
-                            Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                            Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                         }
                         Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $NewVersionNumber -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
                         return $NewVersionNumber
@@ -2578,15 +2584,15 @@ function New-WDACFilePublisherByCriteria {
                 }
                 $NewVersionNumber = Get-FileVersionPrompt -Prompt "What current MinimumVersionNumber would you like to set for this file publisher? " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -CurrentVersionNum $CurrentVersionNum
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $NewVersionNumber -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 2 -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 2 -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                 return $NewVersionNumber
             }
 
             3 {
                 if ($TempFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($TempFilePublisherOptions.MinimumAllowedVersionPivot)) -eq 1) {
-                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
                         return $CurrentVersionNum
                     } else {
@@ -2595,8 +2601,8 @@ function New-WDACFilePublisherByCriteria {
                     }
                 }
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 3 -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 3 -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                 return $CurrentVersionNum
             }
 
@@ -2604,8 +2610,8 @@ function New-WDACFilePublisherByCriteria {
                 $NewVersionNumber = "0.0.0.0"
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $NewVersionNumber -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
                 if (-not $TempFilePublisherOptions) {
-                    Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 4 -Connection $Connection -ErrorAction Stop | Out-Null
-                    Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                    Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 4 -Connection $Connection -ErrorAction Stop | Out-Null
+                    Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                 }
                 return $NewVersionNumber
             }
@@ -2613,7 +2619,7 @@ function New-WDACFilePublisherByCriteria {
             5 {
                 if ($TempFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($TempFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
-                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         $TempPivot = $CurrentversionNum
                     } else {
                         $TempPivot = $TempFilePublisherOptions.MinimumAllowedVersionPivot
@@ -2633,9 +2639,9 @@ function New-WDACFilePublisherByCriteria {
                     $NewVersionNumber = Get-FileVersionPrompt -Prompt "Minimum tolerable minimum cannot be greater than the current FileVersion. Give a valid Minimum Tolerable Minimum." -FileVersionInfo "FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -CurrentVersionNum $CurrentVersionNum
                 }
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 5 -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -MinimumTolerableMinimum -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 5 -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumTolerableMinimum -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                 return $CurrentVersionNum
             }
 
@@ -2646,9 +2652,9 @@ function New-WDACFilePublisherByCriteria {
                 } else {
                     $NewVersionNumber = Get-FileVersionPrompt -Prompt "Different for each policy: What fixed MinimumVersionNumber would you like to set for this file publisher? " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -CurrentVersionNum $CurrentVersionNum
                     Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $NewVersionNumber -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                    Add-FilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 6 -Connection $Connection -ErrorAction Stop | Out-Null
-                    Add-PolicyFilePublisherOptions  -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection -ErrorAction Stop | Out-Null
-                    Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                    Add-FilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 6 -Connection $Connection -ErrorAction Stop | Out-Null
+                    Add-PolicyFilePublisherOptions  -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
+                    Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                 }
                 
                 return $NewVersionNumber
@@ -2657,7 +2663,7 @@ function New-WDACFilePublisherByCriteria {
             7 {
                 if ($TempPolicyFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($TempPolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
-                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
                         return $CurrentVersionNum
                     } else {
@@ -2666,9 +2672,9 @@ function New-WDACFilePublisherByCriteria {
                     }
                 }
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 7 -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 7 -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                 return $CurrentVersionNum
             }
 
@@ -2677,7 +2683,7 @@ function New-WDACFilePublisherByCriteria {
                     if ($TempPolicyFilePublisherOptions.MinimumAllowedVersionPivot -ne $CurrentVersionNum) {
                         $NewVersionNumber = Get-FileVersionOldAndNewPrompt -Prompt "New minimum version number encountered for this filename + publisher index combination. " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -PreviousVersionNum ($TempPolicyFilePublisherOptions.MinimumAllowedVersionPivot) -CurrentVersionNum $CurrentVersionNum
                         if ($NewVersionNumber -ne $TempPolicyFilePublisherOptions.MinimumAllowedVersionPivot) {
-                            Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                            Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                         }
                         Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $NewVersionNumber -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
                         return $NewVersionNumber
@@ -2685,16 +2691,16 @@ function New-WDACFilePublisherByCriteria {
                 }
                 $NewVersionNumber = Get-FileVersionPrompt -Prompt "Different for each policy: What current MinimumVersionNumber would you like to set for this file publisher? " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -CurrentVersionNum $CurrentVersionNum
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $NewVersionNumber -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 8 -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 8 -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                 return $NewVersionNumber
             }
 
             9 {
                 if ($TempPolicyFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($TempPolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq 1) {
-                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
                         return $CurrentVersionNum
                     } else {
@@ -2703,9 +2709,9 @@ function New-WDACFilePublisherByCriteria {
                     }
                 }
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 9 -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 9 -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                 return $CurrentVersionNum
             }
 
@@ -2713,11 +2719,11 @@ function New-WDACFilePublisherByCriteria {
                 $NewVersionNumber = "0.0.0.0"
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $NewVersionNumber -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
                 if (-not $TempFilePublisherOptions) {
-                    Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 10 -Connection $Connection -ErrorAction Stop | Out-Null
+                    Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 10 -Connection $Connection -ErrorAction Stop | Out-Null
                 }
                 if (-not $TempPolicyFilePublisherOptions) {
-                    Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection -ErrorAction Stop | Out-Null
-                    Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                    Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
+                    Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                 }
                 
                 return $NewVersionNumber
@@ -2726,7 +2732,7 @@ function New-WDACFilePublisherByCriteria {
             11 {
                 if ($TempPolicyFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($TempPolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
-                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         $TempPivot = $CurrentversionNum
                     } else {
                         $TempPivot = $TempPolicyFilePublisherOptions.MinimumAllowedVersionPivot
@@ -2746,10 +2752,10 @@ function New-WDACFilePublisherByCriteria {
                     $NewVersionNumber = Get-FileVersionPrompt -Prompt "Minimum tolerable minimum cannot be greater than the current FileVersion. Give a valid Minimum Tolerable Minimum." -FileVersionInfo "FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -CurrentVersionNum $CurrentVersionNum
                 }
                 Add-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -AllowedPolicyID $PolicyID -Comment $Comment -MinimumAllowedVersion $CurrentVersionNum -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -VersioningType 11 -Connection $Connection -ErrorAction Stop | Out-Null
-                Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -MinimumTolerableMinimum -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
-                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -VersioningType 11 -Connection $Connection -ErrorAction Stop | Out-Null
+                Add-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -MinimumTolerableMinimum -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                 return $CurrentVersionNum
             }
         }
@@ -2770,6 +2776,9 @@ function Update-WDACFilePublisherByCriteriaHelper {
         [int]$PublisherIndex,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
+        [string]$SpecificFileNameLevel,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$PolicyGUID,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
@@ -2784,8 +2793,8 @@ function Update-WDACFilePublisherByCriteriaHelper {
     $PolicyID = $PolicyGUID
 
     try {
-        $PolicyFilePublisherOptions = Get-PolicyFilePublisherOptions -PolicyGUID $PolicyGUID -FileName $FileName -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
-        $FilePublisherOptions = Get-FilePublisherOptions -FileName $FileName -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
+        $PolicyFilePublisherOptions = Get-PolicyFilePublisherOptions -PolicyGUID $PolicyGUID -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
+        $FilePublisherOptions = Get-FilePublisherOptions -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -PublisherIndex $PublisherIndex -Connection $Connection -ErrorAction Stop
         $PolicyVersioningOptions = Get-PolicyVersioningOptions -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
         ###### CHECK FOR POLICY FILE PUBLISHER OPTIONS ##################
@@ -2813,7 +2822,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
             1 {
                 if ($FilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($FilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
-                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
                             Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         } else {
@@ -2830,7 +2839,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
                         $NewVersionNumber = Get-FileVersionOldAndNewPrompt -Prompt "New minimum version number encountered for this filename + publisher index combination. " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -PreviousVersionNum ($FilePublisherOptions.MinimumAllowedVersionPivot) -CurrentVersionNum $CurrentVersionNum
                         
                         if ($NewVersionNumber -ne $FilePublisherOptions.MinimumAllowedVersionPivot) {
-                            Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                            Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                         }
 
                         if ($NewVersionNumber -ne $FilePublisherOptions.MinimumAllowedVersionPivot -and ($NewVersionNumber -ne $MinimumVersionNumber)) {
@@ -2848,7 +2857,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
             3 {
                 if ($FilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($FilePublisherOptions.MinimumAllowedVersionPivot)) -eq 1) {
-                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
                             Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         } else {
@@ -2866,7 +2875,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
             5 {
                 if ($FilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($FilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
-                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-FilePublisherOptions -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         $TempPivot = $CurrentversionNum
                     } else {
                         $TempPivot = $FilePublisherOptions.MinimumAllowedVersionPivot
@@ -2897,7 +2906,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
             7 {
                 if ($PolicyFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
-                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel  -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
                             Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         } else {
@@ -2914,7 +2923,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
                         $NewVersionNumber = Get-FileVersionOldAndNewPrompt -Prompt "New minimum version number encountered for this filename + publisher index combination. " -FileVersionInfo " FileVersion for this app is $CurrentVersionNum .`n FilePublisher info: FileName $FileName and Publisher Common Name: $($ThePublisher.LeafCertCN) and PcaCertTBSHash: $($ThePublisher.PcaCertTBSHash)" -PreviousVersionNum ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot) -CurrentVersionNum $CurrentVersionNum
                         
                         if ($NewVersionNumber -ne $PolicyFilePublisherOptions.MinimumAllowedVersionPivot) {
-                            Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
+                            Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $NewVersionNumber -Connection $Connection -ErrorAction Stop | Out-Null
                         }
                         if ($NewVersionNumber -ne $PolicyFilePublisherOptions.MinimumAllowedVersionPivot -and ($NewVersionNumber -ne $MinimumVersionNumber)) {
                             if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $NewVersionNumber -Connection $Connection -ErrorAction Stop)) {
@@ -2932,7 +2941,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
                 if ($FilePublisherOptions -and ( $PolicyFilePublisherOptions)) {
                     if ($PolicyFilePublisherOptions) {
                         if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq 1) {
-                            Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                            Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                             if (-not (Find-WDACFilePublisher -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop)) {
                                 Update-WDACFilePublisherMinimumAllowedVersion -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion $MinimumVersionNumber -NewMinimumAllowedVersion $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                             } else {
@@ -2952,7 +2961,7 @@ function Update-WDACFilePublisherByCriteriaHelper {
             11 {
                 if ($PolicyFilePublisherOptions) {
                     if ( (Compare-Versions -Version1 $CurrentVersionNum -Version2 ($PolicyFilePublisherOptions.MinimumAllowedVersionPivot)) -eq -1) {
-                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
+                        Edit-PolicyFilePublisherOptions -PolicyGUID $PolicyID -PublisherIndex $PublisherIndex -FileName $FileName -SpecificFileNameLevel $SpecificFileNameLevel -NewValue $CurrentVersionNum -Connection $Connection -ErrorAction Stop | Out-Null
                         $TempPivot = $CurrentversionNum
                     } else {
                         $TempPivot = $PolicyFilePublisherOptions.MinimumAllowedVersionPivot
@@ -3009,7 +3018,7 @@ function Update-WDACFilePublisherByCriteria {
                         $TempFilePublishers = $Signer.FilePublishers.$($FileNameLevel)
                         foreach ($TempFilePublisher in $TempFilePublishers) {
                             if ($TempFilePublisher.AllowedPolicyID) {
-                                Update-WDACFilePublisherByCriteriaHelper -FileName $TempFilePublisher.FileName -PublisherIndex $TempFilePublisher.PublisherIndex -MinimumVersionNumber $TempFilePublisher.MinimumAllowedVersion -PolicyGUID $TempFilePublisher.AllowedPolicyID -CurrentVersionNum $WDACApp.FileVersion -Connection $Connection -ErrorAction Stop
+                                Update-WDACFilePublisherByCriteriaHelper -FileName $TempFilePublisher.FileName -PublisherIndex $TempFilePublisher.PublisherIndex -SpecificFileNameLevel $FileNameLevel -MinimumVersionNumber $TempFilePublisher.MinimumAllowedVersion -PolicyGUID $TempFilePublisher.AllowedPolicyID -CurrentVersionNum $WDACApp.FileVersion -Connection $Connection -ErrorAction Stop
                             } elseif ($TempFilePublisher.BlockingPolicyID) {
                                 #TODO
                             }

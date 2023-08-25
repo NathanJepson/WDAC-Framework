@@ -127,6 +127,9 @@ function Add-PolicyFilePublisherOptions {
         [int]$PublisherIndex,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
+        [string]$SpecificFileNameLevel,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$FileName,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
@@ -139,10 +142,11 @@ function Add-PolicyFilePublisherOptions {
         }
 
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "INSERT INTO policy_file_publisher_options (PolicyGUID,FileName,PublisherIndex) values (@PolicyGUID,@FileName,@PublisherIndex)"
+        $Command.Commandtext = "INSERT INTO policy_file_publisher_options (PolicyGUID,FileName,PublisherIndex,SpecificFileNameLevel) values (@PolicyGUID,@FileName,@PublisherIndex,@SpecificFileNameLevel)"
             $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
             $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null 
             $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.ExecuteNonQuery()
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
@@ -168,6 +172,9 @@ function Get-PolicyFilePublisherOptions {
         [int]$PublisherIndex,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
+        [string]$SpecificFileNameLevel,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [string]$FileName,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
@@ -181,10 +188,11 @@ function Get-PolicyFilePublisherOptions {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from policy_file_publisher_options WHERE PolicyGUID = @PolicyGUID AND FileName = @FileName AND PublisherIndex = @PublisherIndex;"
+        $Command.Commandtext = "Select * from policy_file_publisher_options WHERE PolicyGUID = @PolicyGUID AND FileName = @FileName AND PublisherIndex = @PublisherIndex AND SpecificFileNameLevel = @SpecificFileNameLevel;"
         $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -195,6 +203,7 @@ function Get-PolicyFilePublisherOptions {
                     PolicyGUID = $Reader["PolicyGUID"];
                     FileName = $Reader["FileName"];
                     PublisherIndex = $Reader["PublisherIndex"];
+                    SpecificFileNameLevel = $Reader["SpecificFileNameLevel"];
                     VersioningType = $Reader["VersioningType"];
                     MinimumAllowedVersionPivot = $Reader["MinimumAllowedVersionPivot"];
                     MinimumTolerableMinimum = $Reader["MinimumTolerableMinimum"]
@@ -235,6 +244,9 @@ function Edit-PolicyFilePublisherOptions {
         [string]$FileName,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
+        [string]$SpecificFileNameLevel,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [Alias("NewMinimum","VersionNumber","NewVersion","MinimumAllowedVersion","Value")]
         [string]$NewValue,
         [Alias("TolerableMinimum")]
@@ -251,17 +263,17 @@ function Edit-PolicyFilePublisherOptions {
         $Command = $Connection.CreateCommand()
         
         if ($MinimumTolerableMinimum) {
-            $Command.Commandtext = "UPDATE policy_file_publisher_options SET MinimumTolerableMinimum = @MinimumTolerableMinimum WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND PolicyGUID = @PolicyGUID"
+            $Command.Commandtext = "UPDATE policy_file_publisher_options SET MinimumTolerableMinimum = @MinimumTolerableMinimum WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND PolicyGUID = @PolicyGUID AND SpecificFileNameLevel = @SpecificFileNameLevel"
             $Command.Parameters.AddWithValue("MinimumTolerableMinimum",$NewValue) | Out-Null
         }
         else {
-            $Command.Commandtext = "UPDATE policy_file_publisher_options SET MinimumAllowedVersionPivot = @MinimumAllowedVersionPivot WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND PolicyGUID = @PolicyGUID"
+            $Command.Commandtext = "UPDATE policy_file_publisher_options SET MinimumAllowedVersionPivot = @MinimumAllowedVersionPivot WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND PolicyGUID = @PolicyGUID AND SpecificFileNameLevel = @SpecificFileNameLevel"
             $Command.Parameters.AddWithValue("MinimumAllowedVersionPivot",$NewValue) | Out-Null
         }
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
         $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
-
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.ExecuteNonQuery()
 
         if ($NoConnectionProvided -and $Connection) {
@@ -289,6 +301,9 @@ function Add-FilePublisherOptions {
         [string]$FileName,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
+        [string]$SpecificFileNameLevel,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [int]$VersioningType,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
@@ -301,9 +316,10 @@ function Add-FilePublisherOptions {
         }
 
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "INSERT INTO file_publisher_options (FileName,PublisherIndex,VersioningType) values (@FileName,@PublisherIndex,@VersioningType)"
+        $Command.Commandtext = "INSERT INTO file_publisher_options (FileName,PublisherIndex,VersioningType,SpecificFileNameLevel) values (@FileName,@PublisherIndex,@VersioningType,@SpecificFileNameLevel)"
             $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
             $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+            $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
             $Command.Parameters.AddWithValue("VersioningType",$VersioningType) | Out-Null
         $Command.ExecuteNonQuery()
         if ($NoConnectionProvided -and $Connection) {
@@ -328,6 +344,9 @@ function Get-FilePublisherOptions {
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [string]$FileName,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$SpecificFileNameLevel,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -340,9 +359,10 @@ function Get-FilePublisherOptions {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from file_publisher_options WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex;"
+        $Command.Commandtext = "Select * from file_publisher_options WHERE FileName = @FileName AND PublisherIndex = @PublisherIndex AND SpecificFileNameLevel = @SpecificFileNameLevel;"
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -352,6 +372,7 @@ function Get-FilePublisherOptions {
                 $result = [PSCustomObject]@{
                     FileName = $Reader["FileName"];
                     PublisherIndex = $Reader["PublisherIndex"];
+                    SpecificFileNameLevel = $Reader["SpecificFileNameLevel"];
                     VersioningType = $Reader["VersioningType"];
                     MinimumAllowedVersionPivot = $Reader["MinimumAllowedVersionPivot"];
                     MinimumTolerableMinimum = $Reader["MinimumTolerableMinimum"]
@@ -389,6 +410,9 @@ function Edit-FilePublisherOptions {
         [string]$FileName,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
+        [string]$SpecificFileNameLevel,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
         [Alias("NewMinimum","VersionNumber","NewVersion","MinimumAllowedVersion","Value")]
         [string]$NewValue,
         [Alias("TolerableMinimum")]
@@ -405,15 +429,16 @@ function Edit-FilePublisherOptions {
         $Command = $Connection.CreateCommand()
         
         if ($MinimumTolerableMinimum) {
-            $Command.Commandtext = "UPDATE file_publisher_options SET MinimumTolerableMinimum = @MinimumTolerableMinimum WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+            $Command.Commandtext = "UPDATE file_publisher_options SET MinimumTolerableMinimum = @MinimumTolerableMinimum WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
             $Command.Parameters.AddWithValue("MinimumTolerableMinimum",$NewValue) | Out-Null
         }
         else {
-            $Command.Commandtext = "UPDATE file_publisher_options SET MinimumAllowedVersionPivot = @MinimumAllowedVersionPivot WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName"
+            $Command.Commandtext = "UPDATE file_publisher_options SET MinimumAllowedVersionPivot = @MinimumAllowedVersionPivot WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
             $Command.Parameters.AddWithValue("MinimumAllowedVersionPivot",$NewValue) | Out-Null
         }
         $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
         $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
         $Command.ExecuteNonQuery()
 
         if ($NoConnectionProvided -and $Connection) {

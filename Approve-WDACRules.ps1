@@ -824,15 +824,15 @@ function Approve-WDACRules {
     NOTE: Options 0-5 deal with the "file_publisher_options" table, options 6-11 deal with the "policy_file_publisher_options" table
         policy_file_publisher_options has priority over file_publisher_options
 
-        0 - GLOBAL SET MINIMUM - For a particular publisher index + file name combination, prompt the user for a [fixed] MinimumFileVersion that will be applied anytime the combination appears (applied to ALL policies)
-        1 - GLOBAL DECREMENT MINIMUM - For a particular publisher index + file name combination, replace the MinimumFileVersion with a new one anytime a lower one appears for all appearances of the combination
-        2 - GLOBAL ALWAYS SPECIFY - Anytime a new FileVersion is encountered for a publisher index + file name combination, prompt the user whether they want to change the MinimumFileVersion (applied to this combination for ALL policies)
-        3 - GLOBAL INCREMENT MINIMUM - For a particular publisher index + file name combination, replace the MinimumFileVersion with a new one anytime a GREATER one appears for all appearances of the combination
+        0 - GLOBAL SET MINIMUM - For a particular publisher index + file name + SpecificFileNameLevel combination, prompt the user for a [fixed] MinimumFileVersion that will be applied anytime the combination appears (applied to ALL policies)
+        1 - GLOBAL DECREMENT MINIMUM - For a particular publisher index + file name + SpecificFileNameLevel combination, replace the MinimumFileVersion with a new one anytime a lower one appears for all appearances of the combination
+        2 - GLOBAL ALWAYS SPECIFY - Anytime a new FileVersion is encountered for a publisher index + file name + SpecificFileNameLevel combination, prompt the user whether they want to change the MinimumFileVersion (applied to this combination for ALL policies)
+        3 - GLOBAL INCREMENT MINIMUM - For a particular publisher index + file name + SpecificFileNameLevel combination, replace the MinimumFileVersion with a new one anytime a GREATER one appears for all appearances of the combination
         4 - GLOBAL 0.0.0.0 MINIMUM - Exactly like option 0, but 0.0.0.0 will always be set to be the MinimumFileVersion without prompting the user
         5 - GLOBAL DECREMENT MINIMUM NOT EXCEEDING MINIMUM_TOLERABLE_MINIMUM - Similar to option 1, but each time the MinimumFileVersion is replaced with a lower encountered file version, it cannot go lower than a MinimumTolerableMinimum specified by the user.
-        6 - EACH POLICY SET MINIMUM - Prompt the user whether they want a [fixed] MinimumFileVersion for each time a new publisher index + file name combination is encountered for each individual policy. 
+        6 - EACH POLICY SET MINIMUM - Prompt the user whether they want a [fixed] MinimumFileVersion for each time a new publisher index + file name + SpecificFileNameLevel combination is encountered for each individual policy. 
         7 - EACH POLICY DECREMENT MINIMUM - For each policy, specify whether that policy should replace MinimumFileVersion with a lower one anytime a lower one is encountered
-        8 - EACH POLICY ALWAYS SPECIFY - Similar to option 2, but anytime a new publisher index + file name combination is encountered for EACH POLICY, the user will be prompted if they want to change the MinimumFileVersion
+        8 - EACH POLICY ALWAYS SPECIFY - Similar to option 2, but anytime a new publisher index + file name + SpecificFileNameLevel combination is encountered for EACH POLICY, the user will be prompted if they want to change the MinimumFileVersion
         9 - EACH POLICY INCREMENT MINIMUM - For each policy, specify whether that policy should replace MinimumFileVersion with a HIGHER one anytime a higher one is encountered
         10 - EACH POLICY 0.0.0.0 Minimum - Exactly like option 6, but the MinimumFileVersion will always be set to 0.0.0.0 without prompting the user
         11 - EACH POLICY DECREMENT MINIMUM NOT EXCEEDING MINIMUM_TOLERABLE_MINIMUM - Similar to option 7, but each time the MinimumFileVersion is replaced with a lower encountered file version, it cannot go lower than a MinimumTolerableMinimum specified by the user (which must be specified for each policy)
