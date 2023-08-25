@@ -948,6 +948,16 @@ function Approve-WDACRules {
                 }
             }
         }
+
+        if ($ResetUntrusted) {
+            #Resets all Untrusted flags of apps or msi_or_script entries to 0
+            try {
+                Clear-AllWDACUntrusted -ErrorAction Stop
+            } catch {
+                Write-Verbose ($_ | Format-List * -Force | Out-String)
+                throw "Could not clear all the `"Untrusted`" flags on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
+            }
+        }
     }
 
     process {
@@ -963,7 +973,7 @@ function Approve-WDACRules {
             try {
                 Clear-AllWDACSkipped -ErrorAction Stop
             } catch {
-                Write-Verbose $_
+                Write-Verbose ($_ | Format-List * -Force | Out-String)
                 throw "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
             }
         }
