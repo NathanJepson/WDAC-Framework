@@ -576,7 +576,7 @@ function Read-WDACConferredTrust {
             }
         } else {
         #The case that there is only one level
-            $LevelToTrustAt = $Levels[0]
+            $LevelToTrustAt = $Levels
             if ($MultiRuleMode) {
                 if (-not (Get-YesOrNoPrompt -Prompt "Would you like to set this Trust (OR BLOCK) action at the level of $LevelToTrustAt ?")) {
                     $AppsToSkip.Add($SHA256FlatHash,$true)
@@ -748,6 +748,9 @@ function Read-WDACConferredTrust {
             }
             "FileName" {
                 Write-WDACConferredTrust -PrimaryKeyPart1 $AppInfo.$($SpecificFileNameLevel) -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+            }
+            Default {
+                throw "$LevelToTrustAt is not a valid WDAC rule level!"
             }
         }
 
