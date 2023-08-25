@@ -691,7 +691,7 @@ function Read-WDACConferredTrust {
         }
 
         if ((-not $SpecificFileNameLevels[$SHA256FlatHash]) -and $SpecificFileNameLevel -eq "OriginalFileName" -and (-not $AppInfo.OriginalFileName) -and ($LevelToTrustAt -eq "FilePublisher" -or $LevelToTrustAt -eq "FileName")) {
-            Get-SpecificFileNameLevelPrompt -Levels $ResultingSpecificFileNameLevelList
+            $SpecificFileNameLevel = Get-SpecificFileNameLevelPrompt -Levels $ResultingSpecificFileNameLevelList
         }
 
         $LeafCertCNs = @{}
@@ -1155,7 +1155,7 @@ function Approve-WDACRules {
                     Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop
 
                 } catch {
-                    Write-Verbose $_
+                    Write-Verbose ($_ | Format-List * -Force | Out-String)
                     Write-Warning "Could not apply trust action to the database for this app: $($AppHash) ."
                     $Transaction.Rollback()
                     $ErrorCount += 1
@@ -1184,7 +1184,7 @@ function Approve-WDACRules {
                             Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
                         }
                     } catch {
-                        Write-Verbose $_
+                        Write-Verbose ($_ | Format-List * -Force | Out-String)
                         Write-Warning "Could not purge this app from the database: $($AppHash) ."
                         $Transaction.Rollback()
                         $ErrorCount += 1
@@ -1205,7 +1205,6 @@ function Approve-WDACRules {
             }
 
             if (-not $HasPipelineInput) {
-                Write-Host "Successfully updated trust for those potential rules in the database. Use Merge-TrustedWDACRules to merge them into policies."
     
                 try {
                 #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
@@ -1213,7 +1212,7 @@ function Approve-WDACRules {
                 #...So only run this block of code if there is NO pipeline input
                     Clear-AllWDACSkipped -ErrorAction Stop
                 } catch {
-                    Write-Verbose $_
+                    Write-Verbose ($_ | Format-List * -Force | Out-String)
                     Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
                 }
             }
@@ -1225,7 +1224,10 @@ function Approve-WDACRules {
         Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
 
         if (-not $HasPipelineInput) {
-            Write-Host "Successfully updated trust for those potential rules in the database. Use Merge-TrustedWDACRules to merge them into policies."
+
+            if ($ErrorCount -eq 0) {
+                Write-Host "Successfully updated trust for those potential rules in the database. Use Merge-TrustedWDACRules to merge them into policies."
+            }
 
             try {
             #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
@@ -1233,7 +1235,7 @@ function Approve-WDACRules {
             #...So only run this block of code if there is NO pipeline input
                 Clear-AllWDACSkipped -ErrorAction Stop
             } catch {
-                Write-Verbose $_
+                Write-Verbose ($_ | Format-List * -Force | Out-String)
                 Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
             }
         }
