@@ -1115,6 +1115,10 @@ function Approve-WDACRules {
                     if (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
                         if (-not ($AppsToSkip[$AppHash])) {
                             $AppsToSkip.Add($AppHash,$true)
+                            $Transaction.Rollback()
+                            Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                            Write-Verbose "App $FileName with hash $AppHash skipped due to already being blocked at a separate level."
+                            continue;
                         }
                         $Transaction.Rollback()
                         Write-Verbose "App $FileName with hash $AppHash skipped due to already being blocked at a separate level."
