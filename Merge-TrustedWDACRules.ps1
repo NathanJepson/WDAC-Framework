@@ -277,6 +277,11 @@ function Merge-TrustedWDACRules {
                     Set-XMLPolicyVersion -PolicyGUID $Policy -Version $NewVersionNum -Connection $Connection -ErrorAction Stop
                     $Transaction.Commit()
                     Write-Host "Successfully committed changes to Policy $Policy" -ForegroundColor Green
+                    if ($TempFilePath) {
+                        if (Test-Path $TempFilePath) {
+                            Remove-Item -Path $TempFilePath -ErrorAction SilentlyContinue
+                        }
+                    }
                 } else {
                     $Transaction.Rollback()
                     if ($BackupOldPolicy) {
@@ -314,6 +319,12 @@ function Merge-TrustedWDACRules {
                 } catch {
                     Write-Error "Unable to re-write old policy XML for policy $MostRecentPolicy but it can be recovered at $BackupOldPolicy"
                 }
+            }
+        }
+
+        if ($TempFilePath) {
+            if (Test-Path $TempFilePath) {
+                Remove-Item -Path $TempFilePath -ErrorAction SilentlyContinue
             }
         }
 
