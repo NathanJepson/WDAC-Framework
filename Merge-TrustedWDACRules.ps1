@@ -310,7 +310,7 @@ function Merge-TrustedWDACRules {
         if ($MostRecentPolicy -and $BackupOldPolicy) {
             if (Test-Path $BackupOldPolicy) {
                 try {
-                    Copy-Item $BackupOldPolicy -Destination (Get-FullPolicyPath -PolicyGUID $MostRecentPolicy -Connection $Connection -ErrorAction Stop) -Force -ErrorAction Stop
+                    Copy-Item $BackupOldPolicy -Destination (Get-FullPolicyPath -PolicyGUID $MostRecentPolicy -ErrorAction Stop) -Force -ErrorAction Stop
                 } catch {
                     Write-Error "Unable to re-write old policy XML for policy $MostRecentPolicy but it can be recovered at $BackupOldPolicy"
                 }
