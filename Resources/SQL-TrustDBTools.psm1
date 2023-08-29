@@ -133,6 +133,32 @@ function Test-VersionEncompassed {
     return $Encompasses
 }
 
+function Set-IncrementVersionNumber {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [Alias("Version")]
+        $VersionNumber
+    )
+
+    $VersionSplit = $VersionNumber -split "\."
+    $VersionSplit[-1] = ([int]$VersionSplit[-1]) + 1
+    for ($i=-1; $i -gt ((-1) * ($VersionSplit.Count + 1)); $i--) {
+        if ([int]$VersionSplit[$i] -ge 65536) {
+            if (-not ($i -eq -4)) {
+                $VersionSplit[$i] = 0
+                $VersionSplit[$i-1] = ([int]$VersionSplit[$i-1]) + 1
+            } else {
+                #Note: Version Number of 65535.65535.65535.65535 wraps back around to 0.0.0.0
+                return "0.0.0.0"
+            }
+        }
+    }
+
+    return ($VersionSplit -Join ".")
+}
+
 function Find-WDACGroup {
     [cmdletbinding()]
     Param ( 
@@ -1620,6 +1646,43 @@ function Get-WDACPolicy {
         if ($Reader) {
             $Reader.Close()
         }
+        throw $theError
+    }
+}
+
+function Set-WDACPolicyVersion {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$Version,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE policies SET PolicyVersion = @PolicyVersion WHERE PolicyGUID = @PolicyGUID"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("PolicyVersion",$Version) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
         throw $theError
     }
 }
