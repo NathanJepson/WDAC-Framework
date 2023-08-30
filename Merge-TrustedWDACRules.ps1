@@ -154,13 +154,10 @@ function Merge-TrustedWDACRules {
 
             switch ($Levels) {
                 "Hash" {
-                    $PotentialHashRules_PE = Get-PotentialHashRules -Connection $Connection -ErrorAction Stop
-                    $PotentialHashRules_MSIorScript = Get-PotentialHashRules -MSIorScript -Connection $Connection -ErrorAction Stop
+                    $PotentialHashRules_PE = Get-PotentialHashRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
+                    $PotentialHashRules_MSIorScript = Get-PotentialHashRules -MSIorScript -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
 
                     foreach ($HashRulePE in $PotentialHashRules_PE) {
-                        if (($HashRulePE.AllowedPolicyID -ne $Policy) -and ($HashRulePE.BlockingPolicyID -ne $Policy)) {
-                            continue
-                        }
                         $rule = New-MicrosoftSecureBootHashRule -RuleInfo $HashRulePE -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
@@ -168,9 +165,6 @@ function Merge-TrustedWDACRules {
                         }
                     }
                     foreach ($HashRuleMSI in $PotentialHashRules_MSIorScript) {
-                        if (($HashRuleMSI.AllowedPolicyID -ne $Policy) -and ($HashRuleMSI.BlockingPolicyID -ne $Policy)) {
-                            continue
-                        }
                         $rule = New-MicrosoftSecureBootHashRule -RuleInfo $HashRuleMSI -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
@@ -183,11 +177,8 @@ function Merge-TrustedWDACRules {
                     Write-Verbose "FilePath rules have not yet been implemented."
                 }
                 "FileName" {
-                    $PotentialFileNameRules = Get-PotentialFileNameRules -Connection $Connection -ErrorAction Stop
+                    $PotentialFileNameRules = Get-PotentialFileNameRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($FileNameRule in $PotentialFileNameRules) {
-                        if (($FileNameRule.AllowedPolicyID -ne $Policy) -and ($FileNameRule.BlockingPolicyID -ne $Policy)) {
-                            continue
-                        }
                         $rule = New-MicrosoftSecureBootFileNameRule -RuleInfo $FileNameRule -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
@@ -196,11 +187,8 @@ function Merge-TrustedWDACRules {
                     }
                 }
                 "LeafCertificate" {
-                    $PotentialLeafCertRules = Get-PotentialLeafCertificateRules -Connection $Connection -ErrorAction Stop
+                    $PotentialLeafCertRules = Get-PotentialLeafCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($LeafCertRule in $PotentialLeafCertRules) {
-                        if (($LeafCertRule.AllowedPolicyID -ne $Policy) -and ($LeafCertRule.BlockingPolicyID -ne $Policy)) {
-                            continue
-                        }
                         $rule = New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $LeafCertRule -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
@@ -209,11 +197,8 @@ function Merge-TrustedWDACRules {
                     }
                 }
                 "PcaCertificate" {
-                    $PotentialPcaCertRules = Get-PotentialPcaCertificateRules -Connection $Connection -ErrorAction Stop
+                    $PotentialPcaCertRules = Get-PotentialPcaCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($PcaCertRule in $PotentialPcaCertRules) {
-                        if (($PcaCertRule.AllowedPolicyID -ne $Policy) -and ($PcaCertRule.BlockingPolicyID -ne $Policy)) {
-                            continue
-                        }
                         $rule = New-MicrosoftSecureBootPcaCertificateRule -RuleInfo $PcaCertRule -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
@@ -222,11 +207,8 @@ function Merge-TrustedWDACRules {
                     }
                 }
                 "Publisher" {
-                    $PotentialPublisherRules = Get-PotentialPublisherRules -Connection $Connection -ErrorAction Stop
+                    $PotentialPublisherRules = Get-PotentialPublisherRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($PublisherRule in $PotentialPublisherRules) {
-                        if (($PublisherRule.AllowedPolicyID -ne $Policy) -and ($PublisherRule.BlockingPolicyID -ne $Policy)) {
-                            continue
-                        }
                         $rule = New-MicrosoftSecureBootPublisherRule -RuleInfo $PublisherRule -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
@@ -235,11 +217,8 @@ function Merge-TrustedWDACRules {
                     }
                 }
                 "FilePublisher" {
-                   $PotentialFilePublisherRules = Get-PotentialFilePublisherRules -Connection $Connection -ErrorAction Stop
+                   $PotentialFilePublisherRules = Get-PotentialFilePublisherRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($FilePublisherRule in $PotentialFilePublisherRules) {
-                        if (($FilePublisherRule.AllowedPolicyID -ne $Policy) -and ($FilePublisherRule.BlockingPolicyID -ne $Policy)) {
-                            continue
-                        }
                         $rule = New-MicrosoftSecureBootFilePublisherRule -RuleInfo $FilePublisherRule -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
@@ -315,7 +294,8 @@ function Merge-TrustedWDACRules {
         if ($MostRecentPolicy -and $BackupOldPolicy) {
             if (Test-Path $BackupOldPolicy) {
                 try {
-                    Copy-Item $BackupOldPolicy -Destination (Get-FullPolicyPath -PolicyGUID $MostRecentPolicy -ErrorAction Stop) -Force -ErrorAction Stop
+                    Receive-FileAsPolicy -FilePath $BackupOldPolicy -PolicyGUID $Policy -ErrorAction Stop
+                    Remove-Item $BackupOldPolicy -ErrorAction SilentlyContinue
                 } catch {
                     Write-Error "Unable to re-write old policy XML for policy $MostRecentPolicy but it can be recovered at $BackupOldPolicy"
                 }

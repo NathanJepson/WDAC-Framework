@@ -14,6 +14,7 @@ function Get-PotentialHashRules {
     [CmdletBinding()]
     Param (
         [switch]$MSIorScript,
+        $PolicyGUID,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -27,9 +28,19 @@ function Get-PotentialHashRules {
         }
         $Command = $Connection.CreateCommand()
         if ($MSIorScript) {
-            $Command.Commandtext = "Select * from msi_or_script WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+            if ($PolicyGUID) {
+                $Command.Commandtext = "Select * from msi_or_script WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
+                $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+            } else {
+                $Command.Commandtext = "Select * from msi_or_script WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+            }
         } else {
-            $Command.Commandtext = "Select * from apps WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+            if ($PolicyGUID) {
+                $Command.Commandtext = "Select * from apps WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
+                $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+            } else {
+                $Command.Commandtext = "Select * from apps WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+            }
         }
 
         $Command.CommandType = [System.Data.CommandType]::Text
@@ -129,11 +140,13 @@ function Get-PotentialFilePathRules {
     Param (
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
+    #TODO
 }
 
 function Get-PotentialFileNameRules {
     [CmdletBinding()]
     Param (
+        $PolicyGUID,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -146,7 +159,12 @@ function Get-PotentialFileNameRules {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from file_names WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+        if ($PolicyGUID) {
+            $Command.Commandtext = "Select * from file_names WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
+            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from file_names WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+        }
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -192,6 +210,7 @@ function Get-PotentialFileNameRules {
 function Get-PotentialLeafCertificateRules {
     [CmdletBinding()]
     Param (
+        $PolicyGUID,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -204,7 +223,13 @@ function Get-PotentialLeafCertificateRules {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 1"
+        if ($PolicyGUID) {
+            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 1 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
+            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 1"
+        }
+        
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -258,6 +283,7 @@ function Get-PotentialLeafCertificateRules {
 function Get-PotentialPcaCertificateRules {
     [CmdletBinding()]
     Param (
+        $PolicyGUID,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -270,7 +296,12 @@ function Get-PotentialPcaCertificateRules {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 0"
+        if ($PolicyGUID) {
+            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 0 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
+            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 0"
+        }
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -324,6 +355,7 @@ function Get-PotentialPcaCertificateRules {
 function Get-PotentialPublisherRules {
     [CmdletBinding()]
     Param (
+        $PolicyGUID,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -336,7 +368,12 @@ function Get-PotentialPublisherRules {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from publishers WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+        if ($PolicyGUID) {
+            $Command.Commandtext = "Select * from publishers WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
+            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from publishers WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+        }
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -387,6 +424,7 @@ function Get-PotentialPublisherRules {
 function Get-PotentialFilePublisherRules {
     [CmdletBinding()]
     Param (
+        $PolicyGUID,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -400,7 +438,12 @@ function Get-PotentialFilePublisherRules {
         }
         $Command = $Connection.CreateCommand()
        
-        $Command.Commandtext = "Select * from file_publishers WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+        if ($PolicyGUID) {
+            $Command.Commandtext = "Select * from file_publishers WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
+            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        } else {
+            $Command.Commandtext = "Select * from file_publishers WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
+        }
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
