@@ -577,6 +577,9 @@ function Read-WDACConferredTrust {
         } else {
         #The case that there is only one level
             $LevelToTrustAt = $Levels
+            if ($LevelToTrustAt.GetType().BaseType -eq [System.Array]) {
+                $LevelToTrustAt = $Levels[0]
+            }
             if ($MultiRuleMode) {
                 if (-not (Get-YesOrNoPrompt -Prompt "Would you like to set this Trust (OR BLOCK) action at the level of $LevelToTrustAt ?")) {
                     $AppsToSkip.Add($SHA256FlatHash,$true)
