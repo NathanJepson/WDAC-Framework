@@ -163,36 +163,36 @@ function New-MicrosoftSecureBootHashRule {
     [CmdletBinding()]
     param (
         [switch]$MSIorScript,
+        [ValidateNotNullOrEmpty()]
         $RuleInfo,
         $RuleMap
     )
 
     $result = @()
     $Name = (($RuleInfo.FirstDetectedPath + "\" + $RuleInfo.FileName) + " " + "Hash Sha256")
-    #Name = ($RuleInfo.FirstDetectedPath + "\" + $RuleInfo.FileName)
 
     #The authenticode hash is used for hash rules involving PEs
     if ($MSIorScript) {
         $Hash = $RuleInfo.SHA256FlatHash
-        #$SIPHash = $null #TODO
-        return; #TODO
+        #$SIPHash = $null #TODO: SIP Hashes are used for MSI or Script Block Rules
     } else {
         $Hash = $RuleInfo.SHA256AuthenticodeHash
     }
 
     $TemporaryFile = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $Name
 
+    #I'm not sure why, but I have to specify a FileName level even though it's just a hash rule
     if ($RuleInfo.Blocked -eq $true) {
-        $blockResultUserMode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash",[Microsoft.SecureBoot.UserConfig.RuleType]"Deny",[Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
-        $blockResultKernel = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash",[Microsoft.SecureBoot.UserConfig.RuleType]"Deny",[Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+        $blockResultUserMode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"None",[Microsoft.SecureBoot.UserConfig.RuleType]"Deny",[Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+        $blockResultKernel = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"None",[Microsoft.SecureBoot.UserConfig.RuleType]"Deny",[Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
         $ID_User = IncrementDenyID -RuleMap $RuleMap
-        $RuleMap.Add($ID_User,$true)
+        $RuleMap = $RuleMap + @{$ID_User=$true}
         $ID_Kernel = IncrementDenyID -RuleMap $RuleMap
         if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
             $RuleMap[$ID_User] = $RuleInfo.Comment
-            $RuleMap.Add($ID_Kernel,$RuleInfo.Comment)
+            $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
         } else {
-            $RuleMap.Add($ID_Kernel,$true)
+            $RuleMap = $RuleMap + @{$ID_Kernel=$true}
         }
         $blockResultUserMode.Id = $ID_User
         $blockResultKernel.Id = $ID_Kernel
@@ -211,9 +211,9 @@ function New-MicrosoftSecureBootHashRule {
             $kernelResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash",[Microsoft.SecureBoot.UserConfig.RuleType]"Allow",[Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
             $ID_Kernel = IncrementAllowID -RuleMap $RuleMap
             if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
-                $RuleMap.Add($ID_Kernel,$RuleInfo.Comment)
+                $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
             } else {
-                $RuleMap.Add($ID_Kernel,$true)
+                $RuleMap = $RuleMap + @{$ID_Kernel=$true}
             }
             $kernelResult.ID = $ID_Kernel
             # $kernelResult.TypeId = "Allow"
@@ -225,9 +225,9 @@ function New-MicrosoftSecureBootHashRule {
             $userModeResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash",[Microsoft.SecureBoot.UserConfig.RuleType]"Allow",[Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
             $ID_User = IncrementAllowID -RuleMap $RuleMap
             if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
-                $RuleMap.Add($ID_User,$RuleInfo.Comment)
+                $RuleMap = $RuleMap + @{$ID_User=$RuleInfo.Comment}
             } else {
-                $RuleMap.Add($ID_User,$true)
+                $RuleMap = $RuleMap + @{$ID_User=$true}
             }
             $userModeResult.ID = $ID_User
             # $userModeResult.TypeId = "Allow"
@@ -237,7 +237,6 @@ function New-MicrosoftSecureBootHashRule {
         }
     }
 
-    #$result | Out-Host #FIXME
     return $result,$RuleMap
 }
 function New-MicrosoftSecureBootFilePathRule {
@@ -284,5 +283,4 @@ function New-MicrosoftSecureBootFilePublisherRule {
     )
 }
 
-
-Export-ModuleMember -Function New-MicrosoftSecureBootHashRule
+Export-ModuleMember -Function New-MicrosoftSecureBootHashRule,New-MicrosoftSecureBootFilePathRule,New-MicrosoftSecureBootFileNameRule,New-MicrosoftSecureBootLeafCertificateRule,New-MicrosoftSecureBootPcaCertificateRule,New-MicrosoftSecureBootPublisherRule,New-MicrosoftSecureBootFilePublisherRule

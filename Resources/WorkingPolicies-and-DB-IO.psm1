@@ -133,3 +133,28 @@ function Set-XMLPolicyVersion {
         throw $_
     }
 }
+
+function New-WDACPolicyVersionIncrementOne {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$CurrentVersion,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        $FullPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        $NewVersionNum = Set-IncrementVersionNumber -VersionNumber $CurrentVersion
+        Set-XMLPolicyVersion -PolicyGUID $PolicyGUID -Version $NewVersionNum -Connection $Connection -ErrorAction Stop
+        if (-not (Set-WDACPolicyVersion -PolicyGUID $PolicyGUID -Version $NewVersionNum -Connection $Connection -ErrorAction Stop)) {
+            throw "Unable to update policy version in database."
+        }
+        Rename-Item -Path $FullPath -NewName (Get-PolicyFileName -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -Force -ErrorAction Stop
+    } catch {
+        throw $_
+    }
+}

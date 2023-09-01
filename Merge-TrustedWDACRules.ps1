@@ -1,55 +1,3 @@
-function New-MicrosoftSecureBootHashRule {
-    [CmdletBinding()]
-    param (
-        $RuleInfo
-    )
-
-    #TODO: MSIorScript check
-}
-
-function New-MicrosoftSecureBootFilePathRule {
-    [CmdletBinding()]
-    param (
-        $RuleInfo
-    )
-    #TODO: FilePath rules not yet implemented
-}
-
-function New-MicrosoftSecureBootFileNameRule {
-    [CmdletBinding()]
-    param (
-        $RuleInfo
-    )
-}
-
-function New-MicrosoftSecureBootLeafCertificateRule {
-    [CmdletBinding()]
-    param (
-        $RuleInfo
-    )
-}
-
-function New-MicrosoftSecureBootPcaCertificateRule {
-    [CmdletBinding()]
-    param (
-        $RuleInfo
-    )
-}
-
-function New-MicrosoftSecureBootPublisherRule {
-    [CmdletBinding()]
-    param (
-        $RuleInfo
-    )
-}
-
-function New-MicrosoftSecureBootFilePublisherRule {
-    [CmdletBinding()]
-    param (
-        $RuleInfo
-    )
-}
-
 function Merge-TrustedWDACRules {
     <#
     .SYNOPSIS
@@ -73,6 +21,9 @@ function Merge-TrustedWDACRules {
     .PARAMETER PolicyID
     The ID (not the GUID!) of the policy or policies -- when specified, every potential rule in the database with a trust or block flag with AllowedPolicyID or BlockingPolicyID will be merged
 
+    .PARAMETER Levels
+    When Levels are specified, only rules from the specified levels will be merged to policies
+
     .EXAMPLE
     TODO
 
@@ -85,10 +36,19 @@ function Merge-TrustedWDACRules {
         [string]$GroupName,
         [string[]]$PolicyName,
         [string[]]$PolicyGUID,
-        [string[]]$PolicyID
+        [string[]]$PolicyID,
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
+        [Alias("Level")]
+        [string[]]$Levels
     )
 
-    $Levels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    #The only reason that -SkipEditionCheck is used here is that I'm reasonably sure that using these commands won't break in PowerShell 7, but I could be wrong!
+    #...Either way, this is really the only way that this cmdlet works. I could wrap everything (EVERYTHING) in a PowerShell 5.1 block, but I don't think I need to.
+    Import-Module -SkipEditionCheck -Name "ConfigCI"
+
+    if (-not $Levels) {
+        $Levels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+    }
     $Policies = @()
     $MostRecentPolicy = $null
     if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
@@ -148,9 +108,14 @@ function Merge-TrustedWDACRules {
         foreach ($Policy in $Policies) {
             $RulesAdded = 0
             $RulesToMerge = @()
+            $IDsAndComments = @{}
             $Transaction = $Connection.BeginTransaction()
             $MostRecentPolicy = $Policy
             $BackupOldPolicy = $null
+            $CurrentPolicyRules = Get-CIPolicy -FilePath (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop) -ErrorAction Stop
+            foreach ($currentRule in $CurrentPolicyRules) {
+                $IDsAndComments.Add($currentRule.Id,$true)
+            }
 
             switch ($Levels) {
                 "Hash" {
@@ -158,14 +123,16 @@ function Merge-TrustedWDACRules {
                     $PotentialHashRules_MSIorScript = Get-PotentialHashRules -MSIorScript -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
 
                     foreach ($HashRulePE in $PotentialHashRules_PE) {
-                        $rule = New-MicrosoftSecureBootHashRule -RuleInfo $HashRulePE -ErrorAction Stop
+                        
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootHashRule -RuleInfo $HashRulePE -RuleMap $IDsAndComments -ErrorAction Stop
+
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
                         }
                     }
                     foreach ($HashRuleMSI in $PotentialHashRules_MSIorScript) {
-                        $rule = New-MicrosoftSecureBootHashRule -RuleInfo $HashRuleMSI -ErrorAction Stop
+                        $rule = New-MicrosoftSecureBootHashRule -RuleInfo $HashRuleMSI -MSIorScript -RuleMap $IDsAndComments -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
@@ -179,7 +146,7 @@ function Merge-TrustedWDACRules {
                 "FileName" {
                     $PotentialFileNameRules = Get-PotentialFileNameRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($FileNameRule in $PotentialFileNameRules) {
-                        $rule = New-MicrosoftSecureBootFileNameRule -RuleInfo $FileNameRule -ErrorAction Stop
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootFileNameRule -RuleInfo $FileNameRule -RuleMap $IDsAndComments -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
@@ -189,7 +156,7 @@ function Merge-TrustedWDACRules {
                 "LeafCertificate" {
                     $PotentialLeafCertRules = Get-PotentialLeafCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($LeafCertRule in $PotentialLeafCertRules) {
-                        $rule = New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $LeafCertRule -ErrorAction Stop
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $LeafCertRule -RuleMap $IDsAndComments -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
@@ -199,7 +166,7 @@ function Merge-TrustedWDACRules {
                 "PcaCertificate" {
                     $PotentialPcaCertRules = Get-PotentialPcaCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($PcaCertRule in $PotentialPcaCertRules) {
-                        $rule = New-MicrosoftSecureBootPcaCertificateRule -RuleInfo $PcaCertRule -ErrorAction Stop
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootPcaCertificateRule -RuleInfo $PcaCertRule -RuleMap $IDsAndComments -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
@@ -209,7 +176,7 @@ function Merge-TrustedWDACRules {
                 "Publisher" {
                     $PotentialPublisherRules = Get-PotentialPublisherRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($PublisherRule in $PotentialPublisherRules) {
-                        $rule = New-MicrosoftSecureBootPublisherRule -RuleInfo $PublisherRule -ErrorAction Stop
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootPublisherRule -RuleInfo $PublisherRule -RuleMap $IDsAndComments -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
@@ -219,7 +186,7 @@ function Merge-TrustedWDACRules {
                 "FilePublisher" {
                    $PotentialFilePublisherRules = Get-PotentialFilePublisherRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($FilePublisherRule in $PotentialFilePublisherRules) {
-                        $rule = New-MicrosoftSecureBootFilePublisherRule -RuleInfo $FilePublisherRule -ErrorAction Stop
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootFilePublisherRule -RuleInfo $FilePublisherRule -RuleMap $IDsAndComments -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
@@ -230,30 +197,22 @@ function Merge-TrustedWDACRules {
 
             if ($RulesAdded -ge 1) {
 
-                $TempFilePath = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + (New-Guid + ".xml")))
+                $TempFilePath = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( ([string](New-Guid)) + ".xml")))
 
                 $WorkingPoliciesLocationType = (Get-LocalStorageJSON -ErrorAction SilentlyContinue)."WorkingPoliciesDirectory"."Type"
                 if ($WorkingPoliciesLocationType.ToLower() -eq "local") {
                 #This is to recover the old version of the file is an exception happens
-                    $BackupOldPolicy = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + (New-Guid + ".xml")))
+                    $BackupOldPolicy = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( ([string](New-Guid)) + ".xml")))
                     Copy-Item (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction SilentlyContinue) -Destination $BackupOldPolicy -ErrorAction SilentlyContinue
                 }
 
                 Merge-CIPolicy -PolicyPaths (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop) -Rules $RulesToMerge -OutputFilePath $TempFilePath -ErrorAction Stop
                 Receive-FileAsPolicy -FilePath $TempFilePath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
 
-                # $AddRulesTask = PowerShell {
-                #     [CmdletBinding()]
-                #     Param(
-                #         $RuleList
-                #     )
-                # } -args $RuleToMerge
-
                 $PolicyVersion = (Get-PolicyVersionNumber -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop).PolicyVersion
+                $OldPolicyPath = (Get-FullPolicyPath -PolicyGUID $Policy -ErrorAction Stop)
                 if ($PolicyVersion) {
-                    $NewVersionNum = Set-IncrementVersionNumber -VersionNumber $PolicyVersion
-                    Set-WDACPolicyVersion -PolicyGUID $Policy -Version $NewVersionNum -Connection $Connection -ErrorAction Stop
-                    Set-XMLPolicyVersion -PolicyGUID $Policy -Version $NewVersionNum -Connection $Connection -ErrorAction Stop
+                    New-WDACPolicyVersionIncrementOne -PolicyGUID $Policy -CurrentVersion $PolicyVersion -Connection $Connection -ErrorAction Stop
                     $Transaction.Commit()
                     Write-Host "Successfully committed changes to Policy $Policy" -ForegroundColor Green
                     if ($TempFilePath) {
@@ -266,13 +225,9 @@ function Merge-TrustedWDACRules {
                     if ($BackupOldPolicy) {
                         if (Test-Path $BackupOldPolicy) {
                             try {
-                                Receive-FileAsPolicy -FilePath $BackupOldPolicy -PolicyGUID $Policy -ErrorAction Stop
+                                Copy-Item $BackupOldPolicy -Destination $OldPolicyPath -Force -ErrorAction Stop
                             } catch {
-                                try {
-                                    Copy-Item $BackupOldPolicy -Destination (Get-FullPolicyPath -PolicyGUID $Policy -ErrorAction Stop) -Force -ErrorAction Stop
-                                } catch {
-                                    Write-Error "Unable to re-write old policy XML for policy $Policy but it can be recovered at $BackupOldPolicy"
-                                }
+                                Write-Error "Unable to re-write old policy XML for policy $Policy but it can be recovered at $BackupOldPolicy"
                             }
                         }
                     }
@@ -294,7 +249,7 @@ function Merge-TrustedWDACRules {
         if ($MostRecentPolicy -and $BackupOldPolicy) {
             if (Test-Path $BackupOldPolicy) {
                 try {
-                    Receive-FileAsPolicy -FilePath $BackupOldPolicy -PolicyGUID $Policy -ErrorAction Stop
+                    Receive-FileAsPolicy -FilePath $BackupOldPolicy -PolicyGUID $MostRecentPolicy -ErrorAction Stop
                     Remove-Item $BackupOldPolicy -ErrorAction SilentlyContinue
                 } catch {
                     Write-Error "Unable to re-write old policy XML for policy $MostRecentPolicy but it can be recovered at $BackupOldPolicy"
