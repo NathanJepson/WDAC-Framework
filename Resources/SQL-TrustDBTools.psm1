@@ -229,10 +229,11 @@ function Get-WDACGroups {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     GroupName = ($Reader["GroupName"]);
@@ -375,10 +376,11 @@ function Get-MSIorScriptAllHashes {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $Result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     SHA256FlatHash = $Reader["SHA256FlatHash"];
@@ -658,10 +660,11 @@ function Get-WDACAppsAllHashes {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $Result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     SHA256FlatHash = $Reader["SHA256FlatHash"];
@@ -710,10 +713,11 @@ function Get-WDACAppSigners {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     AppIndex = [int]($Reader["AppIndex"]);
@@ -768,10 +772,11 @@ function Get-WDACAppSignersByFlatHash {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     AppIndex = [int]($Reader["AppIndex"]);
@@ -824,10 +829,11 @@ function Get-WDACAppsToSetTrust {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     SHA256FlatHash = $Reader["SHA256FlatHash"];
@@ -1251,10 +1257,10 @@ function Get-WDACCertificate {
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
    
-        if ($Reader.HasRows) {
-            $result = @()
-        }
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
                     TBSHash = $Reader["TBSHash"];
@@ -1711,10 +1717,11 @@ function Get-WDACPoliciesById {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
                     PolicyGUID = $Reader["PolicyGUID"];
@@ -1828,10 +1835,11 @@ function Get-WDACPoliciesGUIDandName {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     PolicyGUID = $Reader["PolicyGUID"];
@@ -1877,10 +1885,11 @@ function Get-AllWDACPoliciesAndAllInfo {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     PolicyGUID = $Reader["PolicyGUID"];
@@ -1946,10 +1955,11 @@ function Get-WDACPolicyAssignments {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 if ($IncludePolicyName) {
                     if ($IncludeGroupName) {
@@ -2343,10 +2353,11 @@ function Get-WDACFilePublishers {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 
                 $VersionNumMin = $Reader["MinimumAllowedVersion"];
@@ -2456,10 +2467,11 @@ function Get-WDACFilePublishersDefinitive {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
                     PublisherIndex = $Reader["PublisherIndex"];

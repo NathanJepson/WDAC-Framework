@@ -46,10 +46,11 @@ function Get-PotentialHashRules {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 if ($MSIorScript) {
                     $result += [PSCustomObject]@{
@@ -168,10 +169,11 @@ function Get-PotentialFileNameRules {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.Read()) {
-            $result = @()
-        }
+ 
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
                     FileName = $Reader["FileName"];
@@ -233,11 +235,11 @@ function Get-PotentialLeafCertificateRules {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-   
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
                     TBSHash = $Reader["TBSHash"];
@@ -306,10 +308,10 @@ function Get-PotentialPcaCertificateRules {
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
    
-        if ($Reader.HasRows) {
-            $result = @()
-        }
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
                     TBSHash = $Reader["TBSHash"];
@@ -377,10 +379,11 @@ function Get-PotentialPublisherRules {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
                     LeafCertCN = $Reader["LeafCertCN"];
@@ -447,10 +450,11 @@ function Get-PotentialFilePublisherRules {
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
-        if ($Reader.HasRows) {
-            $result = @()
-        }
+
         while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
                     PublisherIndex = $Reader["PublisherIndex"];
