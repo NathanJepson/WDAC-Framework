@@ -265,6 +265,7 @@ function New-MicrosoftSecureBootFileNameRule {
 
     $result = @()
     $Name = $RuleInfo.FileName
+    $Name | Out-Host
     $TemporaryFile = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $Name
 
     if ($RuleInfo.Blocked -eq $true) {
@@ -281,12 +282,8 @@ function New-MicrosoftSecureBootFileNameRule {
         }
         $blockResultUserMode.Id = $ID_User
         $blockResultKernel.Id = $ID_Kernel
-        # $blockResultUserMode.TypeId = "Deny"
-        # $blockResultKernel.TypeId = "Deny"
         $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
         $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
-        # $blockResultUserMode.Name = $Name
-        # $blockResultKernel.Name = $Name
         $result += $blockResultUserMode
         $result += $blockResultKernel
     } else {
@@ -299,9 +296,13 @@ function New-MicrosoftSecureBootFileNameRule {
                 $RuleMap = $RuleMap + @{$ID_Kernel=$true}
             }
             $kernelResult.ID = $ID_Kernel
-            # $kernelResult.TypeId = "Allow"
-            $kernelResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
-            # $kernelResult.Name = $Name
+
+            if ($RuleInfo.SpecificFileNameLevel -ne "OriginalFileName") {
+                $kernelResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]($RuleInfo.SpecificFileNameLevel),$RuleInfo.FileName);
+            } else {
+                $kernelResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+            }
+
             $result += $kernelResult
         }
         if ($RuleInfo.TrustedUserMode -eq $true) {
@@ -313,9 +314,13 @@ function New-MicrosoftSecureBootFileNameRule {
                 $RuleMap = $RuleMap + @{$ID_User=$true}
             }
             $userModeResult.ID = $ID_User
-            # $userModeResult.TypeId = "Allow"
-            $userModeResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
-            # $userModeResult.Name = $Name
+
+            if ($RuleInfo.SpecificFileNameLevel -ne "OriginalFileName") {
+                $userModeResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]($RuleInfo.SpecificFileNameLevel),$RuleInfo.FileName);
+            } else {
+                $userModeResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+            }
+
             $result += $userModeResult
         }
     }
