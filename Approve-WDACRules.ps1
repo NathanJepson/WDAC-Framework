@@ -659,22 +659,26 @@ function Read-WDACConferredTrust {
         }
 
         ### DO WE TRUST IT AT USERMODE OR KERNEL MODE? #############################################################
-        $SigningLevelToTrustRuleAt = $null
-        $SigningScenario = $AppInfo.SigningScenario
-        if ($LevelToTrustAt -eq "FilePath") {
-        #FilePath rules can only be applied to user-mode binaries
-            $SigningLevelToTrustRuleAt = "UserMode"
-        } elseif ($OverrideUserorKernelDefaults) {
-            $UserModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -UserMode -Connection $Connection -ErrorAction Stop
-            $KernelModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver -Connection $Connection -ErrorAction Stop
-            $SigningLevelToTrustRuleAt = Get-ChosenSigningScenario -Prompt "What Signing level do you trust this application at?" -UserModeAppTrustLevels $UserModeTrustLevels -KernelModeAppTrustLevels $KernelModeTrustLevels
-        } else {
-            if ($SigningScenario -eq "UserMode") {
+        if (-not ($AppsToBlock[$SHA256FlatHash])) {
+        #Currently, when blocked is selected, it is blocked on UserMode and Kernel mode by default. This may change in the future.
+        #...The signing scenario therefore doesn't need to be selected if the app is blocked.
+            $SigningLevelToTrustRuleAt = $null
+            $SigningScenario = $AppInfo.SigningScenario
+            if ($LevelToTrustAt -eq "FilePath") {
+            #FilePath rules can only be applied to user-mode binaries
                 $SigningLevelToTrustRuleAt = "UserMode"
-            } elseif ($SigningScenario -eq "Driver") {
-                $SigningLevelToTrustRuleAt = "Driver"
+            } elseif ($OverrideUserorKernelDefaults) {
+                $UserModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -UserMode -Connection $Connection -ErrorAction Stop
+                $KernelModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver -Connection $Connection -ErrorAction Stop
+                $SigningLevelToTrustRuleAt = Get-ChosenSigningScenario -Prompt "What Signing level do you trust this application at?" -UserModeAppTrustLevels $UserModeTrustLevels -KernelModeAppTrustLevels $KernelModeTrustLevels
             } else {
-                $SigningLevelToTrustRuleAt = "UserMode"
+                if ($SigningScenario -eq "UserMode") {
+                    $SigningLevelToTrustRuleAt = "UserMode"
+                } elseif ($SigningScenario -eq "Driver") {
+                    $SigningLevelToTrustRuleAt = "Driver"
+                } else {
+                    $SigningLevelToTrustRuleAt = "UserMode"
+                }
             }
         }
         ############################################################################################################
@@ -711,6 +715,11 @@ function Read-WDACConferredTrust {
                 $PublisherIndex = (Get-WDACPublisher -LeafCertCN $Signer.LeafCert.CommonName -PcaCertTBSHash $Signer.PcaCertificate.TBSHash -Connection $Connection -ErrorAction Stop).PublisherIndex
                 $Publishers.Add($Signer.SignatureIndex,$PublisherIndex)
             }
+        }
+
+        if (($AppsToBlock[$SHA256FlatHash])) {
+        #Don't trust at Kernel or UserMode if "Blocked" was selected
+            $SigningLevelToTrustRuleAt = $null
         }
 
         switch ($LevelToTrustAt) {
