@@ -1,3 +1,15 @@
+if ((Split-Path ((Get-Item $PSScriptRoot).Parent) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\..\"
+} else {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
+}
+
 function CountMapToPattern {
     [CmdletBinding()]
     param (
@@ -265,7 +277,6 @@ function New-MicrosoftSecureBootFileNameRule {
 
     $result = @()
     $Name = $RuleInfo.FileName
-    $Name | Out-Host
     $TemporaryFile = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $Name
 
     if ($RuleInfo.Blocked -eq $true) {
@@ -332,31 +343,160 @@ function New-MicrosoftSecureBootLeafCertificateRule {
     [CmdletBinding()]
     param (
         [ValidateNotNullOrEmpty()]
-        $RuleInfo
+        $RuleInfo,
+        $RuleMap,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $PSModuleRoot
     )
+
+    $result = @()
+    $Name = $RuleInfo.CommonName
+    #NOTE: Temporary XML--with the common name and cert TBS hash are copied here. The reason I do this is
+    #...because Microsoft doesn't allow you to set the "root" property of a [Microsoft.SecureBoot.UserConfig.Rule] type directly
+    $TempFilePath = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( "TEMPORARY_PLACEHOLDER_POLICY_DO_NOT_IMPLEMENT.xml")))
+
+    if ($RuleInfo.Blocked -eq $true) {
+        $XML_Denied_Driver = Get-Content (Join-Path $PSModuleRoot -ChildPath ".\Resources\DeniedSigner_Placeholder_Driver.xml") -ErrorAction Stop
+        $XML_Denied_UserMode = Get-Content (Join-Path $PSModuleRoot -ChildPath ".\Resources\DeniedSigner_Placeholder_UserMode.xml") -ErrorAction Stop
+
+        $ID = IncrementSignerID -RuleMap $RuleMap
+        $RuleMap = $RuleMap + @{$ID=$true}
+        $ID2 = IncrementSignerID -RuleMap $RuleMap
+        $RuleMap = $RuleMap + @{$ID2=$true}
+
+        $XML_Denied_Driver = $XML_Denied_Driver.Replace('<CertPublisher Value="PLACEHOLDER_COMPANY_FAKE_LLC" />','').Replace('ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD',$($RuleInfo.TBSHash)).Replace('PLACEHOLDER_COMMON_NAME_FAKE',$Name).Replace('ID_SIGNER_S_1',$ID)
+        $XML_Denied_Driver | Set-Content $TempFilePath -Force -ErrorAction Stop
+        $DriverBlockRule = (Get-CIPolicy -FilePath $TempFilePath -ErrorAction Stop)[0]
+
+        $XML_Denied_UserMode = $XML_Denied_UserMode.Replace('<CertPublisher Value="PLACEHOLDER_COMPANY_FAKE_LLC" />','').Replace('ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD',$($RuleInfo.TBSHash)).Replace('PLACEHOLDER_COMMON_NAME_FAKE',$Name).Replace('ID_SIGNER_S_1',$ID2)
+        $XML_Denied_UserMode | Set-Content $TempFilePath -Force -ErrorAction Stop
+        $UserModeBlockRule = (Get-CIPolicy -FilePath $TempFilePath -ErrorAction Stop)[0]
+
+        $result += $DriverBlockRule
+        $result += $UserModeBlockRule
+    } else {
+        if ($RuleInfo.TrustedDriver -eq $true) {
+            $ID = IncrementSignerID -RuleMap $RuleMap
+            $RuleMap = $RuleMap + @{$ID=$true}
+            $XML_Allowed_Driver = Get-Content (Join-Path $PSModuleRoot -ChildPath ".\Resources\AllowedSigner_Placeholder_Driver.xml") -ErrorAction Stop
+
+            $XML_Allowed_Driver = $XML_Allowed_Driver.Replace('<CertPublisher Value="PLACEHOLDER_COMPANY_FAKE_LLC" />','').Replace('ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD',$($RuleInfo.TBSHash)).Replace('PLACEHOLDER_COMMON_NAME_FAKE',$Name).Replace('ID_SIGNER_S_1',$ID)
+            $XML_Allowed_Driver | Set-Content $TempFilePath -Force -ErrorAction Stop
+            $DriverAllowRule = (Get-CIPolicy -FilePath $TempFilePath -ErrorAction Stop)[0]
+
+            $result += $DriverAllowRule
+        }
+        if ($RuleInfo.TrustedUserMode -eq $true) {
+            $ID = IncrementSignerID -RuleMap $RuleMap
+            $RuleMap = $RuleMap + @{$ID=$true}
+            $XML_Allowed_UserMode = Get-Content (Join-Path $PSModuleRoot -ChildPath ".\Resources\AllowedSigner_Placeholder_UserMode.xml") -ErrorAction Stop
+
+            $XML_Allowed_UserMode = $XML_Allowed_UserMode.Replace('<CertPublisher Value="PLACEHOLDER_COMPANY_FAKE_LLC" />','').Replace('ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD',$($RuleInfo.TBSHash)).Replace('PLACEHOLDER_COMMON_NAME_FAKE',$Name).Replace('ID_SIGNER_S_1',$ID)
+            $XML_Allowed_UserMode | Set-Content $TempFilePath -Force -ErrorAction Stop
+            $UserModeAllowRule = (Get-CIPolicy -FilePath $TempFilePath -ErrorAction Stop)[0]
+
+            $result += $UserModeAllowRule
+        }
+    }
+
+    Remove-Item $TempFilePath -ErrorAction SilentlyContinue
+    return $result,$RuleMap
 }
 
 function New-MicrosoftSecureBootPcaCertificateRule {
     [CmdletBinding()]
     param (
         [ValidateNotNullOrEmpty()]
-        $RuleInfo
+        $RuleInfo,
+        $RuleMap,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $PSModuleRoot
     )
+
+    #As of now, there is no reasonable difference between a PcaCertificate rule and a LeafCertificate rule (by XML alone)
+    $result,$RuleMap = (New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $RuleInfo -RuleMap $RuleMap -PSModuleRoot $PSModuleRoot -ErrorAction Stop)
+    return $result,$RuleMap
 }
 
 function New-MicrosoftSecureBootPublisherRule {
     [CmdletBinding()]
     param (
         [ValidateNotNullOrEmpty()]
-        $RuleInfo
+        $RuleInfo,
+        $RuleMap,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $PSModuleRoot,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
     )
+
+    $result = @()
+
+    $result = @()
+    $LeafCommonName = $RuleInfo.LeafCertCN
+    $Name = (Get-WDACCertificateCommonName -TBSHash $RuleInfo.PcaCertTBSHash -Connection $Connection -ErrorAction Stop).CommonName
+    #NOTE: Temporary XML--with the common name and cert TBS hash are copied here. The reason I do this is
+    #...because Microsoft doesn't allow you to set the "root" property of a [Microsoft.SecureBoot.UserConfig.Rule] type directly
+    $TempFilePath = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( "TEMPORARY_PLACEHOLDER_POLICY_DO_NOT_IMPLEMENT.xml")))
+
+    if ($RuleInfo.Blocked -eq $true) {
+        $XML_Denied_Driver = Get-Content (Join-Path $PSModuleRoot -ChildPath ".\Resources\DeniedSigner_Placeholder_Driver.xml") -ErrorAction Stop
+        $XML_Denied_UserMode = Get-Content (Join-Path $PSModuleRoot -ChildPath ".\Resources\DeniedSigner_Placeholder_UserMode.xml") -ErrorAction Stop
+
+        $ID = IncrementSignerID -RuleMap $RuleMap
+        $RuleMap = $RuleMap + @{$ID=$true}
+        $ID2 = IncrementSignerID -RuleMap $RuleMap
+        $RuleMap = $RuleMap + @{$ID2=$true}
+
+        $XML_Denied_Driver = $XML_Denied_Driver.Replace('PLACEHOLDER_COMPANY_FAKE_LLC',$LeafCommonName).Replace('ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD',$($RuleInfo.PcaCertTBSHash)).Replace('PLACEHOLDER_COMMON_NAME_FAKE',$Name).Replace('ID_SIGNER_S_1',$ID)
+        $XML_Denied_Driver | Set-Content $TempFilePath -Force -ErrorAction Stop
+        $DriverBlockRule = (Get-CIPolicy -FilePath $TempFilePath -ErrorAction Stop)[0]
+
+        $XML_Denied_UserMode = $XML_Denied_UserMode.Replace('PLACEHOLDER_COMPANY_FAKE_LLC',$LeafCommonName).Replace('ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD',$($RuleInfo.PcaCertTBSHash)).Replace('PLACEHOLDER_COMMON_NAME_FAKE',$Name).Replace('ID_SIGNER_S_1',$ID2)
+        $XML_Denied_UserMode | Set-Content $TempFilePath -Force -ErrorAction Stop
+        $UserModeBlockRule = (Get-CIPolicy -FilePath $TempFilePath -ErrorAction Stop)[0]
+
+        $result += $DriverBlockRule
+        $result += $UserModeBlockRule
+    } else {
+        if ($RuleInfo.TrustedDriver -eq $true) {
+            $ID = IncrementSignerID -RuleMap $RuleMap
+            $RuleMap = $RuleMap + @{$ID=$true}
+            $XML_Allowed_Driver = Get-Content (Join-Path $PSModuleRoot -ChildPath ".\Resources\AllowedSigner_Placeholder_Driver.xml") -ErrorAction Stop
+
+            $XML_Allowed_Driver = $XML_Allowed_Driver.Replace('PLACEHOLDER_COMPANY_FAKE_LLC',$LeafCommonName).Replace('ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD',$($RuleInfo.PcaCertTBSHash)).Replace('PLACEHOLDER_COMMON_NAME_FAKE',$Name).Replace('ID_SIGNER_S_1',$ID)
+            $XML_Allowed_Driver | Set-Content $TempFilePath -Force -ErrorAction Stop
+            $DriverAllowRule = (Get-CIPolicy -FilePath $TempFilePath -ErrorAction Stop)[0]
+
+            $result += $DriverAllowRule
+        }
+        if ($RuleInfo.TrustedUserMode -eq $true) {
+            $ID = IncrementSignerID -RuleMap $RuleMap
+            $RuleMap = $RuleMap + @{$ID=$true}
+            $XML_Allowed_UserMode = Get-Content (Join-Path $PSModuleRoot -ChildPath ".\Resources\AllowedSigner_Placeholder_UserMode.xml") -ErrorAction Stop
+
+            $XML_Allowed_UserMode = $XML_Allowed_UserMode.Replace('PLACEHOLDER_COMPANY_FAKE_LLC',$LeafCommonName).Replace('ABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCDABCD',$($RuleInfo.PcaCertTBSHash)).Replace('PLACEHOLDER_COMMON_NAME_FAKE',$Name).Replace('ID_SIGNER_S_1',$ID)
+            $XML_Allowed_UserMode | Set-Content $TempFilePath -Force -ErrorAction Stop
+            $UserModeAllowRule = (Get-CIPolicy -FilePath $TempFilePath -ErrorAction Stop)[0]
+
+            $result += $UserModeAllowRule
+        }
+    }
+
+    Remove-Item $TempFilePath -ErrorAction SilentlyContinue
+    return $result,$RuleMap
 }
 
 function New-MicrosoftSecureBootFilePublisherRule {
     [CmdletBinding()]
     param (
         [ValidateNotNullOrEmpty()]
-        $RuleInfo
+        $RuleInfo,
+        $RuleMap
     )
 }
 

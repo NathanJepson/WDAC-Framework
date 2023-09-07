@@ -15,3 +15,7 @@ Test-Script.ps1
 !Resources/AllowAll.xml
 !Resources/DenyAllAudit.xml
 !Resources/SupplementalShell.xml
+!Resources/AllowedSigner_Placeholder_Driver.xml
+!Resources/AllowedSigner_Placeholder_UserMode.xml
+!Resources/DeniedSigner_Placeholder_Driver.xml
+!Resources/DeniedSigner_Placeholder_UserMode.xml

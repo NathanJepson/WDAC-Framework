@@ -44,6 +44,7 @@ function Merge-TrustedWDACRules {
 
     #The only reason that -SkipEditionCheck is used here is that I'm reasonably sure that using these commands won't break in PowerShell 7, but I could be wrong!
     #...Either way, this is really the only way that this cmdlet works. I could wrap everything (EVERYTHING) in a PowerShell 5.1 block, but I don't think I need to.
+    #...(And I run into weird constrained language mode restrictions if I try and do that.)
     Import-Module -SkipEditionCheck -Name "ConfigCI"
 
     if (-not $Levels) {
@@ -156,7 +157,7 @@ function Merge-TrustedWDACRules {
                 "LeafCertificate" {
                     $PotentialLeafCertRules = Get-PotentialLeafCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($LeafCertRule in $PotentialLeafCertRules) {
-                        $rule,$IDsAndComments = New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $LeafCertRule -RuleMap $IDsAndComments -ErrorAction Stop
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $LeafCertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
@@ -166,7 +167,7 @@ function Merge-TrustedWDACRules {
                 "PcaCertificate" {
                     $PotentialPcaCertRules = Get-PotentialPcaCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($PcaCertRule in $PotentialPcaCertRules) {
-                        $rule,$IDsAndComments = New-MicrosoftSecureBootPcaCertificateRule -RuleInfo $PcaCertRule -RuleMap $IDsAndComments -ErrorAction Stop
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootPcaCertificateRule -RuleInfo $PcaCertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
@@ -176,7 +177,7 @@ function Merge-TrustedWDACRules {
                 "Publisher" {
                     $PotentialPublisherRules = Get-PotentialPublisherRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($PublisherRule in $PotentialPublisherRules) {
-                        $rule,$IDsAndComments = New-MicrosoftSecureBootPublisherRule -RuleInfo $PublisherRule -RuleMap $IDsAndComments -ErrorAction Stop
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootPublisherRule -RuleInfo $PublisherRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -Connection $Connection -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += 1
