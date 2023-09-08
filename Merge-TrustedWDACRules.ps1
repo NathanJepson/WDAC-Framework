@@ -1,10 +1,67 @@
+function Add-LineBeforeSpecificLine {
+    [CmdletBinding()]
+    param (
+        $Line,
+        $LineNumber,
+        $FilePath
+    )
+
+    if ($LineNumber -le 1) {
+        throw "Cannot append line at this location."
+    }
+
+    $FileContent = Get-Content -Path $FilePath
+    $result = @()
+    for ($i=0; $i -lt $FileContent.Count; $i++) {
+        $result += $FileContent[$i]
+        if ($i -eq ($LineNumber -1)) {
+            $result += $Line
+        }
+    }
+
+    $result | Set-Content -Path $FilePath -Force
+}
+
+function Add-WDACRuleComments {
+    [CmdletBinding()]
+    param (
+        $IDsAndComments,
+        $FilePath
+    )
+
+    foreach ($Entry in $IDsAndComments.GetEnumerator()) {
+        if (($Entry.Value) -and ($Entry.Value -ne $true)) {
+            $ID = $Entry.Key
+            $Comment = ("<!-- " + $Entry.Value + " -->")
+            $IDInstances = Select-String -Path $FilePath -Pattern $ID
+            foreach ($IDInstance in $IDInstances) {
+                if ($IDInstance.LineNumber -gt 1) {
+                    if (-not (((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "<!--") -or ((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "-->"))) {
+                    #If there is not already a comment above the line where the ID appears
+                    
+                        Add-LineBeforeSpecificLine -Line $Comment -LineNumber $IDInstance.LineNumber -FilePath $FilePath -ErrorAction Stop
+                    }
+                }
+            }
+        }
+    }
+}
+
 function Merge-TrustedWDACRules {
     <#
     .SYNOPSIS
     For specified Policies only, this cmdlet will observe any entry in the database with a trust or block flag (with no staged flag), and will merge those rules into the designated AllowedPolicyID or BlockingPolicyID
 
     .DESCRIPTION
-    TODO
+    For each instance of a potential rule with a trust or block flag in the database, a new [Microsoft.SecureBoot.UserConfig.Rule] is created which will
+    eventually be merged with the correct policy using the Merge-CIPolicy cmdlet. ConfigCI is imported directly into your version of PowerShell,
+    e.g., PowerShell 7 (rather than running in a PowerShell 5.1 container--which is potentially dangerous, since it is not approved for PowerShell 7 yet.)
+    If a potential rule entry (for example, a row of the publishers table) has a COMMENT entry, this cmdlet will attempt to put an XML comment
+    above where the rule is located in the .XML file. 
+    For signers and publishers, a [Microsoft.SecureBoot.UserConfig.Rule] object is created using Get-CIPolicy with a temporary XML object containing the correct
+    root or publisher name--since there is no other way that Microsoft allows you to create a [Microsoft.SecureBoot.UserConfig.Rule] using a custom root 
+    (other than ingesting a certificate directly--which I don't want to do because many of the database entries are events which are pulled from remote devices and it'd
+    be too much of a hassle to try and grab certificates from all those remote devices--especially if the app directories are not accessible or the files are deleted.)
 
     Author: Nathan Jepson
     License: MIT License
@@ -208,6 +265,7 @@ function Merge-TrustedWDACRules {
                 }
 
                 Merge-CIPolicy -PolicyPaths (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop) -Rules $RulesToMerge -OutputFilePath $TempFilePath -ErrorAction Stop
+                Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $TempFilePath -ErrorAction Stop
                 Receive-FileAsPolicy -FilePath $TempFilePath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
 
                 $PolicyVersion = (Get-PolicyVersionNumber -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop).PolicyVersion
