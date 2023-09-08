@@ -94,10 +94,10 @@ function Merge-TrustedWDACRules {
     When Levels are specified, only rules from the specified levels will be merged to policies
 
     .EXAMPLE
-    TODO
+    Merge-TrustedWDACRules -PolicyGUID "d800d7bc-7be6-45d6-8665-91d9d61c3530" -Level Publisher -Verbose
 
     .EXAMPLE
-    TODO
+    Merge-TrustedWDACRules -GroupName Cashiers -Levels FilePublisher,Publisher,Hash
     #>
 
     [CmdletBinding()]
