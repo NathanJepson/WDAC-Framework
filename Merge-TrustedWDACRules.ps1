@@ -14,7 +14,8 @@ function Add-LineBeforeSpecificLine {
     $result = @()
     for ($i=0; $i -lt $FileContent.Count; $i++) {
         $result += $FileContent[$i]
-        if ($i -eq ($LineNumber -1)) {
+        if ($i -eq ($LineNumber - 2)) {
+        #The reason we subtract 2 here instead of 1 is because the count starts at 0 while the line numbers start at 1
             $result += $Line
         }
     }
@@ -34,12 +35,23 @@ function Add-WDACRuleComments {
             $ID = $Entry.Key
             $Comment = ("<!-- " + $Entry.Value + " -->")
             $IDInstances = Select-String -Path $FilePath -Pattern $ID
-            foreach ($IDInstance in $IDInstances) {
-                if ($IDInstance.LineNumber -gt 1) {
-                    if (-not (((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "<!--") -or ((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "-->"))) {
-                    #If there is not already a comment above the line where the ID appears
-                    
-                        Add-LineBeforeSpecificLine -Line $Comment -LineNumber $IDInstance.LineNumber -FilePath $FilePath -ErrorAction Stop
+
+            for ($i=0; $i -lt $IDInstances.Count; $i++) {
+                #The reason we grab a second time for each instance is that line numbers are all changed once a line is appended to a location
+                $IDInstances2 = Select-String -Path $FilePath -Pattern $ID
+
+                foreach ($IDInstance in $IDInstances2) {
+                    if (($IDInstances[$i]).Line -eq $IDInstance.Line) {
+                        if ( ($IDInstance.LineNumber) -gt 1) {
+                            if (-not (((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "<!--") -or ((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "-->"))) {
+                            #If there is not already a comment above the line where the ID appears
+                            
+                                Add-LineBeforeSpecificLine -Line $Comment -LineNumber $IDInstance.LineNumber -FilePath $FilePath -ErrorAction Stop
+                                break;
+                            } else {
+                                continue;
+                            }
+                        }
                     }
                 }
             }
