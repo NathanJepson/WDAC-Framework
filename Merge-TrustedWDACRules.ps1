@@ -1,3 +1,52 @@
+function CommentPreserving {
+    [CmdletBinding()]
+    param (
+        $IDsAndComments,
+        $FilePath
+    )
+
+    $FileContent = Get-Content $FilePath -ErrorAction Stop
+    $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-F0-9]+(?=")'
+    $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-F0-9]+(?=")'
+    $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-F0-9]+(?=")'
+    $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-F0-9]+(?=")'
+    $CommentPattern = "(?<=<!--).+(?=-->)"
+
+    for ($i=0; $i -lt $FileContent.Count; $i++) {
+        if ( (($FileContent[$i] -match $Pattern1) -or ($FileContent[$i] -match $Pattern2) -or ($FileContent[$i] -match $Pattern3) -or ($FileContent[$i] -match $Pattern4)) -and ($i -gt 0)) {
+            $TempID = $Matches[0]
+            if ($IDsAndComments[$TempID] -eq $true -and ($FileContent[$i -1] -match $CommentPattern)) {
+                $IDsAndComments[$TempID] = $Matches[0]
+            }
+        }
+    }
+
+    return $IDsAndComments
+}
+
+function Remove-UnderscoreDigits {
+#This function removes the underscore digits at the end since we've already accounted for duplicates
+    [CmdletBinding()]
+    param (
+        $FilePath
+    )
+
+    $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-F0-9]+(?=")'
+    $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-F0-9]+(?=")'
+    $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-F0-9]+(?=")'
+    $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-F0-9]+(?=")'
+    
+    $FileContent = Get-Content -Path $FilePath -ErrorAction Stop
+
+    for ($i=0; $i -lt $FileContent.Count; $i++) {
+        if ( ($FileContent[$i] -match $Pattern1) -or ($FileContent[$i] -match $Pattern2) -or ($FileContent[$i] -match $Pattern3) -or ($FileContent[$i] -match $Pattern4)) {
+            $FileContent[$i] = $FileContent[$i].replace($Matches[0],$Matches[0].Substring(0,$Matches[0].Length-2))
+        }
+    }
+
+    $FileContent | Set-Content -Path $FilePath -Force -ErrorAction Stop
+}
+
 function Add-LineBeforeSpecificLine {
     [CmdletBinding()]
     param (
@@ -33,7 +82,7 @@ function Add-WDACRuleComments {
     foreach ($Entry in $IDsAndComments.GetEnumerator()) {
         if (($Entry.Value) -and ($Entry.Value -ne $true)) {
             $ID = $Entry.Key
-            $Comment = ("<!-- " + $Entry.Value + " -->")
+            $Comment = ("<!--" + $Entry.Value + "-->")
             $IDInstances = Select-String -Path $FilePath -Pattern $ID
 
             for ($i=0; $i -lt $IDInstances.Count; $i++) {
@@ -276,7 +325,11 @@ function Merge-TrustedWDACRules {
                     Copy-Item (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction SilentlyContinue) -Destination $BackupOldPolicy -ErrorAction SilentlyContinue
                 }
 
-                Merge-CIPolicy -PolicyPaths (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop) -Rules $RulesToMerge -OutputFilePath $TempFilePath -ErrorAction Stop
+                $FullPolicyPath = (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop)
+                $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $FullPolicyPath -ErrorAction Stop
+                Merge-CIPolicy -PolicyPaths $FullPolicyPath -Rules $RulesToMerge -OutputFilePath $TempFilePath -ErrorAction Stop
+                #Since we've already checked for duplicate IDs, we can remove the _0 and _1 that Merge-CIPolicy puts at the end of each ID
+                Remove-UnderscoreDigits -FilePath $TempFilePath -ErrorAction Stop
                 Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $TempFilePath -ErrorAction Stop
                 Receive-FileAsPolicy -FilePath $TempFilePath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
 
