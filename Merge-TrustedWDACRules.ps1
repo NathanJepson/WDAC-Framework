@@ -163,7 +163,7 @@ function Merge-TrustedWDACRules {
     #The only reason that -SkipEditionCheck is used here is that I'm reasonably sure that using these commands won't break in PowerShell 7, but I could be wrong!
     #...Either way, this is really the only way that this cmdlet works. I could wrap everything (EVERYTHING) in a PowerShell 5.1 block, but I don't think I need to.
     #...(And I run into weird constrained language mode restrictions if I try and do that.)
-    Import-Module -SkipEditionCheck -Name "ConfigCI"
+    Import-Module -SkipEditionCheck -Name "ConfigCI" -Verbose:$false
 
     if (-not $Levels) {
         $Levels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
@@ -242,19 +242,26 @@ function Merge-TrustedWDACRules {
                     $PotentialHashRules_MSIorScript = Get-PotentialHashRules -MSIorScript -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
 
                     foreach ($HashRulePE in $PotentialHashRules_PE) {
-                        
+                        if ( ($HashRulePE.Blocked -eq $true) -and (($HashRulePE.TrustedDriver -eq $true) -or ($HashRulePE.TrustedUserMode -eq $true))) {
+                            Write-Warning "PE Hash rule with hash $($HashRulePE.SHA256FlatHash) is both trusted and blocked. Skipping."
+                            continue
+                        }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootHashRule -RuleInfo $HashRulePE -RuleMap $IDsAndComments -ErrorAction Stop
-
                         if ($rule) {
                             $RulesToMerge += $rule
-                            $RulesAdded += 1
+                            $RulesAdded += ($rule.Count)
                         }
                     }
+
                     foreach ($HashRuleMSI in $PotentialHashRules_MSIorScript) {
-                        $rule = New-MicrosoftSecureBootHashRule -RuleInfo $HashRuleMSI -MSIorScript -RuleMap $IDsAndComments -ErrorAction Stop
+                        if ( ($HashRuleMSI.Blocked -eq $true) -and (($HashRuleMSI.TrustedDriver -eq $true) -or ($HashRuleMSI.TrustedUserMode -eq $true))) {
+                            Write-Warning "MSI or script Hash rule with hash $($HashRuleMSI.SHA256FlatHash) is both trusted and blocked. Skipping."
+                            continue
+                        }
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootHashRule -RuleInfo $HashRuleMSI -MSIorScript -RuleMap $IDsAndComments -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
-                            $RulesAdded += 1
+                            $RulesAdded += ($rule.Count)
                         }
                     }
                 }
@@ -265,49 +272,170 @@ function Merge-TrustedWDACRules {
                 "FileName" {
                     $PotentialFileNameRules = Get-PotentialFileNameRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($FileNameRule in $PotentialFileNameRules) {
+                        if ( ($FileNameRule.Blocked -eq $true) -and (($FileNameRule.TrustedDriver -eq $true) -or ($FileNameRule.TrustedUserMode -eq $true))) {
+                            Write-Warning "FileName rule with name $($FileNameRule.FileName) and SpecificFileNameLevel $($FileNameRule.SpecificFileNameLevel) is both trusted and blocked. Skipping."
+                            continue
+                        }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootFileNameRule -RuleInfo $FileNameRule -RuleMap $IDsAndComments -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
-                            $RulesAdded += 1
+                            $RulesAdded += ($rule.Count)
                         }
                     }
                 }
                 "LeafCertificate" {
                     $PotentialLeafCertRules = Get-PotentialLeafCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($LeafCertRule in $PotentialLeafCertRules) {
+                        if ( ($LeafCertRule.Blocked -eq $true) -and (($LeafCertRule.TrustedDriver -eq $true) -or ($LeafCertRule.TrustedUserMode -eq $true))) {
+                            Write-Warning "LeafCert rule with TBS Hash $($LeafCertRule.TBSHash) is both trusted and blocked. Skipping."
+                            continue
+                        }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $LeafCertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
-                            $RulesAdded += 1
+                            $RulesAdded += ($rule.Count)
                         }
                     }
                 }
                 "PcaCertificate" {
                     $PotentialPcaCertRules = Get-PotentialPcaCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($PcaCertRule in $PotentialPcaCertRules) {
+                        if ( ($PcaCertRule.Blocked -eq $true) -and (($PcaCertRule.TrustedDriver -eq $true) -or ($PcaCertRule.TrustedUserMode -eq $true))) {
+                            Write-Warning "PcaCert rule with TBS Hash $($PcaCertRule.TBSHash) is both trusted and blocked. Skipping."
+                            continue
+                        }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootPcaCertificateRule -RuleInfo $PcaCertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
-                            $RulesAdded += 1
+                            $RulesAdded += ($rule.Count)
                         }
                     }
                 }
                 "Publisher" {
                     $PotentialPublisherRules = Get-PotentialPublisherRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
                     foreach ($PublisherRule in $PotentialPublisherRules) {
+                        if ( ($PublisherRule.Blocked -eq $true) -and (($PublisherRule.TrustedDriver -eq $true) -or ($PublisherRule.TrustedUserMode -eq $true))) {
+                            Write-Warning "Publisher rule with index $($PublisherRule.PublisherIndex) is both trusted and blocked. Skipping."
+                            continue
+                        }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootPublisherRule -RuleInfo $PublisherRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -Connection $Connection -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
-                            $RulesAdded += 1
+                            $RulesAdded += ($rule.Count)
                         }
                     }
                 }
                 "FilePublisher" {
-                   $PotentialFilePublisherRules = Get-PotentialFilePublisherRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
+                    $PotentialFilePublisherRules = Get-PotentialFilePublisherRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
+                    $FilePublisherPublishers_User_Allow = @{}
+                    $FilePublisherPublishers_Kernel_Allow = @{}
+                    $FilePublisherPublishers_User_Deny = @{}
+                    $FilePublisherPublishers_Kernel_Deny = @{}
+
                     foreach ($FilePublisherRule in $PotentialFilePublisherRules) {
-                        $rule,$IDsAndComments = New-MicrosoftSecureBootFilePublisherRule -RuleInfo $FilePublisherRule -RuleMap $IDsAndComments -ErrorAction Stop
-                        if ($rule) {
-                            $RulesToMerge += $rule
+                        if ( ($FilePublisherRule.Blocked -eq $true) -and (($FilePublisherRule.TrustedDriver -eq $true) -or ($FilePublisherRule.TrustedUserMode -eq $true))) {
+                            Write-Warning "FilePublisher rule with publisher index $($FilePublisherRule.PublisherIndex) and FileName $($FilePublisherRule.FileName) is both trusted and blocked. Skipping."
+                            continue
+                        }
+
+                        $TempPublisherRule = Get-WDACPublisherByPublisherIndex -PublisherIndex $FilePublisherRule.PublisherIndex -Connection $Connection -ErrorAction Stop
+                        $TempPublisherRule.Comment = $null
+
+                        if ($FilePublisherRule.Blocked -eq $true) {
+                            if (-not (($FilePublisherPublishers_User_Deny[$FilePublisherRule.PublisherIndex]))) {
+                            #We don't need to check if it's in $FilePublisherPublishers_Kernel_Deny because that's assumed to always mirror $FilePublisherPublishers_User_Deny
+
+                                $TempPublisherRule.Blocked = $true
+                                #We don't need to set the other properties to false, since if something is blocked, the other cases aren't dealt with
+                                $rule,$IDsAndComments = New-MicrosoftSecureBootPublisherRule -RuleInfo $TempPublisherRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -Connection $Connection -ErrorAction Stop
+                                foreach ($tempRule in $rule) {
+                                    if ($tempRule.UserMode -eq $true) {
+                                        $FilePublisherPublishers_User_Deny += @{$FilePublisherRule.PublisherIndex = $tempRule}
+                                    } else {
+                                        $FilePublisherPublishers_Kernel_Deny += @{$FilePublisherRule.PublisherIndex = $tempRule}
+                                    }
+                                }
+                            }
+                        }
+                        else {
+                            if ($FilePublisherRule.TrustedDriver -eq $true) {
+                                if (-not ($FilePublisherPublishers_Kernel_Allow[$FilePublisherRule.PublisherIndex])) {
+                                    $TempPublisherRule.TrustedDriver = $true
+                                    $TempPublisherRule.TrustedUserMode = $false
+                                    $TempPublisherRule.Blocked = $false
+                                    
+                                    $rule,$IDsAndComments = New-MicrosoftSecureBootPublisherRule -RuleInfo $TempPublisherRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -Connection $Connection -ErrorAction Stop
+                                    
+                                    if (-not ($rule.Count -eq 1)) {
+                                        throw "More than one rule created for FilePublisher rule."
+                                    }
+                                    $FilePublisherPublishers_Kernel_Allow += @{$FilePublisherRule.PublisherIndex = $rule[0]}
+                                }
+                            }
+                            if ($FilePublisherRule.TrustedUserMode -eq $true) {
+                                if (-not ($FilePublisherPublishers_User_Allow[$FilePublisherRule.PublisherIndex])) {
+                                    $TempPublisherRule.TrustedUserMode = $true
+                                    $TempPublisherRule.TrustedDriver = $false
+                                    $TempPublisherRule.Blocked = $false
+    
+                                    $rule,$IDsAndComments = New-MicrosoftSecureBootPublisherRule -RuleInfo $TempPublisherRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -Connection $Connection -ErrorAction Stop
+                                    if (-not ($rule.Count -eq 1)) {
+                                        throw "More than one rule created for FilePublisher rule."
+                                    }
+                                    $FilePublisherPublishers_User_Allow += @{$FilePublisherRule.PublisherIndex = $rule[0]}
+                                }
+                            }
+                        }
+                    }
+                    foreach ($FilePublisherRule in $PotentialFilePublisherRules) {
+                        $rule2,$IDsAndComments = New-MicrosoftSecureBootFilePublisherRule -RuleInfo $FilePublisherRule -RuleMap $IDsAndComments -ErrorAction Stop
+                        if ($rule2) {
+                            foreach ($tempRule in $rule2) {
+                                
+                                if (($FilePublisherRule.Blocked -eq $true) -and ($tempRule.UserMode -eq $true)) {
+                                    ($FilePublisherPublishers_User_Deny[$FilePublisherRule.PublisherIndex]).FileAttributes += @($tempRule.Id)
+                                }
+                                elseif ((($FilePublisherRule.Blocked -eq $true)) -and ($tempRule.UserMode -eq $false)) {
+                                    ($FilePublisherPublishers_Kernel_Deny[$FilePublisherRule.PublisherIndex]).FileAttributes += @($tempRule.Id)
+                                }
+                                elseif ( ($tempRule.UserMode -eq $true)) {
+                                    ($FilePublisherPublishers_User_Allow[$FilePublisherRule.PublisherIndex]).FileAttributes += @($tempRule.Id)
+                                }
+                                elseif ( ($tempRule.UserMode -eq $false)) {
+                                    ($FilePublisherPublishers_Kernel_Allow[$FilePublisherRule.PublisherIndex]).FileAttributes += @($tempRule.Id)
+                                }
+
+                                $RulesAdded += 1
+                            }
+                            $RulesToMerge += $rule2
+                        }
+                    }
+
+                    foreach ($Signer in $FilePublisherPublishers_User_Deny.GetEnumerator()) {
+                        $tempRule = $Signer.Value
+                        if (($tempRule).FileAttributes.Count -ge 1) {
+                            $RulesToMerge += $tempRule
+                            $RulesAdded += 1
+                        }
+                    }
+                    foreach ($Signer in $FilePublisherPublishers_Kernel_Deny.GetEnumerator()) {
+                        $tempRule = $Signer.Value
+                        if (($tempRule).FileAttributes.Count -ge 1) {
+                            $RulesToMerge += $tempRule
+                            $RulesAdded += 1
+                        }
+                    }
+                    foreach ($Signer in $FilePublisherPublishers_User_Allow.GetEnumerator()) {
+                        $tempRule = $Signer.Value
+                        if (($tempRule).FileAttributes.Count -ge 1) {
+                            $RulesToMerge += $tempRule
+                            $RulesAdded += 1
+                        }
+                    }
+                    foreach ($Signer in $FilePublisherPublishers_Kernel_Allow.GetEnumerator()) {
+                        $tempRule = $Signer.Value
+                        if (($tempRule).FileAttributes.Count -ge 1) {
+                            $RulesToMerge += $tempRule
                             $RulesAdded += 1
                         }
                     }
@@ -339,6 +467,7 @@ function Merge-TrustedWDACRules {
                     New-WDACPolicyVersionIncrementOne -PolicyGUID $Policy -CurrentVersion $PolicyVersion -Connection $Connection -ErrorAction Stop
                     $Transaction.Commit()
                     Write-Host "Successfully committed changes to Policy $Policy" -ForegroundColor Green
+                    Write-Verbose "There were $RulesAdded rules that were added to this policy."
                     if ($TempFilePath) {
                         if (Test-Path $TempFilePath) {
                             Remove-Item -Path $TempFilePath -ErrorAction SilentlyContinue

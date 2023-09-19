@@ -293,8 +293,14 @@ function New-MicrosoftSecureBootFileNameRule {
         }
         $blockResultUserMode.Id = $ID_User
         $blockResultKernel.Id = $ID_Kernel
-        $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
-        $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+        if ($RuleInfo.SpecificFileNameLevel -ne "OriginalFileName") {
+            $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]($RuleInfo.SpecificFileNameLevel),$RuleInfo.FileName);
+            $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]($RuleInfo.SpecificFileNameLevel),$RuleInfo.FileName);
+        } else {
+            $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+            $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+        }
+
         $result += $blockResultUserMode
         $result += $blockResultKernel
     } else {
@@ -536,6 +542,82 @@ function New-MicrosoftSecureBootFilePublisherRule {
         $RuleInfo,
         $RuleMap
     )
+
+    $result = @()
+    $Name = $RuleInfo.FileName
+    $TemporaryFile = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $Name
+
+    if ($RuleInfo.Blocked -eq $true) {
+        $blockResultUserMode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"FilePublisher", [Microsoft.SecureBoot.UserConfig.RuleType]"FileAttrib", "FileAttribute", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
+        $blockResultKernel = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"FilePublisher", [Microsoft.SecureBoot.UserConfig.RuleType]"FileAttrib", "FileAttribute", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
+        $ID_User = IncrementFileAttribID -RuleMap $RuleMap
+        $RuleMap = $RuleMap + @{$ID_User=$true}
+        $ID_Kernel = IncrementFileAttribID -RuleMap $RuleMap
+        if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
+            $RuleMap[$ID_User] = $RuleInfo.Comment
+            $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
+        } else {
+            $RuleMap = $RuleMap + @{$ID_Kernel=$true}
+        }
+        $blockResultUserMode.Id = $ID_User
+        $blockResultKernel.Id = $ID_Kernel
+        if ($RuleInfo.SpecificFileNameLevel -ne "OriginalFileName") {
+            $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]($RuleInfo.SpecificFileNameLevel),$RuleInfo.FileName);
+            $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]($RuleInfo.SpecificFileNameLevel),$RuleInfo.FileName);
+        } else {
+            $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+            $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+        }
+
+        $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"MinimumFileVersion",$RuleInfo.MinimumAllowedVersion);
+        $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"MinimumFileVersion",$RuleInfo.MinimumAllowedVersion);
+
+        $result += $blockResultUserMode
+        $result += $blockResultKernel
+    } else {
+        if ($RuleInfo.TrustedDriver -eq $true) {
+            $kernelResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"FilePublisher", [Microsoft.SecureBoot.UserConfig.RuleType]"FileAttrib", "FileAttribute", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
+            $ID_Kernel = IncrementFileAttribID -RuleMap $RuleMap
+            if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
+                $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
+            } else {
+                $RuleMap = $RuleMap + @{$ID_Kernel=$true}
+            }
+            $kernelResult.ID = $ID_Kernel
+
+            if ($RuleInfo.SpecificFileNameLevel -ne "OriginalFileName") {
+                $kernelResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]($RuleInfo.SpecificFileNameLevel),$RuleInfo.FileName);
+            } else {
+                $kernelResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+            }
+
+            $kernelResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"MinimumFileVersion",$RuleInfo.MinimumAllowedVersion);
+
+            $result += $kernelResult
+        }
+        if ($RuleInfo.TrustedUserMode -eq $true) {
+            $userModeResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"FilePublisher", [Microsoft.SecureBoot.UserConfig.RuleType]"FileAttrib", "FileAttribute", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
+            $ID_User = IncrementFileAttribID -RuleMap $RuleMap
+            if ( ($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
+                $RuleMap = $RuleMap + @{$ID_User=$RuleInfo.Comment}
+            } else {
+                $RuleMap = $RuleMap + @{$ID_User=$true}
+            }
+            $userModeResult.ID = $ID_User
+
+            if ($RuleInfo.SpecificFileNameLevel -ne "OriginalFileName") {
+                $userModeResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]($RuleInfo.SpecificFileNameLevel),$RuleInfo.FileName);
+            } else {
+                $userModeResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"FileName",$RuleInfo.FileName);
+            }
+
+            $userModeResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"MinimumFileVersion",$RuleInfo.MinimumAllowedVersion);
+
+            $result += $userModeResult
+        }
+    }
+
+    return $result,$RuleMap
 }
 
 Export-ModuleMember -Function New-MicrosoftSecureBootHashRule,New-MicrosoftSecureBootFilePathRule,New-MicrosoftSecureBootFileNameRule,New-MicrosoftSecureBootLeafCertificateRule,New-MicrosoftSecureBootPcaCertificateRule,New-MicrosoftSecureBootPublisherRule,New-MicrosoftSecureBootFilePublisherRule

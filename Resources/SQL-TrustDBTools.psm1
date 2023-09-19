@@ -2537,8 +2537,8 @@ function Get-WDACFilePublishersDefinitive {
                     DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
                     Comment = $Reader["Comment"];
                     BlockingPolicyID = $Reader["BlockingPolicyID"];
-                    MinimumAllowedVersion = $VersionNumMinTmp;
-                    MaximumAllowedVersion = $VersionNumMaxTmp;
+                    MinimumAllowedVersion = $Reader["MinimumAllowedVersion"];
+                    MaximumAllowedVersion = $Reader["MaximumAllowedVersion"];
                     FileName = $Reader["FileName"];
                     SpecificFileNameLevel = $Reader["SpecificFileNameLevel"]
                 }
