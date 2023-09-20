@@ -136,7 +136,61 @@ function Get-PotentialHashRules {
     }
 }
 
+function Set-HashRuleStaged {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        
+        $Command = $Connection.CreateCommand()
+
+        if (Find-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection) {
+            $Command.Commandtext = "UPDATE apps SET Staged = 1 WHERE SHA256FlatHash = @SHA256FlatHash"
+        }
+        elseif (Find-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection) {
+            $Command.Commandtext = "UPDATE msi_or_script SET Staged = 1 WHERE SHA256FlatHash = @SHA256FlatHash"
+        } else {
+            if ($NoConnectionProvided -and $Connection) {
+                $Connection.close()
+            }
+            return
+        }
+
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
 function Get-PotentialFilePathRules {
+    [CmdletBinding()]
+    Param (
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+    #TODO
+}
+
+function Set-FilePathRuleStaged {
     [CmdletBinding()]
     Param (
         [System.Data.SQLite.SQLiteConnection]$Connection
@@ -205,6 +259,44 @@ function Get-PotentialFileNameRules {
         if ($Reader) {
             $Reader.Close()
         }
+        throw $theError
+    }
+}
+
+function Set-FileNameRuleStaged {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FileName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SpecificFileNameLevel,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE file_names SET Staged = 1 WHERE FileName = @FileName AND SpecificFileNameLevel = @SpecificFileNameLevel"
+        $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
         throw $theError
     }
 }
@@ -354,6 +446,40 @@ function Get-PotentialPcaCertificateRules {
     }
 }
 
+function Set-CertificateRuleStaged {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE certificates SET Staged = 1 WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
 function Get-PotentialPublisherRules {
     [CmdletBinding()]
     Param (
@@ -420,6 +546,44 @@ function Get-PotentialPublisherRules {
         if ($Reader) {
             $Reader.Close()
         }
+        throw $theError
+    }
+}
+
+function Set-PublisherRuleStaged {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PcaCertTBSHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$LeafCertCN,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE publishers SET Staged = 1 WHERE PcaCertTBSHash = @PcaCertTBSHash AND LeafCertCN = @LeafCertCN"
+        $Command.Parameters.AddWithValue("PcaCertTBSHash",$PcaCertTBSHash) | Out-Null
+        $Command.Parameters.AddWithValue("LeafCertCN",$LeafCertCN) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
         throw $theError
     }
 }
@@ -492,6 +656,52 @@ function Get-PotentialFilePublisherRules {
         if ($Reader) {
             $Reader.Close()
         }
+        throw $theError
+    }
+}
+
+function Set-FilePublisherRuleStaged {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PublisherIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FileName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$MinimumAllowedVersion,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SpecificFileNameLevel,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE file_publishers SET Staged = 1 WHERE PublisherIndex = @PublisherIndex AND FileName = @FileName AND MinimumAllowedVersion = @MinimumAllowedVersion AND SpecificFileNameLevel = @SpecificFileNameLevel"
+        $Command.Parameters.AddWithValue("PublisherIndex",$PublisherIndex) | Out-Null
+        $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
+        $Command.Parameters.AddWithValue("MinimumAllowedVersion",$MinimumAllowedVersion) | Out-Null
+        $Command.Parameters.AddWithValue("SpecificFileNameLevel",$SpecificFileNameLevel) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
         throw $theError
     }
 }

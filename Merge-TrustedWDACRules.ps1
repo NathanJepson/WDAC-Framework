@@ -247,6 +247,7 @@ function Merge-TrustedWDACRules {
                             continue
                         }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootHashRule -RuleInfo $HashRulePE -RuleMap $IDsAndComments -ErrorAction Stop
+                        Set-HashRuleStaged -SHA256FlatHash $HashRulePE.SHA256FlatHash -Connection $Connection -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += ($rule.Count)
@@ -259,6 +260,7 @@ function Merge-TrustedWDACRules {
                             continue
                         }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootHashRule -RuleInfo $HashRuleMSI -MSIorScript -RuleMap $IDsAndComments -ErrorAction Stop
+                        Set-HashRuleStaged -SHA256FlatHash $HashRuleMSI.SHA256FlatHash -Connection $Connection -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += ($rule.Count)
@@ -277,6 +279,7 @@ function Merge-TrustedWDACRules {
                             continue
                         }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootFileNameRule -RuleInfo $FileNameRule -RuleMap $IDsAndComments -ErrorAction Stop
+                        Set-FileNameRuleStaged -FileName $FileNameRule.FileName -SpecificFileNameLevel $FileNameRule.SpecificFileNameLevel -Connection $Connection -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += ($rule.Count)
@@ -291,6 +294,7 @@ function Merge-TrustedWDACRules {
                             continue
                         }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $LeafCertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
+                        Set-CertificateRuleStaged -TBSHash $LeafCertRule.TBSHash -Connection $Connection -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += ($rule.Count)
@@ -305,6 +309,7 @@ function Merge-TrustedWDACRules {
                             continue
                         }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootPcaCertificateRule -RuleInfo $PcaCertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
+                        Set-CertificateRuleStaged -TBSHash $PcaCertRule.TBSHash -Connection $Connection -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += ($rule.Count)
@@ -319,6 +324,7 @@ function Merge-TrustedWDACRules {
                             continue
                         }
                         $rule,$IDsAndComments = New-MicrosoftSecureBootPublisherRule -RuleInfo $PublisherRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -Connection $Connection -ErrorAction Stop
+                        Set-PublisherRuleStaged -PcaCertTBSHash $PublisherRule.PcaCertTBSHash -LeafCertCN $PublisherRule.LeafCertCN -Connection $Connection -ErrorAction Stop
                         if ($rule) {
                             $RulesToMerge += $rule
                             $RulesAdded += ($rule.Count)
@@ -392,7 +398,8 @@ function Merge-TrustedWDACRules {
                         #Comments are disabled for file publisher rules for now until I can figure out a way of keeping them attached to the FileAttrib or Signer rules
                         $FilePublisherRule.Comment = $null
                         $rule2,$IDsAndComments = New-MicrosoftSecureBootFilePublisherRule -RuleInfo $FilePublisherRule -RuleMap $IDsAndComments -ErrorAction Stop
-                        
+                        Set-FilePublisherRuleStaged -PublisherIndex $FilePublisherRule.PublisherIndex -FileName $FilePublisherRule.FileName -MinimumAllowedVersion $FilePublisherRule.MinimumAllowedVersion -SpecificFileNameLevel $FilePublisherRule.SpecificFileNameLevel -Connection $Connection -ErrorAction Stop
+
                         if ($rule2) {
                             foreach ($tempRule in $rule2) {
                                 
