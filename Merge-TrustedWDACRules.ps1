@@ -388,7 +388,11 @@ function Merge-TrustedWDACRules {
                         }
                     }
                     foreach ($FilePublisherRule in $PotentialFilePublisherRules) {
+
+                        #Comments are disabled for file publisher rules for now until I can figure out a way of keeping them attached to the FileAttrib or Signer rules
+                        $FilePublisherRule.Comment = $null
                         $rule2,$IDsAndComments = New-MicrosoftSecureBootFilePublisherRule -RuleInfo $FilePublisherRule -RuleMap $IDsAndComments -ErrorAction Stop
+                        
                         if ($rule2) {
                             foreach ($tempRule in $rule2) {
                                 

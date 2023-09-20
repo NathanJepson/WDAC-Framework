@@ -548,6 +548,8 @@ function New-MicrosoftSecureBootFilePublisherRule {
     $TemporaryFile = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $Name
 
     if ($RuleInfo.Blocked -eq $true) {
+        # $TemporaryFile_BlockUserMode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $blockResultUserMode_TempName
+        # $TemporaryFile_BlockKernel = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $blockResultKernel_TempName
         $blockResultUserMode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"FilePublisher", [Microsoft.SecureBoot.UserConfig.RuleType]"FileAttrib", "FileAttribute", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
         $blockResultKernel = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"FilePublisher", [Microsoft.SecureBoot.UserConfig.RuleType]"FileAttrib", "FileAttribute", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
         $ID_User = IncrementFileAttribID -RuleMap $RuleMap
@@ -575,7 +577,9 @@ function New-MicrosoftSecureBootFilePublisherRule {
         $result += $blockResultUserMode
         $result += $blockResultKernel
     } else {
+
         if ($RuleInfo.TrustedDriver -eq $true) {
+            #$TemporaryFile_AllowKernel =  New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $kernelResult_TempName
             $kernelResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"FilePublisher", [Microsoft.SecureBoot.UserConfig.RuleType]"FileAttrib", "FileAttribute", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
             $ID_Kernel = IncrementFileAttribID -RuleMap $RuleMap
             if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
@@ -596,6 +600,7 @@ function New-MicrosoftSecureBootFilePublisherRule {
             $result += $kernelResult
         }
         if ($RuleInfo.TrustedUserMode -eq $true) {
+            #$TemporaryFile_AllowUserMode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $userModeResult_TempName
             $userModeResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"FilePublisher", [Microsoft.SecureBoot.UserConfig.RuleType]"FileAttrib", "FileAttribute", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
             $ID_User = IncrementFileAttribID -RuleMap $RuleMap
             if ( ($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
