@@ -233,7 +233,11 @@ function Merge-TrustedWDACRules {
             $BackupOldPolicy = $null
             $CurrentPolicyRules = Get-CIPolicy -FilePath (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop) -ErrorAction Stop
             foreach ($currentRule in $CurrentPolicyRules) {
-                $IDsAndComments.Add($currentRule.Id,$true)
+                if (-not ($IDsAndComments[$currentRule.Id])) {
+                #The only reason this check is necessary, is rules with a certain ID are duplicated based on if they are used for UserMode or Kernel mode
+                #...Which then causes an error if you try to add that ID a second time
+                    $IDsAndComments.Add($currentRule.Id,$true)
+                }
             }
 
             switch ($Levels) {
