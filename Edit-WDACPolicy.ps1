@@ -6,10 +6,10 @@ function CommentPreserving {
     )
 
     $FileContent = Get-Content $FilePath -ErrorAction Stop
-    $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-F0-9]+(?=")'
-    $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-F0-9]+(?=")'
-    $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-F0-9]+(?=")'
-    $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-F0-9]+(?=")'
+    $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-Z0-9]+(?=")'
     $CommentPattern = "(?<=<!--).+(?=-->)"
 
     for ($i=0; $i -lt $FileContent.Count; $i++) {
