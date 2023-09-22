@@ -115,16 +115,25 @@ function Edit-WDACPolicy {
     Edit a WDAC policy by adding or removing some options (a policy entry in the database is required)
     
     .DESCRIPTION
-    TODO
+    You can set or unset many of the options described by Microsoft: 
+    (https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/select-types-of-rules-to-create)
+    You can add a WDACPolicy signer and Powershell code signer (much like New-WDACPolicy)
+    You can set HVCI options.
+    You can even merge with Microsoft's recommended driver or usermode block rules. Or merge with Windows Mode / ALlow Microsoft policies (also created by Microsoft.)
+    There is a provision to backup the old version of the policy (NoOverwrite)
 
     Author: Nathan Jepson
     License: MIT License
 
     .EXAMPLE
-    TODO
+    Edit-WDACPolicy -PolicyGUID "fd04c607-e1d9-4416-954a-b6f3817c9d10" -StrictHVCI -AddPSCodeSigner -DriverBlockRules -DefaultWindowsMode -NoOverwrite -Verbose 
 
     .EXAMPLE
-    TODO
+    Edit-WDACPolicy -PolicyGUID "fd04c607-e1d9-4416-954a-b6f3817c9d10" -UpdatePolicySigner -SupplementalPolicySigner -RemoveWHQL -RemoveISG -EnableScriptEnforcement
+
+    .EXAMPLE
+    Edit-WDACPolicy -PolicyName "CashiersPolicy"
+        Note: If you use Edit-WDACPolicy without setting any of the flags, then the version number should just increment by one.
     
     #>
     [CmdletBinding()]
