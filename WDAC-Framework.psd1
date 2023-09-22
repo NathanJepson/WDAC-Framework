@@ -67,6 +67,7 @@
                         'Get-WDACEvents',
                         'Import-Sqlite',
                         'New-WDACGroup',
+                        'New-WDACGroupMirror',
                         'Register-WDACEvents',
                         'New-WDACPolicy',
                         'Approve-WDACRules',
