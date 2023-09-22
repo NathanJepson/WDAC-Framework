@@ -606,6 +606,7 @@ function Edit-WDACPolicy {
                 $NewSignerIDs = @()
                 foreach ($tempRule in $TempRulesAddSigner) {
                     if (($tempRule.Id.Substring($tempRule.Id.Length -2)) -match "_1") {
+                    #The newly-added signer rules will be the only ones with _1 at the end of the ID
                         $NewSignerIDs += $tempRule.Id
                     }
                 }
@@ -644,7 +645,7 @@ function Edit-WDACPolicy {
                 $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             }
             #=============================================================================================================
-            
+
 
         #Apply Policy Options ======================================================
         #This is slightly different from "New-WDACPolicy" in that if a flag isn't set, a rule is not specified, it is not removed or added 
