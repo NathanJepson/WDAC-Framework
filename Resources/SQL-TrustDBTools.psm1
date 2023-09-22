@@ -3320,7 +3320,7 @@ function Update-WDACFilePublisherByCriteria {
                     if ($Signer.FilePublishers.$($FileNameLevel)) {
                         $TempFilePublishers = $Signer.FilePublishers.$($FileNameLevel)
                         foreach ($TempFilePublisher in $TempFilePublishers) {
-                            if ($TempFilePublisher.AllowedPolicyID) {
+                            if ( ($null -ne $TempFilePublisher.AllowedPolicyID) -and ("" -ne $TempFilePublisher.AllowedPolicyID)) {
                                 Update-WDACFilePublisherByCriteriaHelper -FileName $TempFilePublisher.FileName -PublisherIndex $TempFilePublisher.PublisherIndex -SpecificFileNameLevel $FileNameLevel -MinimumVersionNumber $TempFilePublisher.MinimumAllowedVersion -PolicyGUID $TempFilePublisher.AllowedPolicyID -CurrentVersionNum $WDACApp.FileVersion -Connection $Connection -ErrorAction Stop
                             } elseif ($TempFilePublisher.BlockingPolicyID) {
                                 #TODO

@@ -209,6 +209,10 @@ function New-MicrosoftSecureBootHashRule {
         if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
             $RuleMap[$ID_User] = $RuleInfo.Comment
             $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
+        } elseif (-not ($MSIorScript)) {
+            $FlatHashComment = "SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)"
+            $RuleMap[$ID_User] = $FlatHashComment
+            $RuleMap = $RuleMap + @{$ID_Kernel=$FlatHashComment}
         } else {
             $RuleMap = $RuleMap + @{$ID_Kernel=$true}
         }
@@ -229,6 +233,8 @@ function New-MicrosoftSecureBootHashRule {
             $ID_Kernel = IncrementAllowID -RuleMap $RuleMap
             if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
                 $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
+            } elseif (-not ($MSIorScript)) {
+                $RuleMap = $RuleMap + @{$ID_Kernel=("SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)")}
             } else {
                 $RuleMap = $RuleMap + @{$ID_Kernel=$true}
             }
@@ -243,6 +249,8 @@ function New-MicrosoftSecureBootHashRule {
             $ID_User = IncrementAllowID -RuleMap $RuleMap
             if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
                 $RuleMap = $RuleMap + @{$ID_User=$RuleInfo.Comment}
+            } elseif (-not ($MSIorScript)) {
+                $RuleMap = $RuleMap + @{$ID_User=("SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)")}
             } else {
                 $RuleMap = $RuleMap + @{$ID_User=$true}
             }
