@@ -158,3 +158,41 @@ function New-WDACPolicyVersionIncrementOne {
         throw $_
     }
 }
+
+function Backup-CurrentPolicy {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        $WorkingPoliciesLocation = (Get-LocalStorageJSON -ErrorAction Stop)."WorkingPoliciesDirectory"."Location"
+        $WorkingPoliciesLocationType = (Get-LocalStorageJSON -ErrorAction Stop)."WorkingPoliciesDirectory"."Type"
+
+        $FileName = Split-Path $PolicyPath -Leaf
+        $NewFileName = ($FileName + "_old.xml")
+        if ($WorkingPoliciesLocationType.ToLower() -eq "local") {
+            #return (Join-Path $WorkingPoliciesLocation -ChildPath $FileName)
+            Copy-Item $PolicyPath -Destination (Join-Path $WorkingPoliciesLocation -ChildPath $NewFileName) -Force -ErrorAction Stop
+        } else {
+        #TODO: Other working policies directory types
+        }
+        
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+
+}

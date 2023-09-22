@@ -257,6 +257,31 @@ function New-MicrosoftSecureBootHashRule {
     return $result,$RuleMap
 }
 
+function Remove-UnderscoreDigits {
+    #This function removes the underscore digits at the end since we've already accounted for duplicates
+        [CmdletBinding()]
+        param (
+            [Parameter(Mandatory=$true)]
+            [ValidateNotNullOrEmpty()]
+            $FilePath
+        )
+    
+        $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-F0-9]+(?=")'
+        $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-F0-9]+(?=")'
+        $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-F0-9]+(?=")'
+        $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-F0-9]+(?=")'
+        
+        $FileContent = Get-Content -Path $FilePath -ErrorAction Stop
+    
+        for ($i=0; $i -lt $FileContent.Count; $i++) {
+            if ( ($FileContent[$i] -match $Pattern1) -or ($FileContent[$i] -match $Pattern2) -or ($FileContent[$i] -match $Pattern3) -or ($FileContent[$i] -match $Pattern4)) {
+                $FileContent[$i] = $FileContent[$i].replace($Matches[0],$Matches[0].Substring(0,$Matches[0].Length-2))
+            }
+        }
+    
+        $FileContent | Set-Content -Path $FilePath -Force -ErrorAction Stop
+}
+
 function New-MicrosoftSecureBootFilePathRule {
     [CmdletBinding()]
     param (
