@@ -764,17 +764,20 @@ function Edit-WDACPolicy {
                 Write-Host "Successfully committed changes to Policy $PolicyGUID" -ForegroundColor Green
                 if ($PSModuleRoot) {
                     if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer")) {
-                        Remove-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer") -Force
+                        Remove-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer") -Force -ErrorAction SilentlyContinue
                     }
             
                     if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer")) {
-                        Remove-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Force
+                        Remove-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Force -ErrorAction SilentlyContinue
                     }
                 }
                 if ($TempPolicyPath) {
                     if (Test-Path $TempPolicyPath) {
-                        Remove-Item $TempPolicyPath -Force
+                        Remove-Item $TempPolicyPath -Force -ErrorAction SilentlyContinue
                     }
+                }
+                if ($BackupPolicyLocation -and (Test-Path $BackupPolicyLocation)) {
+                    Remove-Item $BackupPolicyLocation -Force -ErrorAction SilentlyContinue
                 }
                 $Connection.Close()
             } else {
@@ -810,7 +813,7 @@ function Edit-WDACPolicy {
             }
         }
 
-        if ($BackupPolicyLocation -and $OldPolicyPath) {
+        if ($BackupPolicyLocation -and $OldPolicyPath -and (Test-Path $BackupPolicyLocation)) {
             try {
                 Copy-Item $BackupPolicyLocation -Destination $OldPolicyPath -Force -ErrorAction Stop
                 Remove-Item $BackupPolicyLocation -Force -ErrorAction SilentlyContinue
