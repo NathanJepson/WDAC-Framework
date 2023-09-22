@@ -101,8 +101,8 @@ function Set-SignedPowerShellModules {
     if (-not (Test-Path (Join-Path $SignedModules -ChildPath "WDACAuditing"))) {
         New-Item -ItemType Directory -Name "WDACAuditing" -Path $SignedModules -ErrorAction SilentlyContinue | Out-Null
     }
-    if (-not (Test-Path (Join-Path $SignedModules -ChildPath "WDAC Commit Tools"))) {
-        New-Item -ItemType Directory -Name "WDAC Commit Tools" -Path $SignedModules -ErrorAction SilentlyContinue | Out-Null
+    if (-not (Test-Path (Join-Path $SignedModules -ChildPath "WDACCommitTools"))) {
+        New-Item -ItemType Directory -Name "WDACCommitTools" -Path $SignedModules -ErrorAction SilentlyContinue | Out-Null
     }
 
     #Case 1: Only the name of one module is provided
@@ -132,7 +132,7 @@ function Set-SignedPowerShellModules {
         $ModulesFiles = Get-ChildItem -Path ($PSModuleRoot + "\*") -Include ('*.ps1', '*.psm1', '*.psd1') -ErrorAction Stop
         $ResourceFiles = Get-ChildItem -Path ($PSModuleRoot + "\Resources\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
         $WDACAuditingFiles = Get-ChildItem -Path ($PSModuleRoot + "\WDACAuditing\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
-        $WDACCommitToolsFiles = Get-ChildItem -Path ($PSModuleRoot + "\WDAC Commit Tools\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
+        $WDACCommitToolsFiles = Get-ChildItem -Path ($PSModuleRoot + "\WDACCommitTools\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
     } catch {
         throw $_
     }
@@ -150,7 +150,7 @@ function Set-SignedPowerShellModules {
                     } elseif ($WDACAuditingFiles -contains $Module) {
                         $Copied = Copy-Item $Module -Destination "$SignedModules\WDACAuditing" -PassThru -Force -ErrorAction Stop 
                     } elseif ($WDACCommitToolsFiles -contains $Module) {
-                        $Copied = Copy-Item $Module -Destination "$SignedModules\WDAC Commit Tools" -PassThru -Force -ErrorAction Stop 
+                        $Copied = Copy-Item $Module -Destination "$SignedModules\WDACCommitTools" -PassThru -Force -ErrorAction Stop 
                     }
                     else {
                         $Copied = Copy-Item $Module -Destination $SignedModules -PassThru -Force -ErrorAction Stop 
