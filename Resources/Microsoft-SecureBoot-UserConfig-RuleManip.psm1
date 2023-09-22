@@ -266,10 +266,10 @@ function Remove-UnderscoreDigits {
             $FilePath
         )
     
-        $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-F0-9]+(?=")'
-        $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-F0-9]+(?=")'
-        $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-F0-9]+(?=")'
-        $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-F0-9]+(?=")'
+        $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-Z0-9]+(?=")'
+        $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-Z0-9]+(?=")'
+        $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-Z0-9]+(?=")'
+        $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-Z0-9]+(?=")'
         
         $FileContent = Get-Content -Path $FilePath -ErrorAction Stop
     
@@ -650,4 +650,4 @@ function New-MicrosoftSecureBootFilePublisherRule {
     return $result,$RuleMap
 }
 
-Export-ModuleMember -Function New-MicrosoftSecureBootHashRule,New-MicrosoftSecureBootFilePathRule,New-MicrosoftSecureBootFileNameRule,New-MicrosoftSecureBootLeafCertificateRule,New-MicrosoftSecureBootPcaCertificateRule,New-MicrosoftSecureBootPublisherRule,New-MicrosoftSecureBootFilePublisherRule
+Export-ModuleMember -Function New-MicrosoftSecureBootHashRule,New-MicrosoftSecureBootFilePathRule,New-MicrosoftSecureBootFileNameRule,New-MicrosoftSecureBootLeafCertificateRule,New-MicrosoftSecureBootPcaCertificateRule,New-MicrosoftSecureBootPublisherRule,New-MicrosoftSecureBootFilePublisherRule,IncrementAllowID,IncrementDenyID,IncrementSignerID,IncrementFileAttribID,Remove-UnderscoreDigits

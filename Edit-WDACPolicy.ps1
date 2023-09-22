@@ -348,10 +348,6 @@ function Edit-WDACPolicy {
         
         Copy-Item $FullCurrentPolicyPath -Destination $TempPolicyPath -Force -ErrorAction Stop
         Copy-Item $FullCurrentPolicyPath -Destination $BackupPolicyLocation -Force -ErrorAction Stop
-        if ($NoOverwrite) {
-            #Despite the name, this is not backed up to the $BackupPolicyLocation, this is backed up to the WorkingPolicies directory
-            Backup-CurrentPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-        }
 
             if ($DriverBlockRules) {
             #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
@@ -756,12 +752,30 @@ function Edit-WDACPolicy {
             #===========================================================================
 
             Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $TempPolicyPath -ErrorAction Stop
+            if ($NoOverwrite) {
+                #Despite the name, this is not backed up to the $BackupPolicyLocation, this is backed up to the WorkingPolicies directory
+                Backup-CurrentPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+            }
             Receive-FileAsPolicy -FilePath $TempPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             $PolicyVersion = (Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion
             if ($PolicyVersion) {
                 New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $PolicyVersion -Connection $Connection -ErrorAction Stop
                 $Transaction.Commit()
                 Write-Host "Successfully committed changes to Policy $PolicyGUID" -ForegroundColor Green
+                if ($PSModuleRoot) {
+                    if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer")) {
+                        Remove-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer") -Force
+                    }
+            
+                    if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer")) {
+                        Remove-Item (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Force
+                    }
+                }
+                if ($TempPolicyPath) {
+                    if (Test-Path $TempPolicyPath) {
+                        Remove-Item $TempPolicyPath -Force
+                    }
+                }
                 $Connection.Close()
             } else {
                 $Transaction.Rollback()
@@ -799,6 +813,7 @@ function Edit-WDACPolicy {
         if ($BackupPolicyLocation -and $OldPolicyPath) {
             try {
                 Copy-Item $BackupPolicyLocation -Destination $OldPolicyPath -Force -ErrorAction Stop
+                Remove-Item $BackupPolicyLocation -Force -ErrorAction SilentlyContinue
             } catch {
                 Write-Host "Could not restore policy file to original location, but it can be recovered at $BackupPolicyLocation"
             }

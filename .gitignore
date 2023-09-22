@@ -12,6 +12,7 @@ Test-Script.ps1
 *.cip
 *.p7
 *.db-journal
+*.cer
 !Resources/AllowAll.xml
 !Resources/DenyAllAudit.xml
 !Resources/SupplementalShell.xml
