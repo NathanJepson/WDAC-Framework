@@ -3374,6 +3374,93 @@ function Add-WDACDevice {
     }
 }
 
+function Add-WDACPolicyAdHocAssignment {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeviceName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "INSERT INTO ad_hoc_policy_assignments (PolicyGUID,DeviceName) values (@PolicyGUID,@DeviceName)"
+            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+            $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+            
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Find-WDACPolicyAdHocAssignment {
+    [CmdletBinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeviceName,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from ad_hoc_policy_assignments WHERE PolicyGUID = @PolicyGUID AND DeviceName = @DeviceName"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $_
+    }
+}
+
 function Add-WDACPolicyAssignment {
     [CmdletBinding()]
     Param (

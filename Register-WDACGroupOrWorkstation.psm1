@@ -49,7 +49,6 @@ function Register-WDACGroup {
         [Alias("ID","IDs","PolicyGUID","GUID","GUIDs","PolicyGUIDs")]
         [string[]]$PolicyID,
         [ValidateNotNullOrEmpty()]
-        [Alias("Name","Names")]
         [string[]]$PolicyName,
         [ValidateNotNullOrEmpty()]
         [string]$GroupName
@@ -62,7 +61,7 @@ function Register-WDACGroup {
             if ($PolicyID) {
                 foreach ($thisID in $PolicyID) {
                     if (-not (Find-WDACPolicy -PolicyGUID $thisID -ErrorAction Stop)) {
-                        throw "There is no policy with ID $thisID."
+                        throw "There is no policy with ID $thisID ."
                     }
                 }
             } elseif ($PolicyName) {
@@ -70,7 +69,7 @@ function Register-WDACGroup {
                 $PoliciesWithNames = Get-WDACPoliciesGUIDandName -ErrorAction Stop
                 foreach ($thisName in $PolicyName) {
                     if (-not (Find-WDACPolicyByName -PolicyName $thisName -ErrorAction Stop)) {
-                        throw "There is no policy with name $thisName."
+                        throw "There is no policy with name $thisName ."
                     }
                     $PolicyID += ($PoliciesWithNames | Where-Object {$_.PolicyName -eq $thisName} | Select-Object PolicyGUID).PolicyGUID
                 }
@@ -121,16 +120,18 @@ function Register-WDACGroup {
         $Connection.Close()
         Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
 
-        Write-Host "Policies assigned successfully to group $GroupName."
+        Write-Host "Policies assigned successfully to group $GroupName ."
 
     } catch {
+        $theError = $_
         if ($Transaction) {
             $Transaction.Rollback()
         }
         if ($Connection) {
             $Connection.Close()
         }
-        Write-Error $_
+        Write-Verbose ($theError | Format-List * -Force | Out-String)
+        throw $theError
     }
 }
 
@@ -163,7 +164,7 @@ function Register-WDACWorkstation {
     param (
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
-        [Alias("Name","Workstations","Workstation","Device","Devices","PC","Computer","Computers")]
+        [Alias("Workstations","Workstation","Device","Devices","PC","Computer","Computers")]
         [string[]]$WorkstationName,
         [ValidateNotNullOrEmpty()]
         [string]$GroupName
@@ -192,7 +193,7 @@ function Register-WDACWorkstation {
 
         foreach ($Name in $WorkstationName) {
             try {
-                $workstation_in_db = Get-WDACDevice -DeviceName $Name
+                $workstation_in_db = Get-WDACDevice -DeviceName $Name -ErrorAction Stop
                 if ($workstation_in_db) {
                     if ($workstation_in_db.AllowedGroup -eq $GroupName) {
                         throw "Device $Name already registered to group $GroupName"
@@ -213,9 +214,10 @@ function Register-WDACWorkstation {
         $Connection.Close()
         Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
 
-        Write-Host "Workstations successfully instantiated and assigned to group $GroupName."
+        Write-Host "Workstations successfully instantiated and assigned to group $GroupName ."
 
     } catch {
+        $theError = $_
         if ($Transaction) {
             $Transaction.Rollback()
         }
@@ -223,7 +225,8 @@ function Register-WDACWorkstation {
             $Connection.Close()
         }
 
-        Write-Error $_
+        Write-Verbose ($theError | Format-List * -Force | Out-String)
+        throw $theError
     }
 }
 
@@ -233,18 +236,107 @@ function Register-WDACWorkstationAdHoc {
     This function assigns workstations to policies. This is not recommended, as it is recommended to allow policies to be applied by assigning workstations to groups.
 
     .DESCRIPTION
-    TODO
+    This functions contains a similar method of selecting a policy if it is not provided -- similar to Register-WDACGroup
+    WorkstationName is required, but you can provide more than one workstation name at once. 
+    You cannot provide more than one policy at once.
 
     Author: Nathan Jepson
     License: MIT License
 
     .EXAMPLE
-    TODO
+    Register-WDACWorkstationAdHoc -Devices PC1,PC2
+
+    .EXAMPLE
+    Register-WDACWorkstationAdHoc -Computer PC1 -PolicyName "Cashiers_Policy"
+
+    .EXAMPLE
+    Register-WDACWorkstationAdHoc -WorkstationName PC1 -PolicyID "fd04c607-e1d9-4416-954a-b6f3817c9d10"
 #>
     [CmdletBinding()]
     param (
-
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [Alias("Name","Workstations","Workstation","Device","Devices","PC","Computer","Computers","PCs")]
+        [string[]]$WorkstationName,
+        [ValidateNotNullOrEmpty()]
+        [Alias("ID","IDs","PolicyGUID","GUID","GUIDs","PolicyGUIDs")]
+        [string]$PolicyID,
+        [ValidateNotNullOrEmpty()]
+        [string]$PolicyName
     )
+
+    $Connection = $null
+    $Transaction = $null
+
+    try {
+        foreach ($PC in $WorkstationName) {
+            if (-not (Get-WDACDevice -DeviceName $PC -ErrorAction Stop)) {
+                throw "No device in the DB exists with name $PC"
+            }
+        }
+
+        if ($PolicyID -and $PolicyName) {
+            throw "You must provider Policy names or Policy IDs, but not both."
+        } elseif ($PolicyID -or $PolicyName) {
+            if ($PolicyID) {
+                if (-not (Find-WDACPolicy -PolicyGUID $PolicyID -ErrorAction Stop)) {
+                    throw "There is no policy with ID $PolicyID ."
+                }
+            } elseif ($PolicyName) {
+                if (-not (Find-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop)) {
+                    throw "There is no policy with name $PolicyName ."
+                }
+                $PolicyID = (Get-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop).PolicyGUID
+            }
+        } else {
+        #Case: No policy IDs or names are provided
+            $PoliciesWithNames = Get-WDACPoliciesGUIDandName -ErrorAction Stop
+            Write-Host "What policy would you like to assign to a group?" -ForegroundColor Green
+            Write-Host "Here are your options (please use GUID):" -ForegroundColor Yellow
+            $PoliciesWithNames | Select-Object PolicyGUID,PolicyName | Out-Host
+            $PolicyIDInput = Read-Host -Prompt "PolicyGUID"
+            while (-not (Find-WDACPolicy -PolicyGUID $PolicyIDInput -ErrorAction Stop)) {
+                Write-Host "Not a valid PolicyGUID." -ForegroundColor Red
+                Write-Host "Here are your options (please use GUID): " -ForegroundColor Yellow
+                $PoliciesWithNames | Select-Object PolicyGUID,PolicyName | Out-Host
+                $PolicyIDInput = Read-Host -Prompt "PolicyGUID"
+            }
+            $PolicyID = $PolicyIDInput
+        }
+
+        foreach ($PC in $WorkstationName) {
+            if (Find-WDACPolicyAdHocAssignment -PolicyGUID $PolicyID -DeviceName $PC -ErrorAction Stop) {
+                throw "Workstation $PC is already assigned to policy $PolicyID"
+            }
+        }
+
+        $Connection = New-SQLiteConnection -ErrorAction Stop
+        $Transaction = $Connection.BeginTransaction()
+
+        foreach ($PC in $WorkstationName) {
+            if (-not (Add-WDACPolicyAdHocAssignment -DeviceName $PC -PolicyGUID $PolicyID -Connection $Connection -ErrorAction Stop)) {
+                throw "Unable to add Policy assignment of policy $PolicyID  to device $PC to the database."
+            }
+        }
+
+        $Transaction.Commit()
+        $Connection.Close()
+        Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
+
+        Write-Host "Policy $PolicyID assigned successfully to the designated device(s)."
+
+    } catch {
+        $theError = $_
+
+        if ($Transaction) {
+            $Transaction.Rollback()
+        }
+        if ($Connection) {
+            $Connection.Close()
+        }
+        Write-Verbose ($theError | Format-List * -Force | Out-String)
+        throw $theError
+    }
 
     return $null
 }
