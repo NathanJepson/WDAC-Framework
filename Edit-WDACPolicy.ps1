@@ -118,8 +118,9 @@ function Edit-WDACPolicy {
     You can set or unset many of the options described by Microsoft: 
     (https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/design/select-types-of-rules-to-create)
     You can add a WDACPolicy signer and Powershell code signer (much like New-WDACPolicy)
-    You can set HVCI options.
-    You can even merge with Microsoft's recommended driver or usermode block rules. Or merge with Windows Mode / ALlow Microsoft policies (also created by Microsoft.)
+    You can set HVCI options, including strict with -StrictHVCI (corresponds to option "2" of Set-HVCIOptions ).
+    You can even merge with Microsoft's recommended driver or usermode block rules. (Again, just like New-WDACPolicy.) Or merge with Windows Mode / ALlow Microsoft policies (also created by Microsoft.)
+    NOTE: This cmdlet cannot detect whether driver or usermode block rules or windows / microsoft modes are already merged into a policy!
     There is a provision to backup the old version of the policy (NoOverwrite)
 
     Author: Nathan Jepson
@@ -589,10 +590,44 @@ function Edit-WDACPolicy {
                 }
             }
 
+            function Set-RepairedIDsAfterNewSigner {
+            #Since _0 or _1 is added to the end of each ID following Add-SignerRule, we need to modify things slightly 
+            #...for the Remove-UnderscoreDigits function to work
+                [CmdletBinding()]
+                Param (
+                    [ValidateNotNullOrEmpty()]
+                    [string]$Comment,
+                    [ValidateNotNullOrEmpty()]
+                    [string]$FilePath,
+                    $IDsAndComments
+                )
+
+                $TempRulesAddSigner = Get-CIPolicy -FilePath $FilePath -ErrorAction Stop
+                $NewSignerIDs = @()
+                foreach ($tempRule in $TempRulesAddSigner) {
+                    if (($tempRule.Id.Substring($tempRule.Id.Length -2)) -match "_1") {
+                        $NewSignerIDs += $tempRule.Id
+                    }
+                }
+                foreach ($NewSignerID in $NewSignerIDs) {
+                    $NewID = IncrementSignerID -RuleMap $IDsAndComments -ErrorAction Stop
+                    $IDsAndComments += @{$NewID = $Comment}
+                    $FileContent = Get-Content $FilePath -ErrorAction Stop
+                    #We add an extra _1 to the ID here because it will be removed by Remove-UnderscoreDigits
+                    $FileContent = $FileContent.Replace($NewSignerID,($NewID + "_1"))
+                    $FileContent | Set-Content $FilePath -Force -ErrorAction Stop
+                }
+
+                Remove-UnderscoreDigits -FilePath $FilePath -ErrorAction Stop
+                return $IDsAndComments
+            }
+
             #Add Code Signing / Policy Signing Rules: =====================================================================
             if ($AddPSCodeSigner) {
                 Export-CodeSignerAsCER -Destination (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -PSCodeSigner -ErrorAction Stop | Out-Null
+
                 Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\PSCodeSigning.cer") -User -Kernel -ErrorAction Stop
+                $IDsAndComments = Set-RepairedIDsAfterNewSigner -Comment "Powershell Code Signing Certificate" -FilePath $TempPolicyPath -IDsAndComments $IDsAndComments -ErrorAction Stop
                 $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             }
 
@@ -600,12 +635,16 @@ function Edit-WDACPolicy {
                 Export-CodeSignerAsCER -Destination (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -WDACCodeSigner -ErrorAction Stop | Out-Null
                 if ($UpdatePolicySigner) {
                     Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Update -ErrorAction Stop
+                    $IDsAndComments = Set-RepairedIDsAfterNewSigner -Comment "WDAC Update Certificate" -FilePath $TempPolicyPath -IDsAndComments $IDsAndComments -ErrorAction Stop
                 } 
                 if ($SupplementalPolicySigner) {
                     Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Supplemental -ErrorAction Stop
+                    $IDsAndComments = Set-RepairedIDsAfterNewSigner -Comment "WDAC Supplemental Signer Certificate" -FilePath $TempPolicyPath -IDsAndComments $IDsAndComments -ErrorAction Stop
                 }
                 $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             }
+            #=============================================================================================================
+            
 
         #Apply Policy Options ======================================================
         #This is slightly different from "New-WDACPolicy" in that if a flag isn't set, a rule is not specified, it is not removed or added 
