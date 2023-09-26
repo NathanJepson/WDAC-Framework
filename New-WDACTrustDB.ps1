@@ -280,6 +280,8 @@ function New-WDACTrustDB {
         OriginLocation Text NOT NULL,
         OriginLocationType Text NOT NULL,
         LastDeployedPolicyVersion Text,
+        LastSignedVersion Text,
+        LastUnsignedVersion Text,
         FOREIGN KEY (ParentPolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
 
