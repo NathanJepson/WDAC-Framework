@@ -305,6 +305,7 @@ function New-WDACTrustDB {
         DeviceName Text PRIMARY KEY,
         AllowedGroup Text,
         UpdateDeferring Integer DEFAULT 0,
+        processor_architecture Text,
         FOREIGN KEY(AllowedGroup) REFERENCES groups(GroupName) ON DELETE RESTRICT
     );
 
