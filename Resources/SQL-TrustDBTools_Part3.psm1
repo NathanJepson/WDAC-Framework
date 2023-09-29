@@ -10,7 +10,7 @@ if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-T
     Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
 }
 
-function Get-DevicesByGroupToPolicyMapping {
+function Get-WDACDevicesByGroupToPolicyMapping {
     [cmdletbinding()]
     Param (
         [ValidateNotNullOrEmpty()]
@@ -82,7 +82,7 @@ function Get-DevicesByGroupToPolicyMapping {
     }
 }
 
-function Get-DevicesByMirroredGroupToPolicyMapping {
+function Get-WDACDevicesByMirroredGroupToPolicyMapping {
     [cmdletbinding()]
     Param (
         [ValidateNotNullOrEmpty()]
@@ -157,7 +157,7 @@ function Get-DevicesByMirroredGroupToPolicyMapping {
     }
 }
 
-function Get-DevicesByAdHocPolicyMapping {
+function Get-WDACDevicesByAdHocPolicyMapping {
     [cmdletbinding()]
     Param (
         [ValidateNotNullOrEmpty()]
@@ -226,7 +226,7 @@ function Get-DevicesByAdHocPolicyMapping {
     }
 }
 
-function Get-DevicesNeedingWDACPolicy {
+function Get-WDACDevicesNeedingWDACPolicy {
     [cmdletbinding()]
     Param ( 
         [ValidateNotNullOrEmpty()]
@@ -235,8 +235,6 @@ function Get-DevicesNeedingWDACPolicy {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
-
     #TODO
-    
 	
 }
