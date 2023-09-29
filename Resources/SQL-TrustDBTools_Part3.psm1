@@ -16,6 +16,7 @@ function Get-DevicesByGroupToPolicyMapping {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyGUID,
+        [switch]$Deferred,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -39,7 +40,11 @@ function Get-DevicesByGroupToPolicyMapping {
         # WHERE pa.PolicyGUID = @PolicyGUID
         # AND dev.UpdateDeferring = 0
         
-        $Command.Commandtext = "Select DeviceName,processor_architecture from devices AS dev INNER JOIN groups as gro ON gro.GroupName = dev.AllowedGroup INNER JOIN policy_assignments as pa ON gro.GroupName = pa.GroupName WHERE pa.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 0"
+        if ($Deferred) {
+            $Command.Commandtext = "Select DeviceName,processor_architecture from devices AS dev INNER JOIN groups as gro ON gro.GroupName = dev.AllowedGroup INNER JOIN policy_assignments as pa ON gro.GroupName = pa.GroupName WHERE pa.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 1"
+        } else {
+            $Command.Commandtext = "Select DeviceName,processor_architecture from devices AS dev INNER JOIN groups as gro ON gro.GroupName = dev.AllowedGroup INNER JOIN policy_assignments as pa ON gro.GroupName = pa.GroupName WHERE pa.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 0"
+        }
         
         $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
@@ -83,6 +88,7 @@ function Get-DevicesByMirroredGroupToPolicyMapping {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyGUID,
+        [switch]$Deferred,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -109,7 +115,11 @@ function Get-DevicesByMirroredGroupToPolicyMapping {
         # WHERE pa.PolicyGUID = @PolicyGUID
         # AND dev.UpdateDeferring = 0
         
-        $Command.Commandtext = "Select DeviceName,processor_architecture from devices AS dev INNER JOIN groups as gro ON gro.GroupName = dev.AllowedGroup INNER JOIN group_mirrors as gm ON gm.GroupName = gro.GroupName INNER JOIN policy_assignments as pa ON gm.MirroredGroupName = pa.GroupName WHERE pa.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 0"
+        if ($Deferred) {
+            $Command.Commandtext = "Select DeviceName,processor_architecture from devices AS dev INNER JOIN groups as gro ON gro.GroupName = dev.AllowedGroup INNER JOIN group_mirrors as gm ON gm.GroupName = gro.GroupName INNER JOIN policy_assignments as pa ON gm.MirroredGroupName = pa.GroupName WHERE pa.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 1"
+        } else {
+            $Command.Commandtext = "Select DeviceName,processor_architecture from devices AS dev INNER JOIN groups as gro ON gro.GroupName = dev.AllowedGroup INNER JOIN group_mirrors as gm ON gm.GroupName = gro.GroupName INNER JOIN policy_assignments as pa ON gm.MirroredGroupName = pa.GroupName WHERE pa.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 0"
+        }
         
         $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
@@ -153,6 +163,7 @@ function Get-DevicesByAdHocPolicyMapping {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyGUID,
+        [switch]$Deferred,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -173,7 +184,11 @@ function Get-DevicesByAdHocPolicyMapping {
         # WHERE ah.PolicyGUID = @PolicyGUID
         # AND dev.UpdateDeferring = 0
 
-        $Command.Commandtext = "SELECT dev.DeviceName,dev.processor_architecture from Devices as dev INNER JOIN ad_hoc_policy_assignments as ah ON ah.DeviceName = dev.DeviceName WHERE ah.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 0"
+        if ($Deferred) {
+            $Command.Commandtext = "SELECT dev.DeviceName,dev.processor_architecture from Devices as dev INNER JOIN ad_hoc_policy_assignments as ah ON ah.DeviceName = dev.DeviceName WHERE ah.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 1"
+        } else {
+            $Command.Commandtext = "SELECT dev.DeviceName,dev.processor_architecture from Devices as dev INNER JOIN ad_hoc_policy_assignments as ah ON ah.DeviceName = dev.DeviceName WHERE ah.PolicyGUID = @PolicyGUID AND dev.UpdateDeferring = 0"
+        }
         
         $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
@@ -222,6 +237,6 @@ function Get-DevicesNeedingWDACPolicy {
 
 
     #TODO
-
+    
 	
 }
