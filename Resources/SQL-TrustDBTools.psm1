@@ -1735,19 +1735,26 @@ function Add-WDACPolicy {
         }
         $Command = $Connection.CreateCommand()
 
-        $Command.Commandtext = "INSERT INTO policies (PolicyGUID,PolicyID,PolicyHash,PolicyName,PolicyVersion,ParentPolicyGUID,BaseOrSupplemental,IsSigned,AuditMode,IsPillar,OriginLocation,OriginLocationType) values (@PolicyGUID,@PolicyID,@PolicyHash,@PolicyName,@PolicyVersion,@ParentPolicyGUID,@BaseOrSupplemental,@IsSigned,@AuditMode,@IsPillar,@OriginLocation,@OriginLocationType)"
-            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
-            $Command.Parameters.AddWithValue("PolicyID",$PolicyID) | Out-Null
-            $Command.Parameters.AddWithValue("PolicyHash",$PolicyHash) | Out-Null
-            $Command.Parameters.AddWithValue("PolicyName",$PolicyName) | Out-Null
-            $Command.Parameters.AddWithValue("PolicyVersion",$PolicyVersion) | Out-Null
-            $Command.Parameters.AddWithValue("ParentPolicyGUID",$ParentPolicyGUID) | Out-Null
-            $Command.Parameters.AddWithValue("BaseOrSupplemental",$BaseOrSupplemental) | Out-Null
-            $Command.Parameters.AddWithValue("IsSigned",$IsSigned) | Out-Null
-            $Command.Parameters.AddWithValue("AuditMode",$AuditMode) | Out-Null
-            $Command.Parameters.AddWithValue("IsPillar",$IsPillar) | Out-Null
-            $Command.Parameters.AddWithValue("OriginLocation",$OriginLocation) | Out-Null
-            $Command.Parameters.AddWithValue("OriginLocationType",$OriginLocationType) | Out-Null
+        if ($IsSigned) {
+            $Command.Commandtext = "INSERT INTO policies (PolicyGUID,PolicyID,PolicyHash,PolicyName,PolicyVersion,ParentPolicyGUID,BaseOrSupplemental,IsSigned,AuditMode,IsPillar,OriginLocation,OriginLocationType,LastSignedVersion) values (@PolicyGUID,@PolicyID,@PolicyHash,@PolicyName,@PolicyVersion,@ParentPolicyGUID,@BaseOrSupplemental,@IsSigned,@AuditMode,@IsPillar,@OriginLocation,@OriginLocationType,@LastSignedVersion)"
+            $Command.Parameters.AddWithValue("LastSignedVersion",$PolicyVersion) | Out-Null
+        } else {
+            $Command.Commandtext = "INSERT INTO policies (PolicyGUID,PolicyID,PolicyHash,PolicyName,PolicyVersion,ParentPolicyGUID,BaseOrSupplemental,IsSigned,AuditMode,IsPillar,OriginLocation,OriginLocationType,LastUnsignedVersion) values (@PolicyGUID,@PolicyID,@PolicyHash,@PolicyName,@PolicyVersion,@ParentPolicyGUID,@BaseOrSupplemental,@IsSigned,@AuditMode,@IsPillar,@OriginLocation,@OriginLocationType,@LastUnsignedVersion)"
+            $Command.Parameters.AddWithValue("LastUnsignedVersion",$PolicyVersion) | Out-Null
+        }
+
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("PolicyID",$PolicyID) | Out-Null
+        $Command.Parameters.AddWithValue("PolicyHash",$PolicyHash) | Out-Null
+        $Command.Parameters.AddWithValue("PolicyName",$PolicyName) | Out-Null
+        $Command.Parameters.AddWithValue("PolicyVersion",$PolicyVersion) | Out-Null
+        $Command.Parameters.AddWithValue("ParentPolicyGUID",$ParentPolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("BaseOrSupplemental",$BaseOrSupplemental) | Out-Null
+        $Command.Parameters.AddWithValue("IsSigned",$IsSigned) | Out-Null
+        $Command.Parameters.AddWithValue("AuditMode",$AuditMode) | Out-Null
+        $Command.Parameters.AddWithValue("IsPillar",$IsPillar) | Out-Null
+        $Command.Parameters.AddWithValue("OriginLocation",$OriginLocation) | Out-Null
+        $Command.Parameters.AddWithValue("OriginLocationType",$OriginLocationType) | Out-Null
             
         $Command.ExecuteNonQuery()
 
@@ -1854,6 +1861,239 @@ function Set-WDACPolicyVersion {
             $Connection.close()
         }
 
+        throw $theError
+    }
+}
+
+function Set-WDACPolicyPillar {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [switch]$Set,
+        [switch]$Unset,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    if ((-not $Set) -and (-not $Unset)) {
+        throw "Set-WDACPolicyPillar function called without setting `"set`" or `"unset`" flags."
+    } elseif ($Set -and $Unset) {
+        throw "Cannot set both `"set`" and `"unset`" flags for cmdlet Set-WDACPolicyPillar"
+    }
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        if ($Set) {
+            $Command.Commandtext = "UPDATE policies SET IsPillar = 1 WHERE PolicyGUID = @PolicyGUID"
+        } elseif ($Unset) {
+            $Command.Commandtext = "UPDATE policies SET IsPillar = 0 WHERE PolicyGUID = @PolicyGUID"
+        }
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Set-WDACPolicySigned {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [switch]$Set,
+        [switch]$Unset,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    if ((-not $Set) -and (-not $Unset)) {
+        throw "Set-WDACPolicySigned function called without setting `"set`" or `"unset`" flags."
+    } elseif ($Set -and $Unset) {
+        throw "Cannot set both `"set`" and `"unset`" flags for cmdlet Set-WDACPolicySigned"
+    }
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        if ($Set) {
+            $Command.Commandtext = "UPDATE policies SET IsSigned = 1 WHERE PolicyGUID = @PolicyGUID"
+        } elseif ($Unset) {
+            $Command.Commandtext = "UPDATE policies SET IsSigned = 0 WHERE PolicyGUID = @PolicyGUID"
+        }
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Set-WDACPolicyEnforced {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [switch]$Set,
+        [switch]$Unset,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    if ((-not $Set) -and (-not $Unset)) {
+        throw "Set-WDACPolicyEnforced function called without setting `"set`" or `"unset`" flags."
+    } elseif ($Set -and $Unset) {
+        throw "Cannot set both `"set`" and `"unset`" flags for cmdlet Set-WDACPolicyEnforced"
+    }
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        if ($Set) {
+            $Command.Commandtext = "UPDATE policies SET AuditMode = 0 WHERE PolicyGUID = @PolicyGUID"
+        } elseif ($Unset) {
+            $Command.Commandtext = "UPDATE policies SET AuditMode = 1 WHERE PolicyGUID = @PolicyGUID"
+        }
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Set-LastSignedUnsignedWDACPolicyVersion {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyVersion,
+        [switch]$Signed,
+        [switch]$Unsigned,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    if ((-not $Signed) -and (-not $Unsigned)) {
+        throw "Signed or Unsigned flags not set for Set-LastSignedUnsignedWDACPolicyVersion."
+    }
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        if ($Signed) {
+            $Command.Commandtext = "UPDATE policies SET LastSignedVersion = @LastSignedVersion WHERE PolicyGUID = @PolicyGUID"
+            $Command.Parameters.AddWithValue("LastSignedVersion",$PolicyVersion) | Out-Null
+        } elseif ($Unsigned) {
+            $Command.Commandtext = "UPDATE policies SET LastUnsignedVersion = @LastUnsignedVersion WHERE PolicyGUID = @PolicyGUID"
+            $Command.Parameters.AddWithValue("LastUnsignedVersion",$PolicyVersion) | Out-Null
+        }
+        
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Test-WDACPolicySigned {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select IsSigned from policies WHERE PolicyGUID = @PolicyGUID"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [bool]$Reader["IsSigned"]
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
         throw $theError
     }
 }

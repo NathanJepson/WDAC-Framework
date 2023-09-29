@@ -139,6 +139,8 @@ function Edit-WDACPolicy {
     #>
     [CmdletBinding()]
     Param (
+        [switch]$Pillar,
+        [switch]$RemovePillar,
         [Alias("RetainCopy","KeepOld","RetainOld")]
         [switch]$NoOverwrite,
         [ValidateNotNullOrEmpty()]
@@ -809,6 +811,47 @@ function Edit-WDACPolicy {
             $PolicyVersion = (Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion
             if ($PolicyVersion) {
                 New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $PolicyVersion -Connection $Connection -ErrorAction Stop
+                
+                if ($Signed) {
+                    if (-not (Set-WDACPolicySigned -PolicyGUID $PolicyGUID -Set -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update IsSigned attribute for policy $PolicyGUID"
+                    }
+                } elseif ($Unsigned) {
+                    if (-not (Set-WDACPolicySigned -PolicyGUID $PolicyGUID -Unset -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update IsSigned attribute to FALSE for policy $PolicyGUID"
+                    }
+                }
+
+                if ($Audit) {
+                    if (-not (Set-WDACPolicyEnforced -PolicyGUID $PolicyGUID -Unset -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update AuditMode attribute for policy $PolicyGUID"
+                    }
+                } elseif ($RemoveAudit) {
+                    if (-not (Set-WDACPolicyEnforced -PolicyGUID $PolicyGUID -Set -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update AuditMode attribute to FALSE for policy $PolicyGUID"
+                    }
+                }
+
+                if ($Pillar) {
+                    if (-not (Set-WDACPolicyPillar -PolicyGUID $PolicyGUID -Set -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update IsPillar attribute for policy $PolicyGUID"
+                    }
+                } elseif ($RemovePillar) {
+                    if (-not (Set-WDACPolicyPillar -PolicyGUID $PolicyGUID -Unset -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update IsPillar attribute to FALSE for policy $PolicyGUID"
+                    }
+                }
+
+                if (Test-WDACPolicySigned -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {
+                    if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Signed -Connection $Connection -ErrorAction Stop)) {
+                        throw "Could not set LastSignedVersion attribute on Policy $PolicyGUID"
+                    }
+                } else {
+                    if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Unsigned -Connection $Connection -ErrorAction Stop)) {
+                        throw "Could not set LastUnsignedVersion attribute on Policy $PolicyGUID"
+                    }
+                }
+
                 $Transaction.Commit()
                 Write-Host "Successfully committed changes to Policy $PolicyGUID" -ForegroundColor Green
                 if ($PSModuleRoot) {
