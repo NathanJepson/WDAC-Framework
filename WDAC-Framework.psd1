@@ -19,7 +19,7 @@
     Copyright = 'MIT License'
     
     # Description of the functionality provided by this module
-    Description = 'A module to organize organizational deployment of WDAC policies via Remote Powershell (WinRM).'
+    Description = 'A module to organize deployment of WDAC policies in an organization via Remote Powershell (WinRM).'
     
     # Minimum version of the Windows PowerShell engine required by this module
     PowerShellVersion = '5.0'
@@ -76,7 +76,9 @@
                         'Register-WDACGroup',
                         'Register-WDACWorkstationAdHoc',
                         'Merge-TrustedWDACRules',
-                        'Edit-WDACPolicy'
+                        'Edit-WDACPolicy',
+                        'Deploy-WDACPolicies',
+                        'Restore-WDACWorkstations'
                         
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     # CmdletsToExport = '*'

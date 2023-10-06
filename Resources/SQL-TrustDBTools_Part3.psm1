@@ -232,9 +232,72 @@ function Get-WDACDevicesNeedingWDACPolicy {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyGUID,
+        [switch]$Deferred,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
-    #TODO
-	
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $DeviceMap = @{}
+
+        $DeviceList1 = Get-WDACDevicesByGroupToPolicyMapping -PolicyGUID $PolicyGUID -Deferred:$Deferred -Connection $Connection 
+        $DeviceList2 = Get-WDACDevicesByMirroredGroupToPolicyMapping -PolicyGUID $PolicyGUID -Deferred:$Deferred -Connection $Connection
+        $DeviceList3 = Get-WDACDevicesByAdHocPolicyMapping -PolicyGUID $PolicyGUID -Deferred:$Deferred -Connection $Connection
+
+        foreach ($Device in $DeviceList1) {
+            if (-not ($DeviceMap[($Device.DeviceName)])) {
+                $DeviceMap += @{ ($Device.DeviceName) = $Device.processor_architecture}
+            }
+        }
+        foreach ($Device in $DeviceList2) {
+            if (-not ($DeviceMap[($Device.DeviceName)])) {
+                $DeviceMap += @{ ($Device.DeviceName) = $Device.processor_architecture}
+            }
+        }
+        foreach ($Device in $DeviceList3) {
+            if (-not ($DeviceMap[($Device.DeviceName)])) {
+                $DeviceMap += @{ ($Device.DeviceName) = $Device.processor_architecture}
+            }
+        }
+
+        return $DeviceMap
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
+function Test-PolicyDeferredOnDevice {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$WorkstationName,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+
+}
+
+function Test-AnyPoliciesDeferredOnDevice {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$WorkstationName,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    
 }

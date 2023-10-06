@@ -37,6 +37,12 @@ function Deploy-WDACPolicies {
 
     .PARAMETER TestForce
     Force deployment of policy to machines -- even if they are not assigned the relevant policy. (Only if "TestComputers" is provided.)
+
+    .EXAMPLE
+    TODO
+
+    .EXAMPLE
+    TODO
     #>    
     [cmdletbinding()]
     Param ( 
@@ -50,12 +56,28 @@ function Deploy-WDACPolicies {
         [Alias("Force")]
         [switch]$TestForce
     )
-
     
+    if ($PolicyName -and $PolicyGUID) {
+        throw "Cannot provide both a policy name and policy GUID."
+    }
 
+    try {
+        $Connection = New-SQLiteConnection -ErrorAction Stop
+        $Transaction = $Connection.BeginTransaction()
+        
+        if ($PolicyName) {
+            $PolicyInfo = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection
+            $PolicyGUID = $PolicyInfo.PolicyGUID
+        } elseif ($PolicyGUID) {
+            $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection
+        }
+    
+        $ComputerMap = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
+    } catch {
+        throw $_
+    }
 }
-
 
 function Restore-WDACWorkstations {
     <#
@@ -64,7 +86,12 @@ function Restore-WDACWorkstations {
     apply the most recent policy version -- bring them up to date with the the policy specified.
 
     .DESCRIPTION
-    TODO
+    This cmdlet will remove workstations / PCs from "deferred" status if it can successfully deploy the newest policy designated by PolicyGUID to the applicable workstations.
+    If the "WorkstatioNName" parameter does not specify a workstation, then all devices with a deferred status and associated with a policy.
+    Many of the same elements of deploying policies is borrowed from the Deploy-Policies cmdlet.
+
+    Author: Nathan Jepson
+    License: MIT License
 
     .PARAMETER PolicyGUID
     ID of the policy (NOT the alternate ID which WDAC policies also have, although you can use the alias "PolicyID" for this parameter)
@@ -72,8 +99,15 @@ function Restore-WDACWorkstations {
     .PARAMETER PolicyName
     Name of the policy (exact)
 
-    Author: Nathan Jepson
-    License: MIT License
+    .PARAMETER WorkstationName
+    Specify this parameter if you only want to restore particular workstations to the current WDAC policy.
+
+    .EXAMPLE
+    TODO
+
+    .EXAMPLE
+    TODO
+
     #>
     [cmdletbinding()]
     Param ( 
@@ -81,6 +115,38 @@ function Restore-WDACWorkstations {
         [Alias("PolicyID","id")]
         [string]$PolicyGUID,
         [ValidateNotNullOrEmpty()]
-        [string]$PolicyName
+        [string]$PolicyName,
+        [ValidateNotNullOrEmpty()]
+        [Alias("Workstations","Workstation","Device","Devices","PC","Computer","Computers")]
+        [string[]]$WorkstationName
     )
+
+    if ($PolicyName -and $PolicyGUID) {
+        throw "Cannot provide both a policy name and policy GUID."
+    }
+
+    try {
+        $Connection = New-SQLiteConnection -ErrorAction Stop
+        $Transaction = $Connection.BeginTransaction()
+        
+        if ($PolicyName) {
+            $PolicyInfo = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection
+            $PolicyGUID = $PolicyInfo.PolicyGUID
+        } elseif ($PolicyGUID) {
+            $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection
+        }
+    
+        #Deferred flag is set here, unlike the above cmdlet
+        $ComputerMapTemp = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Deferred -Connection $Connection -ErrorAction Stop
+        $ComputerMap = @{}
+        if ($WorkstationName) {
+            foreach ($Entry in $ComputerMapTemp.GetEnumerator()) {
+                if ($WorkstationName -contains $Entry.Name) {
+                    $ComputerMap += @{$Entry.Name = $Entry.Value}
+                }
+            }
+        }
+    } catch {
+        throw $_
+    }
 }
