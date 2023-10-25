@@ -29,15 +29,18 @@
             "ParentLocation" : ""
         },
         
-        "SqliteAssembly" : "Path_To_Sqlite_DLL",
-        "SignTool" : "Path_To_SignTool.exe",
-        "RefreshTool" : "Path_To_RefreshPolicy.exe",
+        "SqliteAssembly" : "Full_Path_To_Sqlite_DLL",
+        "SignTool" : "Full_Path_To_SignTool.exe",
+        "RefreshTool_AMD64" : "",
+        "RefreshTool_ARM64" : "",
+        "RefreshTool_x86" : "",
         "PowerShellCodeSigningCertificate" : "",
         "_PSCodeSigningCertExample" : "Cert:\\CurrentUser\\My\\27018D517AAA57E94D10075C084C0DEA13E793EB",
         "WDACPolicySigningCertificate" : "",
         "_WDACSigningCertExample" : "Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3",
         "PreferredOrganizationRuleLevel" : "",
         "PreferredOrganizationRuleFallbacks" : [],
-        "GlobalVersioningType" : ""
+        "GlobalVersioningType" : "",
+        "RemoteStagingDirectory" : ""
     }
 ]

@@ -61,6 +61,17 @@ function Deploy-WDACPolicies {
         throw "Cannot provide both a policy name and policy GUID."
     }
 
+    if ($TestForce -and (-not $TestComputers)) {
+        throw "Cannot set TestForce without providing a list of test computers."
+    }
+
+    if (-not $Local) {
+        $RemoteStagingDirectory = (Get-LocalStorageJSON -ErrorAction Stop)."RemoteStagingDirectory"
+        if (-not $RemoteStagingDirectory -or ("" -eq $RemoteStagingDirectory)) {
+            throw "When deploying staged policies to remote machines, you must designate a RemoteStagingDirectory in LocalStorage.json."
+        }
+    }
+
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
         $Transaction = $Connection.BeginTransaction()
@@ -71,9 +82,220 @@ function Deploy-WDACPolicies {
         } elseif ($PolicyGUID) {
             $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection
         }
-    
-        $ComputerMap = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
+    
+        if ($Local) {
+            #TODO
+
+        } else {
+        #Push to Remote Machines
+
+            if ((Test-ValidVersionNumber -VersionNumber $PolicyInfo.PolicyVersion) -and (Test-ValidVersionNumber -VersionNumber $PolicyInfo.LastDeployedPolicyVersion)) {
+                if ((Compare-Versions -Version1 $PolicyInfo.PolicyVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion) -le  0) {
+                    throw "Latest version of this policy is already deployed."
+                }
+            }
+
+            $ComputerMap = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+            if ( (($null -eq $ComputerMap) -or $ComputerMap.Count -le 0) -and (-not ($TestComputers -and $TestForce)) ) {
+                throw "No non-deferred workstations currently assigned to policy $PolicyGUID"
+            }
+
+            $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+            $SignedToUnsigned = Test-MustRemoveSignedPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+            $X86_Path = $null
+            $AMD64_Path = $null
+            $ARM64_Path = $null
+
+            function Get-X86Path {
+                $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
+                if (-not $X86_Path -or ("" -eq $X86_Path)) {
+                    throw "For remote machines with AMD64 architecture, specify the path of the AMD64 refresh tool in LocalStorage.json."
+                }
+                if (-not (Test-Path $X86_Path)) {
+                    throw "Please provide the full, valid path of the X86 refresh tool executable in LocalStorage.json."
+                }
+
+                return $X86_Path
+            }
+
+            function Get-AMD64Path {
+                
+                $AMD64_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_AMD64"
+                if (-not $AMD64_Path -or ("" -eq $AMD64_Path)) {
+                    throw "For remote machines with AMD64 architecture, specify the path of the AMD64 refresh tool in LocalStorage.json."
+                }
+                if (-not (Test-Path $AMD64_Path)) {
+                    throw "Please provide the full, valid path of the AMD64 refresh tool executable in LocalStorage.json."
+                }
+
+                return $AMD64_Path
+            }
+
+            function Get-ARM64Path {
+                $ARM64_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_ARM64"
+                if (-not $ARM64_Path -or ("" -eq $ARM64_Path)) {
+                    throw "For remote machines with ARM64 architecture, specify the path of the ARM64 refresh tool in LocalStorage.json."
+                }
+                if (-not (Test-Path $ARM64_Path)) {
+                    throw "Please provide the full, valid path of the ARM64 refresh tool executable in LocalStorage.json."
+                }
+
+                return $ARM64_Path
+            }
+
+            $NewComputerMap = @()
+
+            foreach ($Computer in $ComputerMap.GetEnumerator()) {
+                $thisComputer = $Computer.Name
+                $CPU = $Computer.Value
+                
+                if ($null -eq $CPU -or ($CPU -eq "")) {
+                    try {
+                        $Architecture = Invoke-Command -ComputerName $thisComputer -ScriptBlock {cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"} -ErrorAction Stop
+                    } catch {
+                        Write-Verbose "Device $thisComputer not available for PowerShell remoting."
+                        $NewComputerMap += @{DeviceName = $thisComputer; CPU = $CPU; NewlyDeferred = $true; TestMachine = $false}
+                        continue
+                    }
+
+                    if ($Architecture) {
+                        if (-not (Add-WDACWorkstationProcessorArchitecture -DeviceName $thisComputer -ProcessorArchitecture $Architecture -Connection $Connection -ErrorAction Stop)) {
+                            Write-Verbose "Could not set CPU architecture $Architecture on device $thisComputer"
+                        }
+                        $CPU = $Architecture
+                    }
+                }
+
+                if ($CPU -eq "AMD64") {
+                    if ($null -eq $AMD64_Path) {
+                        $AMD64_Path = Get-AMD64Path
+                    }
+                } elseif ($CPU -eq "ARM64") {
+                    if ($null -eq $ARM64_Path) {
+                        $ARM64_Path = Get-ARM64Path
+                    }
+                } elseif ($CPU -eq "X86") {
+                    if ($null -eq $X86_Path) {
+                        $X86_Path = Get-X86Path
+                    }
+                } else {
+                    #The reason we commit here is because database values were written for CPU architectures
+                    $Transaction.Commit()
+                    $Connection.Close()
+                    throw "$CPU CPU architecture not supported for device $thisComputer"
+                }
+
+                if ($TestComputers) {
+                    if ( ($TestComputers -contains $thisComputer)) {
+                        $NewComputerMap += @{DeviceName = $thisComputer; CPU = $CPU; NewlyDeferred = $false; TestMachine = $true}
+                    } else {
+                        $NewComputerMap += @{DeviceName = $thisComputer; CPU = $CPU; NewlyDeferred = $true; TestMachine = $false}
+                    }
+                } else {
+                    $NewComputerMap += @{DeviceName = $thisComputer; CPU = $CPU; NewlyDeferred = $false; TestMachine = $false}
+                }
+            }
+
+            if ($TestForce) {  
+                foreach ($thisTestMachine in $TestComputers) {
+                    $Assigned = $false
+                    $CPU = $null
+                    foreach ($Computer in $ComputerMap.GetEnumerator()) {
+                        if ($thisTestMachine -eq $Computer.Name) {
+                            $Assigned = $true
+                        }
+                    }
+                    if (-not $Assigned) {
+                        
+                        #$NewComputerMap += @{DeviceName = $thisTestMachine; CPU = }
+                        $CPU = Get-WDACWorkstationProcessorArchitecture -DeviceName $thisTestMachine -Connection $Connection -ErrorAction Stop
+                        if ($null -eq $CPU -or ($CPU -eq "")) {
+                            try {
+                                $Architecture = Invoke-Command -ComputerName $thisComputer -ScriptBlock {cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"} -ErrorAction Stop
+                            } catch {
+                                Write-Verbose "Device $thisComputer not available for PowerShell remoting."
+                                #We don't add this device to the $NewComputerMap because it was never assigned the policy in the first place and we don't want to defer it
+                                continue
+                            }
+        
+                            if ($Architecture) {
+                                if (-not (Add-WDACWorkstationProcessorArchitecture -DeviceName $thisComputer -ProcessorArchitecture $Architecture -Connection $Connection -ErrorAction Stop)) {
+                                    Write-Verbose "Could not set CPU architecture $Architecture on device $thisComputer"
+                                }
+                                $CPU = $Architecture
+                            } elseif (($null -eq $Architecture) -or ("" -eq $Architecture)) {
+                                Write-Verbose "Could not retrieve valid CPU architecture from $thisComputer"
+                                continue
+                            }
+                        }
+
+                        if ($CPU -eq "AMD64") {
+                            if ($null -eq $AMD64_Path) {
+                                $AMD64_Path = Get-AMD64Path
+                            }
+                        } elseif ($CPU -eq "ARM64") {
+                            if ($null -eq $ARM64_Path) {
+                                $ARM64_Path = Get-ARM64Path
+                            }
+                        } elseif ($CPU -eq "X86") {
+                            if ($null -eq $X86_Path) {
+                                $X86_Path = Get-X86Path
+                            }
+                        } elseif (($null -ne $CPU) -and ("" -ne $CPU)) {
+                            #The reason we commit here is because database values were written for CPU architectures
+                            $Transaction.Commit()
+                            $Connection.Close()
+                            throw "$CPU CPU architecture not supported for device $thisComputer"
+                        }
+
+                        if ($CPU) {
+                            $NewComputerMap += @{DeviceName = $thisComputer; CPU = $CPU; NewlyDeferred = $false; TestMachine = $true}
+                        }
+                    }
+                }
+            }
+
+            $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
+
+
+            #Copy WDAC Policies and Refresh Tools
+            ##======================================================================================
+            if ($SignedToUnsigned) {
+
+                #Get Signed First
+
+                #Copy to Machine(s)
+
+                #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+
+                #Increment Version Number
+
+                #Get Unsigned Second
+
+                #Copy to Machine(s)
+
+                #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+
+            } else {
+
+                if ($PolicyInfo.IsSigned -eq $true) {
+                #Get Signed
+
+
+
+                }
+
+                #Copy to Machine(s)
+
+                #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+
+            }
+            
+            ##======================================================================================
+        }
+        
     } catch {
         throw $_
     }
