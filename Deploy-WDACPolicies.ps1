@@ -38,6 +38,9 @@ function Deploy-WDACPolicies {
     .PARAMETER TestForce
     Force deployment of policy to machines -- even if they are not assigned the relevant policy. (Only if "TestComputers" is provided.)
 
+    .PARAMETER SkipSetup
+    Cmdlet will not check whether staging directory or refresh tools are present on a device.
+
     .EXAMPLE
     TODO
 
@@ -54,7 +57,8 @@ function Deploy-WDACPolicies {
         [switch]$Local,
         [string[]]$TestComputers,
         [Alias("Force")]
-        [switch]$TestForce
+        [switch]$TestForce,
+        [switch]$SkipSetup
     )
     
     if ($PolicyName -and $PolicyGUID) {
@@ -69,6 +73,12 @@ function Deploy-WDACPolicies {
         $RemoteStagingDirectory = (Get-LocalStorageJSON -ErrorAction Stop)."RemoteStagingDirectory"
         if (-not $RemoteStagingDirectory -or ("" -eq $RemoteStagingDirectory)) {
             throw "When deploying staged policies to remote machines, you must designate a RemoteStagingDirectory in LocalStorage.json."
+        }
+
+        try {
+            Split-Path $RemoteStagingDirectory -Qualifier -ErrorAction Stop | Out-Null
+        } catch {
+            throw "The RemoteStagingDirectory must have a qualifier such as `"C:\`" or `"D:\`" at the beginning."
         }
     }
 
@@ -90,9 +100,11 @@ function Deploy-WDACPolicies {
         } else {
         #Push to Remote Machines
 
-            if ((Test-ValidVersionNumber -VersionNumber $PolicyInfo.PolicyVersion) -and (Test-ValidVersionNumber -VersionNumber $PolicyInfo.LastDeployedPolicyVersion)) {
-                if ((Compare-Versions -Version1 $PolicyInfo.PolicyVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion) -le  0) {
-                    throw "Latest version of this policy is already deployed."
+            if (($null -ne $PolicyInfo.PolicyVersion) -and ($null -ne $PolicyInfo.LastDeployedPolicyVersion)) {
+                if ((Test-ValidVersionNumber -VersionNumber $PolicyInfo.PolicyVersion) -and (Test-ValidVersionNumber -VersionNumber $PolicyInfo.LastDeployedPolicyVersion)) {
+                    if ((Compare-Versions -Version1 $PolicyInfo.PolicyVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion) -le  0) {
+                        throw "Latest version of this policy is already deployed."
+                    }
                 }
             }
 
@@ -162,7 +174,7 @@ function Deploy-WDACPolicies {
 
                     if ($Architecture) {
                         if (-not (Add-WDACWorkstationProcessorArchitecture -DeviceName $thisComputer -ProcessorArchitecture $Architecture -Connection $Connection -ErrorAction Stop)) {
-                            Write-Verbose "Could not set CPU architecture $Architecture on device $thisComputer"
+                            Write-Verbose "Could not write CPU architecture $Architecture of device $thisComputer to database."
                         }
                         $CPU = $Architecture
                     }
@@ -222,7 +234,7 @@ function Deploy-WDACPolicies {
         
                             if ($Architecture) {
                                 if (-not (Add-WDACWorkstationProcessorArchitecture -DeviceName $thisComputer -ProcessorArchitecture $Architecture -Connection $Connection -ErrorAction Stop)) {
-                                    Write-Verbose "Could not set CPU architecture $Architecture on device $thisComputer"
+                                    Write-Verbose "Could not write CPU architecture $Architecture of device $thisComputer to database."
                                 }
                                 $CPU = $Architecture
                             } elseif (($null -eq $Architecture) -or ("" -eq $Architecture)) {
@@ -259,7 +271,7 @@ function Deploy-WDACPolicies {
 
             $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
 
-
+            
             #Copy WDAC Policies and Refresh Tools
             ##======================================================================================
             if ($SignedToUnsigned) {
