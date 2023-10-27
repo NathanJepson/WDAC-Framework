@@ -55,6 +55,7 @@ function Deploy-WDACPolicies {
         [ValidateNotNullOrEmpty()]
         [string]$PolicyName,
         [switch]$Local,
+        [Alias("TestMachines","TestMachine","TestDevices","TestDevice","TestComputer")]
         [string[]]$TestComputers,
         [Alias("Force")]
         [switch]$TestForce,
@@ -108,7 +109,11 @@ function Deploy-WDACPolicies {
                 }
             }
 
-            $ComputerMap = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+            if ($PolicyInfo.IsPillar -eq $true) {
+                $ComputerMap = Get-WDACDevicesAllNamesAndCPUInfo -Connection $Connection -ErrorAction Stop
+            } else {
+                $ComputerMap = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+            }
 
             if ( (($null -eq $ComputerMap) -or $ComputerMap.Count -le 0) -and (-not ($TestComputers -and $TestForce)) ) {
                 throw "No non-deferred workstations currently assigned to policy $PolicyGUID"
@@ -119,6 +124,13 @@ function Deploy-WDACPolicies {
             $X86_Path = $null
             $AMD64_Path = $null
             $ARM64_Path = $null
+
+            if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+                $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+                Write-Verbose "The current file is in the SignedModules folder."
+            } else {
+                $PSModuleRoot = $PSScriptRoot
+            }        
 
             function Get-X86Path {
                 $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
@@ -163,7 +175,8 @@ function Deploy-WDACPolicies {
                 $thisComputer = $Computer.Name
                 $CPU = $Computer.Value
                 
-                if ($null -eq $CPU -or ($CPU -eq "")) {
+                if ($null -eq $CPU -or ($CPU -eq "") -or ($CPU -is [System.DBNull])) {
+                    $Architecture = $null
                     try {
                         $Architecture = Invoke-Command -ComputerName $thisComputer -ScriptBlock {cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"} -ErrorAction Stop
                     } catch {
@@ -223,7 +236,8 @@ function Deploy-WDACPolicies {
                         
                         #$NewComputerMap += @{DeviceName = $thisTestMachine; CPU = }
                         $CPU = Get-WDACWorkstationProcessorArchitecture -DeviceName $thisTestMachine -Connection $Connection -ErrorAction Stop
-                        if ($null -eq $CPU -or ($CPU -eq "")) {
+                        if ($null -eq $CPU -or ($CPU -eq "") -or ($CPU -is [System.DBNull])) {
+                            $Architecture = $null
                             try {
                                 $Architecture = Invoke-Command -ComputerName $thisComputer -ScriptBlock {cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"} -ErrorAction Stop
                             } catch {
@@ -270,8 +284,14 @@ function Deploy-WDACPolicies {
             }
 
             $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
+            $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
+            $SignedStagedPolicyPath = $null
+            ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+            $Test = $false
+            if (($CustomPSObjectComputerMap | Where-Object {$_.TestMachine -eq $true} | Select-Object DeviceName).Count -ge 1) {
+                $Test = $true
+            }
 
-            
             #Copy WDAC Policies and Refresh Tools
             ##======================================================================================
             if ($SignedToUnsigned) {
@@ -293,23 +313,31 @@ function Deploy-WDACPolicies {
             } else {
 
                 if ($PolicyInfo.IsSigned -eq $true) {
-                #Get Signed
+                    #Get Signed
 
+                    #Copy to Machine(s)
 
+                    #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+
+                } else {
+                    #Copy to Machine(s)
+                    Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
+
+                    #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
 
                 }
-
-                #Copy to Machine(s)
-
-                #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-
             }
-            
             ##======================================================================================
+
+            Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            $Transaction.Commit()
+            $Connection.Close()
         }
         
     } catch {
-        throw $_
+        $theError = $_
+        Write-Verbose ($theError | Format-List -Property * | Out-String)
+        throw $theError
     }
 }
 
@@ -381,6 +409,8 @@ function Restore-WDACWorkstations {
             }
         }
     } catch {
-        throw $_
+        $theError = $_
+        Write-Verbose ($theError | Format-List -Property * | Out-String)
+        throw $theError
     }
 }

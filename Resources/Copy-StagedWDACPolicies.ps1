@@ -30,7 +30,7 @@ function Copy-StagedWDACPolicies {
         }
     } else {
         #TODO
-        throw "Operation not currently supported for fixing deferred" #FIXME
+        throw "Operation not currently supported for fixing deferred but will be added soon" #FIXME
     }
 
     $CopyRefreshTool_ScriptBlock = {
@@ -50,7 +50,7 @@ function Copy-StagedWDACPolicies {
 
             $Root = Split-Path -Qualifier $Path
             if (($Root.Length -eq 2) -and ($Root[1] -eq ":")) {
-                $Letter = $Root.Substring(0,1)
+                $Letter = $Root.Substring(0,1).ToLower()
                 return (Join-Path "\\$ComputerName\$Letter`$\" -ChildPath (Split-Path -NoQualifier $Path))
             } else {
                 return (Join-Path "\\$ComputerName" -ChildPath $Path)
@@ -89,7 +89,7 @@ function Copy-StagedWDACPolicies {
 
             $Root = (Split-Path -Qualifier $Path)
             if (($Root.Length -eq 2) -and ($Root[1] -eq ":")) {
-                $Letter = $Root.Substring(0,1)
+                $Letter = $Root.Substring(0,1).ToLower()
                 return (Join-Path "\\$ComputerName\$Letter`$\" -ChildPath (Split-Path -NoQualifier $Path))
             } else {
                 return (Join-Path "\\$ComputerName\" -ChildPath $Path)
@@ -97,11 +97,11 @@ function Copy-StagedWDACPolicies {
         }
 
         try {
-            Copy-Item -Path $CIPolicyPath -Destination (Convert-ToSMBPath -Path $RemoteStagingDirectory -ComputerName $PSComputerName) -ErrorAction Stop
+            Copy-Item -Path $CIPolicyPath -Destination (Convert-ToSMBPath -Path $RemoteStagingDirectory -ComputerName $PSComputerName) -Force -ErrorAction Stop
         } catch {
             try {
                 $sess = New-PSSession -ComputerName $PSComputerName -ErrorAction Stop; 
-                Copy-Item -ToSession $sess -Path $CIPolicyPath -Destination $RemoteStagingDirectory -ErrorAction Stop
+                Copy-Item -ToSession $sess -Path $CIPolicyPath -Destination $RemoteStagingDirectory -Force -ErrorAction Stop
                 $sess | Remove-PSSession
             } catch {
                 #FIXME / TODO
@@ -124,7 +124,7 @@ function Copy-StagedWDACPolicies {
             throw New-Object System.Management.Automation.Remoting.PSRemotingTransportException
         }
 
-        $Result = Invoke-Command -ErrorAction SilentlyContinue -Session $sess -ArgumentList $RemoteStagingDirectory,$X86_Path,$AMD64_Path,$ARM64_Path -ScriptBlock {
+        $Result = Invoke-Command -Session $sess -ArgumentList $RemoteStagingDirectory,$X86_Path,$AMD64_Path,$ARM64_Path -ScriptBlock {
             Param (
                 $RemoteStagingDirectory,
                 $X86_Path,
@@ -135,30 +135,38 @@ function Copy-StagedWDACPolicies {
             $IsDirectoryPresent = $null
             $DirectoryPlacingError = $null
             $RefreshToolPresent = $null
-
             if (-not (Test-Path $RemoteStagingDirectory)) {
                 try {
-                    New-Item -ItemType Directory -Name (Split-Path -NoQualifier $RemoteStagingDirectory) -Path (Split-Path -Qualifier $RemoteStagingDirectory) -ErrorAction Stop | Out-Null
+                    #Slash needs to be added to end of the qualifier \ drive name or else it gets put in the Documents folder
+                    New-Item -Name (Split-Path -NoQualifier $RemoteStagingDirectory) -Path ((Split-Path -Qualifier $RemoteStagingDirectory) + "\") -ItemType "Directory" -ErrorAction Stop | Out-Null
                     $IsDirectoryPresent = $true
+                    $RefreshToolPresent = $false
                 } catch {
                     $IsDirectoryPresent = $false
+                    $RefreshToolPresent = $false
                     $DirectoryPlacingError = $_
                 }
             } else {
                 $IsDirectoryPresent = $true
-
                 if ((Test-Path (Join-Path $RemoteStagingDirectory -ChildPath (Split-Path -Leaf $X86_Path))) -or (Test-Path (Join-Path $RemoteStagingDirectory -ChildPath (Split-Path -Leaf $ARM64_Path))) -or (Test-Path (Join-Path $RemoteStagingDirectory -ChildPath (Split-Path -Leaf $AMD64_Path)))) {
                 #Note here that the names of the refresh tools are the names provided by initially in the LocalStorage.json file
                     $RefreshToolPresent = $true
                 } else {
                     $RefreshToolPresent = $false
                 }
+                
+                try {
+                    Set-Location $RemoteStagingDirectory
+                    Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop
+                } catch {
+                    Write-Verbose "Trouble with deleting previous .CIP files in WDAC staging directory."
+                }
             }
 
             $Result = @()
             $Result += @{IsDirectoryPresent = $IsDirectoryPresent; DirectoryPlacingError = $DirectoryPlacingError; RefreshToolPresent = $RefreshToolPresent}
             return ($Result | ForEach-Object {New-Object -TypeName pscustomobject | Add-Member -NotePropertyMembers $_ -PassThru})
-        }
+        } -ErrorAction SilentlyContinue
 
         #I believe you have to remove the session here otherwise you can't make individual connections to the machines that you need to copy files to (if you aren't using SMB)
         $sess | Remove-PSSession
@@ -166,6 +174,7 @@ function Copy-StagedWDACPolicies {
        
         #Copy Refresh Tools
         $Result | ForEach-Object {
+
             $thisComputer = $_.PSComputerName
             if ($_.DirectoryPlacingError) {
                 Write-Verbose "Error creating remote staging directory on $($_.PSComputerName) with error: $($_.DirectoryPlacingError)"

@@ -405,6 +405,75 @@ function Get-WDACDevicesNeedingWDACPolicy {
     }
 }
 
+function Get-WDACDevicesAllNamesAndCPUInfo {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [switch]$Deferred,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        if ($Deferred) {
+            $Command.Commandtext = "SELECT DeviceName,processor_architecture from Devices WHERE UpdateDeferring = 1"
+        } else {
+            $Command.Commandtext = "SELECT DeviceName,processor_architecture from Devices WHERE UpdateDeferring = 0"
+        }
+        
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
+            if($Reader.Read()) {
+                $result += [PSCustomObject]@{
+                    DeviceName = $Reader["DeviceName"]
+                    processor_architecture = $Reader["processor_architecture"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        $DeviceMap = @{}
+        foreach ($Device in $result) {
+            if (-not ($DeviceMap[($Device.DeviceName)])) {
+                $DeviceMap += @{ ($Device.DeviceName) = $Device.processor_architecture}
+            }
+        }
+
+        return $DeviceMap
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Test-PolicyDeferredOnDevice {
     [cmdletbinding()]
     Param ( 

@@ -172,6 +172,11 @@ function Register-WDACWorkstation {
 
     try {
         $GroupNames = Get-WDACGroups -ErrorAction Stop
+
+        if ($null -eq $GroupNames -or ($GroupNames.Count -le 0)) {
+            throw "Create some groups before registering a new workstation."
+        }
+
         $GroupNamesArray = @()
         for ($i=0; $i -lt $GroupNames.Count; $i++) {
             $GroupNamesArray += $GroupNames[$i].GroupName
