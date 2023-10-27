@@ -185,7 +185,7 @@ function Get-WDACDevicesByGroupToPolicyMapping {
             }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
-                    DeviceName = $Reader["DeviceName"]
+                    DeviceName = $Reader["DeviceName"];
                     processor_architecture = $Reader["processor_architecture"]
                 }
             }
@@ -260,7 +260,7 @@ function Get-WDACDevicesByMirroredGroupToPolicyMapping {
             }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
-                    DeviceName = $Reader["DeviceName"]
+                    DeviceName = $Reader["DeviceName"];
                     processor_architecture = $Reader["processor_architecture"]
                 }
             }
@@ -329,7 +329,7 @@ function Get-WDACDevicesByAdHocPolicyMapping {
             }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
-                    DeviceName = $Reader["DeviceName"]
+                    DeviceName = $Reader["DeviceName"];
                     processor_architecture = $Reader["processor_architecture"]
                 }
             }
@@ -441,7 +441,7 @@ function Get-WDACDevicesAllNamesAndCPUInfo {
             }
             if($Reader.Read()) {
                 $result += [PSCustomObject]@{
-                    DeviceName = $Reader["DeviceName"]
+                    DeviceName = $Reader["DeviceName"];
                     processor_architecture = $Reader["processor_architecture"]
                 }
             }
@@ -462,6 +462,129 @@ function Get-WDACDevicesAllNamesAndCPUInfo {
         }
 
         return $DeviceMap
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Test-DeferredWDACPolicy {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeferredDevicePolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyVersion,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID AND PolicyVersion = @PolicyVersion"
+        $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$DeferredDevicePolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("PolicyVersion",$PolicyVersion) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Get-DeferredWDACPolicy {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeferredDevicePolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyVersion,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID AND PolicyVersion = @PolicyVersion"
+        $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$DeferredDevicePolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("PolicyVersion",$PolicyVersion) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [PSCustomObject]@{
+                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
+                    DeferredDevicePolicyGUID = $Reader["DeferredDevicePolicyGUID"];
+                    PolicyName = $Reader["PolicyName"];
+                    PolicyID = $Reader["PolicyID"];
+                    PolicyVersion = $Reader["PolicyVersion"];
+                    ParentPolicyGUID = $Reader["ParentPolicyGUID"];
+                    BaseOrSupplemental = [bool]$Reader["BaseOrSupplemental"];
+                    IsSigned = [bool]$Reader["IsSigned"];
+                    AuditMode = [bool]$Reader["AuditMode"];
+                    IsPillar = [bool]$Reader["IsPillar"];
+                    OriginLocation = $Reader["OriginLocation"];
+                    OriginLocationType = $Reader["OriginLocationType"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {

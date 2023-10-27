@@ -160,6 +160,12 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                                     $ResultMessage = "Device will need to be restarted to apply policy; users logged out and device is ready for a restart."
                                 } catch {                                   
                                     $ResultMessage = ("Error while logging users out to prep device for restart to activate policy: " + $_)
+                                    try {
+                                        Set-Location $RemoteStagingDirectory
+                                        Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop
+                                    } catch {
+                                        $ResultMessage += " Trouble with deleting previous .CIP files in WDAC staging directory."
+                                    }
                                     $Result = @()
                                     $Result += @{ResultMessage = $ResultMessage; RefreshToolAndPolicyPresent = $RefreshToolAndPolicyPresent; CopyToCIPoliciesActiveSuccessfull = $CopyToCIPoliciesActiveSuccessfull; CopyToEFIMount = $CopyToEFIMount; RefreshCompletedSuccessfully = $RefreshCompletedSuccessfully; ReadyForARestart = $ReadyForARestart}
                                     return ($Result | ForEach-Object {New-Object -TypeName pscustomobject | Add-Member -NotePropertyMembers $_ -PassThru})
@@ -194,6 +200,13 @@ function Invoke-ActivateAndRefreshWDACPolicy {
             } else {
                 $ResultMessage = "No WDAC / CodeIntegrity policy of name $CIPolicyFileName in remote staging directory."
             }
+        }
+
+        try {
+            Set-Location $RemoteStagingDirectory
+            Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop
+        } catch {
+            $ResultMessage += " Trouble with deleting previous .CIP files in WDAC staging directory."
         }
 
         $Result = @()
