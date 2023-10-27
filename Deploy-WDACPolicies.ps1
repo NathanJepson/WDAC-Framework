@@ -325,6 +325,8 @@ function Deploy-WDACPolicies {
 
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
 
+                #Remove all entries in "first_signed_policy_deployments" for this policy
+
             } else {
 
                 if ($PolicyInfo.IsSigned -eq $true) {
