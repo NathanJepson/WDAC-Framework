@@ -331,6 +331,14 @@ function New-WDACTrustDB {
         FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE RESTRICT,
         PRIMARY KEY(DeferredPolicyIndex,DeviceName)
     );
+
+    CREATE TABLE first_signed_policy_deployments (
+        PolicyGUID Text NOT NULL,
+        DeviceName Text NOT NULL,
+        PRIMARY KEY(PolicyGUID,DeviceName),
+        FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE CASCADE,
+        FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE CASCADE
+    );
 '@    
     $Database = Join-Path -Path $Destination -ChildPath $DBName
     if (Test-Path $Database) {

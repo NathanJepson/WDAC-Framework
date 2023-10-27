@@ -41,6 +41,11 @@ function Deploy-WDACPolicies {
     .PARAMETER SkipSetup
     Cmdlet will not check whether staging directory or refresh tools are present on a device.
 
+    .PARAMETER ForceRestart
+    WARNING: Disruptive action.
+    All devices* will be forced to restart! -- *Only applies to when a signed base policy is 
+    deployed on a device for the first time.
+
     .EXAMPLE
     TODO
 
@@ -59,7 +64,8 @@ function Deploy-WDACPolicies {
         [string[]]$TestComputers,
         [Alias("Force")]
         [switch]$TestForce,
-        [switch]$SkipSetup
+        [switch]$SkipSetup,
+        [switch]$ForceRestart
     )
     
     if ($PolicyName -and $PolicyGUID) {
@@ -292,6 +298,15 @@ function Deploy-WDACPolicies {
                 $Test = $true
             }
 
+            $results = $null
+            $Machines = $null
+
+            if ($Test) {
+                $Machines = ($CustomPSObjectComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($_.TestMachine -eq $true) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
+            } else {
+                $Machines = ($CustomPSObjectComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
+            }
+
             #Copy WDAC Policies and Refresh Tools
             ##======================================================================================
             if ($SignedToUnsigned) {
@@ -324,10 +339,19 @@ function Deploy-WDACPolicies {
                     Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -ErrorAction Stop
 
                 }
             }
             ##======================================================================================
+
+            if ($CustomPSObjectComputerMap) {
+            #Assign devices as deferred in the database which have failed to apply the new WDAC policy
+
+
+
+
+            }
 
             Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
             $Transaction.Commit()
