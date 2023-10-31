@@ -87,7 +87,7 @@ function Get-WDACWorkstationProcessorArchitecture {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -197,7 +197,7 @@ function Get-WDACDevicesByGroupToPolicyMapping {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -272,7 +272,7 @@ function Get-WDACDevicesByMirroredGroupToPolicyMapping {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -341,7 +341,7 @@ function Get-WDACDevicesByAdHocPolicyMapping {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -440,10 +440,10 @@ function Get-WDACDevicesAllNamesAndCPUInfo {
                 $result = @()
             }
             if($Reader.Read()) {
-                $result += [PSCustomObject]@{
+                $result += (Format-SQLResult ([PSCustomObject]@{
                     DeviceName = $Reader["DeviceName"];
                     processor_architecture = $Reader["processor_architecture"]
-                }
+                }))
             }
         }
 
@@ -584,7 +584,7 @@ function Get-DeferredWDACPolicy {
             $Connection.close()
         }
         
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -595,6 +595,19 @@ function Get-DeferredWDACPolicy {
         }
         throw $theError
     }
+}
+
+function Add-DeferredWDACPolicy {
+#This function takes the current WDAC policy by the GUID and 
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    
 }
 
 function Test-PolicyDeferredOnDevice {
@@ -660,7 +673,7 @@ function Get-WDACPolicyLastUnsignedVersion {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -709,7 +722,7 @@ function Get-WDACPolicyLastSignedVersion {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -758,7 +771,7 @@ function Get-WDACPolicyLastDeployedVersion {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {

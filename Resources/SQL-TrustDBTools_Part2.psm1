@@ -123,7 +123,7 @@ function Get-PotentialHashRules {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -250,7 +250,7 @@ function Get-PotentialFileNameRules {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -361,7 +361,7 @@ function Get-PotentialLeafCertificateRules {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -433,7 +433,7 @@ function Get-PotentialPcaCertificateRules {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -537,7 +537,7 @@ function Get-PotentialPublisherRules {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -647,7 +647,7 @@ function Get-PotentialFilePublisherRules {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -740,7 +740,7 @@ function Get-PolicyVersionNumber {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {

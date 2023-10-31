@@ -159,6 +159,26 @@ function Set-IncrementVersionNumber {
     return ($VersionSplit -Join ".")
 }
 
+function Format-SQLResult {
+#This converts all PSObject members of type [System.DBNull] to $null
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [PSCustomObject[]]$Object
+    )
+
+    for ($i=0; $i -lt $Object.Count; $i++) {
+        foreach ($Property in $Object[$i].PSObject.Properties) {
+            if ($Property.TypeNameOfValue -eq [System.DBNull]) {
+                $Object[$i].($Property.Name) = $null
+            }
+        }
+    }
+    
+    return $Object
+}
+
 function Find-WDACGroup {
     [cmdletbinding()]
     Param ( 
@@ -273,7 +293,7 @@ function Get-WDACGroups {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -507,7 +527,7 @@ function Get-MSIorScriptAllHashes {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -742,7 +762,7 @@ function Get-WDACApp {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -791,7 +811,7 @@ function Get-WDACAppsAllHashes {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -852,7 +872,7 @@ function Get-WDACAppSigners {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -911,7 +931,7 @@ function Get-WDACAppSignersByFlatHash {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -992,7 +1012,7 @@ function Get-WDACAppsToSetTrust {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -1404,7 +1424,7 @@ function Get-WDACCertificate {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -1455,7 +1475,7 @@ function Get-WDACCertificateCommonName {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -1815,7 +1835,7 @@ function Get-WDACPolicy {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -1852,12 +1872,9 @@ function Get-WDACPolicyVersion {
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
         while($Reader.HasRows) {
-            if (-not $result) {
-                $result = @()
-            }
-
             if($Reader.Read()) {
-                $result += $Reader["PolicyVersion"]
+                $result = $Reader["PolicyVersion"]
+                break
             }
         }
         $Reader.Close()
@@ -2200,7 +2217,7 @@ function Get-WDACPoliciesById {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -2257,7 +2274,7 @@ function Get-WDACPolicyByName {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -2307,7 +2324,7 @@ function Get-WDACPoliciesGUIDandName {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -2367,7 +2384,7 @@ function Get-AllWDACPoliciesAndAllInfo {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -2449,7 +2466,7 @@ function Get-WDACPolicyAssignments {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -2518,7 +2535,7 @@ function Get-WDACPublisher {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -2583,7 +2600,7 @@ function Get-WDACPublisherByPublisherIndex {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -2869,7 +2886,7 @@ function Get-WDACFilePublishers {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -2954,7 +2971,7 @@ function Get-WDACFilePublishersDefinitive {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -3725,7 +3742,7 @@ function Get-WDACDevice {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -4148,7 +4165,7 @@ function Get-WDACFileName {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -4912,7 +4929,7 @@ function Get-AppTrustedAllLevels {
     }
     
     $Result | Add-Member -NotePropertyMembers $ResultHashTable -PassThru | Out-Null
-    return $Result
+    return (Format-SQLResult $Result)
 }
 
 function Update-WDACTrust {

@@ -116,6 +116,26 @@ function New-SqliteConnection {
     }
 }
 
+function Format-SQLResult {
+#This converts all PSObject members of type [System.DBNull] to $null
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [PSCustomObject[]]$Object
+    )
+
+    for ($i=0; $i -lt $Object.Count; $i++) {
+        foreach ($Property in $Object[$i].PSObject.Properties) {
+            if ($Property.TypeNameOfValue -eq [System.DBNull]) {
+                $Object[$i].($Property.Name) = $null
+            }
+        }
+    }
+    
+    return $Object
+}
+
 function Add-PolicyFilePublisherOptions {
     [cmdletbinding()]
     param (
@@ -217,7 +237,7 @@ function Get-PolicyFilePublisherOptions {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -386,7 +406,7 @@ function Get-FilePublisherOptions {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -531,7 +551,7 @@ function Get-PolicyVersioningOptions {
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return $result
+        return (Format-SQLResult $result)
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
