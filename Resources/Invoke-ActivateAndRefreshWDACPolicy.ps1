@@ -37,6 +37,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         )
 
         $ResultMessage = $null
+        $WinRMSuccess = $true
         $RefreshToolAndPolicyPresent = $false
         $CopyToCIPoliciesActiveSuccessfull = $false
         $CopyToEFIMount = $false
@@ -167,7 +168,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                                         $ResultMessage += " Trouble with deleting previous .CIP files in WDAC staging directory."
                                     }
                                     $Result = @()
-                                    $Result += @{ResultMessage = $ResultMessage; RefreshToolAndPolicyPresent = $RefreshToolAndPolicyPresent; CopyToCIPoliciesActiveSuccessfull = $CopyToCIPoliciesActiveSuccessfull; CopyToEFIMount = $CopyToEFIMount; RefreshCompletedSuccessfully = $RefreshCompletedSuccessfully; ReadyForARestart = $ReadyForARestart}
+                                    $Result += @{WinRMSuccess = $WinRMSuccess; ResultMessage = $ResultMessage; RefreshToolAndPolicyPresent = $RefreshToolAndPolicyPresent; CopyToCIPoliciesActiveSuccessfull = $CopyToCIPoliciesActiveSuccessfull; CopyToEFIMount = $CopyToEFIMount; RefreshCompletedSuccessfully = $RefreshCompletedSuccessfully; ReadyForARestart = $ReadyForARestart}
                                     return ($Result | ForEach-Object {New-Object -TypeName pscustomobject | Add-Member -NotePropertyMembers $_ -PassThru})
                                 }
                             } else {
@@ -203,14 +204,14 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         }
 
         try {
-            Set-Location $RemoteStagingDirectory
+            Set-Location $RemoteStagingDirectory -ErrorAction Stop
             Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop
         } catch {
             $ResultMessage += " Trouble with deleting previous .CIP files in WDAC staging directory."
         }
 
         $Result = @()
-        $Result += @{ResultMessage = $ResultMessage; RefreshToolAndPolicyPresent = $RefreshToolAndPolicyPresent; CopyToCIPoliciesActiveSuccessfull = $CopyToCIPoliciesActiveSuccessfull; CopyToEFIMount = $CopyToEFIMount; RefreshCompletedSuccessfully = $RefreshCompletedSuccessfully; ReadyForARestart = $ReadyForARestart}
+        $Result += @{WinRMSuccess = $WinRMSuccess; ResultMessage = $ResultMessage; RefreshToolAndPolicyPresent = $RefreshToolAndPolicyPresent; CopyToCIPoliciesActiveSuccessfull = $CopyToCIPoliciesActiveSuccessfull; CopyToEFIMount = $CopyToEFIMount; RefreshCompletedSuccessfully = $RefreshCompletedSuccessfully; ReadyForARestart = $ReadyForARestart}
         return ($Result | ForEach-Object {New-Object -TypeName pscustomobject | Add-Member -NotePropertyMembers $_ -PassThru})
     } -ErrorAction SilentlyContinue
 
