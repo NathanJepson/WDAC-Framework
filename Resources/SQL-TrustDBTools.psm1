@@ -422,11 +422,15 @@ function Get-MAXAppIndexID {
                 $result = $Reader["MAX(AppIndex)"]
                 if ($result -is [System.DBNull]) {
                     $Reader.Close()
-                    $Connection.close()
+                    if ($NoConnectionProvided -and $Connection) {
+                        $Connection.close()
+                    }
                     return $null
                 } else {
                     $Reader.Close()
-                    $Connection.close()
+                    if ($NoConnectionProvided -and $Connection) {
+                        $Connection.close()
+                    }
                     return $result
                 }
             }
@@ -1051,9 +1055,9 @@ function Get-WDACAppSigningScenario {
         while($Reader.HasRows) {
             if($Reader.Read()) {
                 if ($Reader["SigningScenario"]) {
-                    return $Reader["SigningScenario"]
+                    $result = $Reader["SigningScenario"]
                 } else {
-                    return $null
+                    $result = $null
                 }
             }
         }
@@ -1062,6 +1066,9 @@ function Get-WDACAppSigningScenario {
         }
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
+        }
+        if ($result -is [System.DBNull]) {
+            return $null
         }
         return $result
     } catch {
@@ -1880,6 +1887,9 @@ function Get-WDACPolicyVersion {
         $Reader.Close()
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
+        }
+        if ($result -is [System.DBNull]) {
+            return $null
         }
         return $result
     } catch {

@@ -842,19 +842,19 @@ function Get-WDACPolicyLastUnsignedVersion {
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
         while($Reader.HasRows) {
-            if (-not $result) {
-                $result = @()
-            }
-
+        
             if($Reader.Read()) {
-                $result += $Reader["LastUnsignedVersion"]
+                $result = $Reader["LastUnsignedVersion"]
             }
         }
         $Reader.Close()
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return (Format-SQLResult $result)
+        if ($result -is [System.DBNull]) {
+            return $null
+        }
+        return $result
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -891,19 +891,19 @@ function Get-WDACPolicyLastSignedVersion {
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
         while($Reader.HasRows) {
-            if (-not $result) {
-                $result = @()
-            }
 
             if($Reader.Read()) {
-                $result += $Reader["LastSignedVersion"]
+                $result = $Reader["LastSignedVersion"]
             }
         }
         $Reader.Close()
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return (Format-SQLResult $result)
+        if ($result -is [System.DBNull]) {
+            return $null
+        }
+        return $result
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -940,19 +940,19 @@ function Get-WDACPolicyLastDeployedVersion {
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
         while($Reader.HasRows) {
-            if (-not $result) {
-                $result = @()
-            }
-
+            
             if($Reader.Read()) {
-                $result += $Reader["LastDeployedPolicyVersion"]
+                $result = $Reader["LastDeployedPolicyVersion"]
             }
         }
         $Reader.Close()
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
         }
-        return (Format-SQLResult $result)
+        if ($result -is [System.DBNull]) {
+            return $null
+        }
+        return $result
     } catch {
         $theError = $_
         if ($NoConnectionProvided -and $Connection) {
@@ -988,21 +988,29 @@ function Test-MustRemoveSignedPolicy {
             return $false
         
         } else {
-            $CurrentVersion = Get-WDACPolicyVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             $LastUnsignedVersion = Get-WDACPolicyLastUnsignedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             $LastSignedVersion = Get-WDACPolicyLastSignedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             $LastDeployedPolicyVersion = Get-WDACPolicyLastDeployedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
-            #The if statement checks that there was a signed version, and that the policy was actually deployed in a signed state
-            #NOTE: This doesn't actually check whether a previous signed policy was ACTUALLY deployed, but that doesn't matter because the procedure should cover its deployment anyway
-            if ( (("" -ne $LastSignedVersion) -and ($null -ne $LastSignedVersion) -and (Test-ValidVersionNumber -VersionNumber $LastSignedVersion)) -and ( (Compare-Versions -Version1 $LastSignedVersion -Version2 $LastUnsignedVersion) -eq -1) -and ((Compare-Versions -Version1 $LastUnsignedVersion -Version2 $CurrentVersion) -eq 0)) {
-                if ((("" -ne $LastDeployedPolicyVersion) -and ($null -ne $LastDeployedPolicyVersion) -and (Test-ValidVersionNumber -VersionNumber $LastDeployedPolicyVersion))) {
-                    $result = $true
+            if (-not $LastDeployedPolicyVersion) {
+            #Policy was never deployed
+                return $false
+            }
+
+            if (Compare-Versions -Version1 $LastUnsignedVersion -Version2 $LastSignedVersion -eq 1) {
+            #If the more recent version is unsigned
+
+                if (Get-WDACPolicyLatestDeployedSignedStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {
+                #Last deployed policy was actually signed
+                    
+                    return $true
                 } else {
-                    $result = $false
+                    return $false
                 }
             } else {
-                $result = $false
+            #Case LastUnsignedVersion < LastSignedVersion
+
+                return $false
             }
     
             if ($NoConnectionProvided -and $Connection) {
