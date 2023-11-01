@@ -597,6 +597,67 @@ function Get-DeferredWDACPolicy {
     }
 }
 
+function Get-WDACPolicyLatestDeployedSignedStatus {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+        if (-not $PolicyInfo.LastDeployedPolicyVersion) {
+            return $false
+        }
+
+        if ($PolicyInfo.LastSignedVersion -and $PolicyInfo.LastUnsignedVersion) {
+            
+            if (Compare-Versions -Version1 $PolicyInfo.LastUnsignedVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion -eq -1) {
+            #LastUnsignedVersion < LastDeployedPolicyVersion
+            #This means that the most recently deployed policy would have to have been signed
+                return $true
+            } else {
+                return $false
+            }
+
+        } elseif ($PolicyInfo.LastSignedVersion) {
+            if (-not ($PolicyInfo.LastDeployedPolicyVersion)) {
+                return $false
+            } else {
+            #If a policy is deployed, and there's only a LastSignedVersion, then the deployed policy was signed
+                return $true
+            }
+        } elseif ($PolicyInfo.LastUnsignedVersion) {
+            return $false
+        } else {
+            return $false
+        }
+
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $_
+    }
+}
+
 function Add-DeferredWDACPolicy {
 #This function takes the current WDAC policy by the GUID and 
     [cmdletbinding()]
@@ -607,7 +668,45 @@ function Add-DeferredWDACPolicy {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
-    
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $CurrentWDACPolicy = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+        $DeferredVersion = $CurrentWDACPolicy.LastDeployedPolicyVersion
+
+        if (Test-DeferredWDACPolicy -DeferredDevicePolicyGUID $PolicyGUID -PolicyVersion $DeferredVersion -Connection $Connection -ErrorAction Stop) {
+        #If there is already a deferred policy entry for this version of the policy, then return
+            if ($NoConnectionProvided -and $Connection) {
+                $Connection.close()
+            }
+            return $false;
+        }
+
+        #Find out if the latest deployed version of the policy is signed or not-signed
+        $DeferredSigned = Get-WDACPolicyLatestDeployedSignedStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "INSERT INTO deferred_policies (DeferredDevicePolicyGUID,PolicyVersion,IsSigned) values (@DeferredDevicePolicyGUID,@PolicyVersion,@IsSigned)"
+            $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$PolicyGUID) | Out-Null
+            $Command.Parameters.AddWithValue("PolicyVersion",$DeferredVersion) | Out-Null
+            $Command.Parameters.AddWithValue("IsSigned",$DeferredSigned) | Out-Null
+            
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $_
+    }
 }
 
 function Test-PolicyDeferredOnDevice {
@@ -622,7 +721,50 @@ function Test-PolicyDeferredOnDevice {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $result = $false
+    $NoConnectionProvided = $false
 
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        #Select * from deferred_policies_assignments as dpa inner join deferred_policies as dp on dp.DeferredPolicyIndex = dpa.DeferredPolicyIndex 
+        #WHERE dp.DeferredDevicePolicyGUID = @PolicyGUID AND dpa.DeviceName = @WorkstationName
+
+        $Command.Commandtext = "Select * from deferred_policies_assignments as dpa INNER JOIN deferred_policies as dp on dp.DeferredPolicyIndex = dpa.DeferredPolicyIndex WHERE dp.DeferredDevicePolicyGUID = @PolicyGUID AND dpa.DeviceName = @WorkstationName"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("WorkstationName",$WorkstationName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
 }
 
 function Test-AnyPoliciesDeferredOnDevice {
@@ -634,7 +776,46 @@ function Test-AnyPoliciesDeferredOnDevice {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
-    
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "Select * from deferred_policies_assignments where DeviceName = @WorkstationName"
+        $Command.Parameters.AddWithValue("WorkstationName",$WorkstationName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
 }
 
 function Get-WDACPolicyLastUnsignedVersion {
