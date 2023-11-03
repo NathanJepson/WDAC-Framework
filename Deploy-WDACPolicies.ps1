@@ -89,6 +89,13 @@ function Deploy-WDACPolicies {
         }
     }
 
+    if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+        $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+        Write-Verbose "The current file is in the SignedModules folder."
+    } else {
+        $PSModuleRoot = $PSScriptRoot
+    }
+
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
         $Transaction = $Connection.BeginTransaction()
@@ -154,13 +161,6 @@ function Deploy-WDACPolicies {
             $X86_Path = $null
             $AMD64_Path = $null
             $ARM64_Path = $null
-
-            if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
-                $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-                Write-Verbose "The current file is in the SignedModules folder."
-            } else {
-                $PSModuleRoot = $PSScriptRoot
-            }        
 
             function Get-X86Path {
                 $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
@@ -317,50 +317,115 @@ function Deploy-WDACPolicies {
             $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
             $SignedStagedPolicyPath = $null
             ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+
+            ##Check if Restart is Required on Devices. If there is a mix of statuses, then defer the ones which haven't been deployed yet and set $RestartRequired to $false.
+            $RestartRequired = $false
+            if ($PolicyInfo.IsSigned -eq $true -and (-not ($PolicyInfo.BaseOrSupplemental -eq $true))) {
+            #A policy does not necessitate a restart if it's a supplemental policy
+
+                $RestartRequired = $true
+                foreach ($ComputerInfo in $CustomPSObjectComputerMap) {
+                    $Name = $ComputerInfo.DeviceName
+                    if (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Name -Connection $Connection -ErrorAction Stop) {
+                        $RestartRequired = $false
+                    }
+                }
+
+                if (-not $RestartRequired) {
+                #Go through each device and if they have never received a deployment yet, then defer them (since other devices already were restarted)
+                    for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
+                        if (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Connection $Connection -ErrorAction Stop)) {
+                            $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
+                        }
+                    }
+                }
+            }
+            ##############################################################################################################################
+
+            $Machines = $null
+            $results = $null
             $Test = $false
             if (($CustomPSObjectComputerMap | Where-Object {$_.TestMachine -eq $true} | Select-Object DeviceName).Count -ge 1) {
                 $Test = $true
             }
-
-            $results = $null
-            $Machines = $null
-
             if ($Test) {
                 $Machines = ($CustomPSObjectComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($_.TestMachine -eq $true) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
             } else {
                 $Machines = ($CustomPSObjectComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
             }
 
+            $SuccessfulMachines = @()
+            #This list is only used when SignedToUnsigned is set to true
+
             #Copy WDAC Policies and Refresh Tools
             ##======================================================================================
-            if ($SignedToUnsigned) {
+            if ($SignedToUnsigned) {    
 
                 #Get Signed First
+                $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
+                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                Rename-Item -Path $SignedStagedPolicyPath -NewName $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
 
                 #Copy to Machine(s)
+                Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired:$RestartRequired -ForceRestart:$ForceRestart -ErrorAction Stop
+                $results | ForEach-Object {
+                    if ($_.RefreshCompletedSuccessfully -eq $true) {
+                        $SuccessfulMachines += $_.PSComputerName
+                    }
+                }
+
+                for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
+                    if (-not ($SuccessfulMachines -contains $CustomPSObjectComputerMap[$i].DeviceName)) {
+                        $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
+                    }
+                }
+
+                #Set Deferred Devices #######
+
+                #TODO
+                
+                #############################
 
                 #Increment Version Number
+                New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $PolicyInfo.PolicyVersion -Connection $Connection -ErrorAction Stop
+
+                $Transaction.Commit()
+                $Transaction = $Connection.BeginTransaction()
 
                 #Get Unsigned Second
+                $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+                ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
 
                 #Copy to Machine(s)
+                Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -ErrorAction Stop
 
                 #Remove all entries in "first_signed_policy_deployments" for this policy
+
+                ##TODO
+
+                ##TODO
 
             } else {
 
                 if ($PolicyInfo.IsSigned -eq $true) {
                     #Get Signed
+                    $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
+                    Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                    Rename-Item -Path $SignedStagedPolicyPath -NewName $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                    $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
 
                     #Copy to Machine(s)
+                    Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-
-                    #If it is a first signed deployment, then restart devices and add relevant "first_signed_policy_deployment" entries
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired:$RestartRequired -ForceRestart:$ForceRestart -ErrorAction Stop
 
                 } else {
                     #Copy to Machine(s)
@@ -373,19 +438,66 @@ function Deploy-WDACPolicies {
             }
             ##======================================================================================
 
-            if ($CustomPSObjectComputerMap) {
+            if ($CustomPSObjectComputerMap -and $results) {
             #Assign devices as deferred in the database which have failed to apply the new WDAC policy
+            #......If it is a first signed deployment, then restart devices and add relevant "first_signed_policy_deployment" entries (only for successes)
 
-                
+                if ($VerbosePreference) {
+                    $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                }
+
+                $results | ForEach-Object {
+                    
+                    $DeferredPolicy = $null
+
+                    if ($SignedToUnsigned) {
+                        if (-not ($SuccessfulMachines -contains $_.PSComputerName)) {
+
+                        }
+                    }
+
+                    if ($RestartRequired) {
+                        if ($_.ReadyForARestart -eq $true) {
+
+                        } else {
+                        #Defer
+
+                            
+                            
+                        }
+                    } else {
+                        if ($_.RefreshCompletedSuccessfully -eq $true) {
+
+                        } else {
+                        #Defer
 
 
+                        }
+                    }
+                }
+
+
+                ##Set All other Deferred Policies and Deferred Policy Assignments##
+
+
+
+
+                ###################################################################
+
+            } elseif (-not $results) {
+                $Transaction.Rollback()
+                $Connection.Close()
+                throw "No remote powershell results from attempting to refresh policies -- for all devices."
             }
 
             #Write policy info to the database, including LastDeployedPolicyVersion
 
-
-
-            Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            if (Test-Path $SignedStagedPolicyPath) {
+                Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            }
+            if (Test-Path $UnsignedStagedPolicyPath) {
+                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            }
             $Transaction.Commit()
             $Connection.Close()
         }
