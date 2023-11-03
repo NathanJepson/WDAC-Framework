@@ -53,8 +53,45 @@ function Export-CodeSignerAsCER {
 }
 function Invoke-SignTool {
     [CmdletBinding()]
-    Param ()
-    #TODO
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$CIPPolicyPath,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DestinationDirectory
+    )
+    
+    try {
+        $WDACodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
+        if (-not $WDACodeSigningCert -or "" -eq $WDACodeSigningCert) {
+            throw "Error: Empty or null value for WDAC Policy signing certificate retreived from Local Storage."
+        } elseif (-not ($WDACodeSigningCert.ToLower() -match "cert\:\\")) {
+            throw "Local cache does not specify a valid certificate path for the WDAC policy signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
+        }
+        $cert = Get-ChildItem -Path $WDACodeSigningCert -ErrorAction Stop
+        
+        #Export-Certificate -Cert $cert -FilePath (Join-Path -Path $Destination -ChildPath "WDACCodeSigning.cer")
+        $SignTool = (Get-LocalStorageJSON -ErrorAction Stop)."SignTool"
+        if (-not $SignTool -or ("" -eq $SignTool) -or ("Full_Path_To_SignTool.exe" -eq $SignTool)) {
+            throw "Error: Empty, default, or null value for WDAC Policy signing certificate retreived from Local Storage."
+        } elseif (-not (Test-Path $SignTool)) {
+            throw "Path for Sign tool does not exist or not a valid path."
+        }
+
+        $cert_subject = $cert.Subject
+        
+        if ($cert_subject -match "(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))") {
+            $cert_subject = $Matches[0]
+        } else {
+            throw "WDACCodeSigningCert subject name not in the correct format. Example: CN=WDACSigningCertificate "
+        }
+
+        Start-Process $SignTool -ArgumentList 'sign', '/v' , '/n', "`"$cert_subject`"", '/p7', '.', '/p7co', '1.3.6.1.4.1.311.79.1', '/fd', 'sha256', "`"$CIPPolicyPath`"" -Wait -NoNewWindow -ErrorAction Stop
+
+    } catch {
+        throw $_
+    }
 }
 
 

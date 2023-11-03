@@ -51,7 +51,7 @@ function Deploy-WDACPolicies {
 
     .EXAMPLE
     TODO
-    #>    
+    #>
     [cmdletbinding()]
     Param ( 
         [ValidateNotNullOrEmpty()]
@@ -100,6 +100,30 @@ function Deploy-WDACPolicies {
             $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection
         }
 
+        if ($PolicyInfo.IsSigned -eq $true) {
+        #Check if all local variables are correctly set to be able to sign and deploy WDAC policies
+            $WDACodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
+            if (-not $WDACodeSigningCert -or "" -eq $WDACodeSigningCert) {
+                throw "Error: Empty or null value for WDAC Policy signing certificate retreived from Local Storage."
+            } elseif (-not ($WDACodeSigningCert.ToLower() -match "cert\:\\")) {
+                throw "Local cache does not specify a valid certificate path for the WDAC policy signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
+            }
+            
+            #See if it's in the Local Cert Store
+            $cert = Get-ChildItem -Path $WDACodeSigningCert -ErrorAction Stop
+            
+            #Export-Certificate -Cert $cert -FilePath (Join-Path -Path $Destination -ChildPath "WDACCodeSigning.cer")
+            $SignTool = (Get-LocalStorageJSON -ErrorAction Stop)."SignTool"
+            if (-not $SignTool -or ("" -eq $SignTool) -or ("Full_Path_To_SignTool.exe" -eq $SignTool)) {
+                throw "Error: Empty, default, or null value for WDAC Policy signing certificate retreived from Local Storage."
+            } elseif (-not (Test-Path $SignTool)) {
+                throw "Path for Sign tool does not exist or not a valid path."
+            }
+
+            if (-not ($cert.Subject -match "(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))")) {
+                throw "WDACCodeSigningCert subject name not in the correct format. Example: CN=WDACSigningCertificate "
+            }
+        }
     
         if ($Local) {
             #TODO
@@ -336,6 +360,8 @@ function Deploy-WDACPolicies {
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
 
+                    #If it is a first signed deployment, then restart devices and add relevant "first_signed_policy_deployment" entries
+
                 } else {
                     #Copy to Machine(s)
                     Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
@@ -350,10 +376,14 @@ function Deploy-WDACPolicies {
             if ($CustomPSObjectComputerMap) {
             #Assign devices as deferred in the database which have failed to apply the new WDAC policy
 
-
+                
 
 
             }
+
+            #Write policy info to the database, including LastDeployedPolicyVersion
+
+
 
             Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
             $Transaction.Commit()
