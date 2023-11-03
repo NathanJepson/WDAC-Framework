@@ -87,8 +87,8 @@ function Invoke-SignTool {
             throw "WDACCodeSigningCert subject name not in the correct format. Example: CN=WDACSigningCertificate "
         }
 
-        Start-Process $SignTool -ArgumentList 'sign', '/v' , '/n', "`"$cert_subject`"", '/p7', '.', '/p7co', '1.3.6.1.4.1.311.79.1', '/fd', 'sha256', "`"$CIPPolicyPath`"" -Wait -NoNewWindow -ErrorAction Stop
-
+        Start-Process $SignTool -ArgumentList 'sign', '/v' , '/n', "`"$cert_subject`"", '/p7', "`"$DestinationDirectory`"", '/p7co', '1.3.6.1.4.1.311.79.1', '/fd', 'sha256', "`"$CIPPolicyPath`"" -Wait -NoNewWindow -ErrorAction Stop
+        
     } catch {
         throw $_
     }
