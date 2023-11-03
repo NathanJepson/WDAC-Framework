@@ -179,7 +179,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                         } else {
                             try {
                                 if ($null -ne $RefreshToolPath) {
-                                    Start-Process $RefreshToolPath -Wait -ErrorAction Stop
+                                    Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
                                     $RefreshCompletedSuccessfully = $true
                                 } elseif ($Windows11) {
                                     #CiTool --update-policy $PolicyDest
