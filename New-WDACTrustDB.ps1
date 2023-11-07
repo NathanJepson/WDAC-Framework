@@ -319,6 +319,7 @@ function New-WDACTrustDB {
     CREATE TABLE deferred_policies_assignments (
         DeferredPolicyIndex Integer NOT NULL,
         DeviceName Text NOT NULL,
+        comment Text,
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE RESTRICT,
         PRIMARY KEY(DeferredPolicyIndex,DeviceName)
