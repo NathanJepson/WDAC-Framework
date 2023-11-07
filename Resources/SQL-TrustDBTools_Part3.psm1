@@ -767,6 +767,49 @@ function Test-PolicyDeferredOnDevice {
     }
 }
 
+function Add-DeferredWDACPolicyAssignment {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeferredPolicyIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeviceName,
+        $Comment,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $Command = $Connection.CreateCommand()
+        if ($Comment) {
+            $Command.Commandtext = "INSERT INTO deferred_policies_assignments (DeferredPolicyIndex,DeviceName,Comment) values (@DeferredPolicyIndex,@DeviceName,@Comment)"
+            $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+        } else {
+            $Command.Commandtext = "INSERT INTO deferred_policies_assignments (DeferredPolicyIndex,DeviceName) values (@DeferredPolicyIndex,@DeviceName)"
+        }
+        $Command.Parameters.AddWithValue("DeferredPolicyIndex",$DeferredPolicyIndex) | Out-Null
+        $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+            
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $_
+    }
+}
+
 function Test-AnyPoliciesDeferredOnDevice {
     [cmdletbinding()]
     Param (
@@ -965,6 +1008,49 @@ function Get-WDACPolicyLastDeployedVersion {
     }
 }
 
+function Set-WDACPolicyLastDeployedVersion {
+#This function sets the LastDeployedPolicyVersion to be the same as the current version of the policy
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $CurrentVersion = Get-WDACPolicyVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        if (-not $CurrentVersion) {
+            if ($NoConnectionProvided -and $Connection) {
+                $Connection.close()
+            }
+            throw "Policy $PolicyGUID currently doesn't have a valid policy version number."
+        }
+
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE policies SET LastDeployedPolicyVersion = @CurrentVersion WHERE PolicyGUID = @PolicyGUID"        
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("CurrentVersion",$CurrentVersion) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
 function Test-MustRemoveSignedPolicy {
     [cmdletbinding()]
     Param (
@@ -1083,6 +1169,180 @@ function Test-FirstSignedPolicyDeployment {
         if ($Reader) {
             $Reader.Close()
         }
+        throw $theError
+    }
+}
+
+function Add-FirstSignedPolicyDeployment {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeviceName,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "INSERT INTO first_signed_policy_deployments (PolicyGUID,DeviceName) values (@PolicyGUID,@DeviceName)"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $_
+    }
+}
+
+function Remove-AllFirstSignedPolicyDeployments {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+    
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.CommandText = "PRAGMA foreign_keys=ON;"
+            #This PRAGMA is needed so that foreign key constraints will work upon deleting
+        $Command.Commandtext += "DELETE FROM first_signed_policy_deployments WHERE PolicyGUID = @PolicyGUID"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
+function Test-WDACDeviceDeferred {
+    [cmdletbinding()]
+    Param ( 
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DeviceName,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "Select * from devices where DeviceName = @DeviceName AND UpdateDeferring = 1"
+        $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Set-WDACDeviceDeferredStatus {
+    [cmdletbinding()]
+    Param ( 
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DeviceName,
+        [switch]$Unset,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+    
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        if ((-not $Unset) -and (Test-WDACDeviceDeferred -DeviceName $DeviceName -Connection $Connection -ErrorAction Stop)) {
+            if ($NoConnectionProvided -and $Connection) {
+                $Connection.close()
+            }
+            return $true
+        } elseif ($Unset -and (-not (Test-WDACDeviceDeferred -DeviceName $DeviceName -Connection $Connection -ErrorAction Stop))) {
+            if ($NoConnectionProvided -and $Connection) {
+                $Connection.close()
+            }    
+            return $true
+        }
+
+        $Command = $Connection.CreateCommand()
+        if ($Unset) {
+            $Command.Commandtext = "UPDATE devices SET UpdateDeferring = 0 WHERE DeviceName = @DeviceName"
+        } else {
+            $Command.Commandtext = "UPDATE devices SET UpdateDeferring = 1 WHERE DeviceName = @DeviceName"
+        }
+        $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
         throw $theError
     }
 }

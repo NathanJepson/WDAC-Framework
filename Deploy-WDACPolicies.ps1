@@ -1,3 +1,63 @@
+function Get-YesOrNoPrompt {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $Prompt
+    )
+
+    Write-Host ($Prompt + " (Y/N): ") -NoNewline
+    while ($true) {
+        $InputString = Read-Host
+        if ($InputString.ToLower() -eq "y") {
+            return $true
+        } elseif ($InputString.ToLower() -eq "n") {
+            return $false
+        } else {
+            Write-Host "Not a valid option. Please supply y or n."
+        }
+    }
+}
+
+function Set-MachineDeferred {
+    [cmdletbinding()]
+    Param ( 
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$PolicyGUID,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DeviceName,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$Comment,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    if (-not (Set-WDACDeviceDeferredStatus -DeviceName $DeviceName -Connection $Connection -ErrorAction Stop)) {
+        throw "Unable to update deferred status for $DeviceName"
+    }
+
+    if (-not (Test-PolicyDeferredOnDevice -PolicyGUID $PolicyGUID -WorkstationName $DeviceName -Connection $Connection -ErrorAction Stop)) {
+        $PolicyVersion = Get-WDACPolicyLastDeployedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        $DeferredPolicy = $null
+        if (Test-DeferredWDACPolicy -DeferredDevicePolicyGUID $PolicyGUID -PolicyVersion $PolicyVersion -Connection $Connection -ErrorAction Stop) {
+            $DeferredPolicy = Get-DeferredWDACPolicy -DeferredDevicePolicyGUID $PolicyGUID -PolicyVersion $PolicyVersion -Connection $Connection -ErrorAction Stop
+        } else {
+            if (-not (Add-DeferredWDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                throw "Cannot add deferred WDAC policy of GUID $PolicyGUID and version $PolicyVersion"
+            }
+            $DeferredPolicy = Get-DeferredWDACPolicy -DeferredDevicePolicyGUID $PolicyGUID -PolicyVersion $PolicyVersion -Connection $Connection -ErrorAction Stop
+        }
+
+        if (-not (Add-DeferredWDACPolicyAssignment -DeferredPolicyIndex $DeferredPolicy.DeferredPolicyIndex -DeviceName $DeviceName -Comment $Comment -Connection $Connection -ErrorAction Stop)) {
+            throw "Unable to add deferred policy assignment of deferred policy index $($DeferredPolicy.DeferredPolicyIndex) to device $DeviceName"
+        }
+    }
+}
+
 function Deploy-WDACPolicies {
     <#
     .SYNOPSIS
@@ -44,7 +104,7 @@ function Deploy-WDACPolicies {
     .PARAMETER ForceRestart
     WARNING: Disruptive action.
     All devices* will be forced to restart! -- *Only applies to when a signed base policy is 
-    deployed on a device for the first time.
+    deployed on a device for the first time or when you are modifying a policy that is signed to be unsigned.
 
     .EXAMPLE
     TODO
@@ -95,6 +155,11 @@ function Deploy-WDACPolicies {
     } else {
         $PSModuleRoot = $PSScriptRoot
     }
+
+    $Connection = $null
+    $Transaction = $null
+    $SignedStagedPolicyPath = $null
+    $UnsignedStagedPolicyPath = $null
 
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -361,6 +426,12 @@ function Deploy-WDACPolicies {
             ##======================================================================================
             if ($SignedToUnsigned) {    
 
+                if (-not (Get-YesOrNoPrompt -Prompt "Devices will require a restart to fully remove UEFI boot protection of old, signed policy. Continue with script execution?")) {
+                    $Transaction.Rollback()
+                    $Connection.Close()
+                    return
+                }
+
                 #Get Signed First
                 $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
@@ -371,30 +442,50 @@ function Deploy-WDACPolicies {
                 Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired:$RestartRequired -ForceRestart:$ForceRestart -ErrorAction Stop
+                #NOTE: The "restartrequired" flag is not used here because that would prevent the refresh tool from being used
+                #...Instead, devices will simply be restarted below after the first initial transaction commit
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -Signed -ErrorAction Stop
+                
                 $results | ForEach-Object {
                     if ($_.RefreshCompletedSuccessfully -eq $true) {
                         $SuccessfulMachines += $_.PSComputerName
+                    } else {
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment ("Unable to deploy initial signed policy before deploying unsigned policy." + $_.ResultMessage) -Connection $Connection -ErrorAction Stop
                     }
                 }
-
-                for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
-                    if (-not ($SuccessfulMachines -contains $CustomPSObjectComputerMap[$i].DeviceName)) {
-                        $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
-                    }
-                }
-
-                #Set Deferred Devices #######
-
-                #TODO
-                
-                #############################
 
                 #Increment Version Number
                 New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $PolicyInfo.PolicyVersion -Connection $Connection -ErrorAction Stop
 
+                for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
+                    if (-not ($SuccessfulMachines -contains $CustomPSObjectComputerMap[$i].DeviceName)) {
+                        $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
+                    } elseif ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre-script checks for device not satisfied." -Connection $Connection -ErrorAction Stop
+                    }
+                }
+
                 $Transaction.Commit()
                 $Transaction = $Connection.BeginTransaction()
+
+                #Restart Machines to Remove UEFI boot protection on Signed Policy 
+                if (($SuccessfulMachines.Count -ge 1)) {
+
+                    if ($ForceRestart) {
+                        Restart-WDACDevices -Devices $SuccessfulMachines
+                    } else {
+                        $DevicesWithComma = $SuccessfulMachines -join ","
+                        if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully remove UEFI boot protection of old, signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
+                            Restart-WDACDevices -Devices $SuccessfulMachines
+                        } else {
+                            #There's got to be a better way of doing this
+                            while (-not (Get-YesOrNoPrompt -Prompt "This script cannot continue execution until devices can be restarted. `n Device might blue-screen if you do not restart them. To restart, select `"Y`"")) {
+                                continue
+                            }
+                            Restart-WDACDevices -Devices $SuccessfulMachines
+                        }
+                    }
+                }
 
                 #Get Unsigned Second
                 $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
@@ -404,13 +495,10 @@ function Deploy-WDACPolicies {
                 Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -ErrorAction Stop
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -ErrorAction Stop
 
                 #Remove all entries in "first_signed_policy_deployments" for this policy
-
-                ##TODO
-
-                ##TODO
+                Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
             } else {
 
@@ -438,6 +526,7 @@ function Deploy-WDACPolicies {
             }
             ##======================================================================================
 
+            $DevicesToRestart = @()
             if ($CustomPSObjectComputerMap -and $results) {
             #Assign devices as deferred in the database which have failed to apply the new WDAC policy
             #......If it is a first signed deployment, then restart devices and add relevant "first_signed_policy_deployment" entries (only for successes)
@@ -447,41 +536,63 @@ function Deploy-WDACPolicies {
                 }
 
                 $results | ForEach-Object {
-                    
-                    $DeferredPolicy = $null
-
                     if ($SignedToUnsigned) {
                         if (-not ($SuccessfulMachines -contains $_.PSComputerName)) {
-
+                            Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "Device did not deploy initial signed policy successfully before subsequent unsigned policy." -Connection $Connection -ErrorAction Stop
                         }
-                    }
-
-                    if ($RestartRequired) {
+                    } elseif ($null -eq $_.ResultMessage) {
+                        #Defer
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "No initial WinRM sessions established with device." -Connection $Connection -ErrorAction Stop
+                    } elseif ($RestartRequired) {
                         if ($_.ReadyForARestart -eq $true) {
+                            $DevicesToRestart += $_.PSComputerName
 
                         } else {
-                        #Defer
-
-                            
-                            
+                            #Defer
+                            Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                         }
                     } else {
-                        if ($_.RefreshCompletedSuccessfully -eq $true) {
-
-                        } else {
-                        #Defer
-
-
+                        if (-not ($_.RefreshCompletedSuccessfully -eq $true)) {
+                            #Defer
+                            Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                         }
                     }
                 }
 
-
                 ##Set All other Deferred Policies and Deferred Policy Assignments##
+                for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
+                    if ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "Pre script check failures or pre-signed-deployment check not satisfied." -Connection $Connection -ErrorAction Stop
+                    }
+                }
+                ###################################################################
 
 
+                ## Restart Devices ################################################
+                if ($RestartRequired -and ($DevicesToRestart.Count -ge 1) -and (-not $SignedToUnsigned)) {
 
+                    if ($ForceRestart) {
+                        Restart-WDACDevices -Devices $DevicesToRestart
+                    } else {
+                        $DevicesWithComma = $DevicesToRestart -join ","
+                        if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
+                            Restart-WDACDevices -Devices $DevicesToRestart
+                        } else {
+                            Write-Host "Please restart devices soon so that the new signed policy can take effect."
+                        }
+                    }
 
+                    foreach ($Device in $DevicesToRestart) {
+                        try {
+                            if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Device -Connection $Connection -ErrorAction Stop)) {
+                                throw "Unable to add first_signed_policy_deployment entry for device $Device ."
+                            }
+                        } catch {
+                            Write-Verbose ($theError | Format-List -Property * | Out-String)
+                            Write-Warning "Unable to add first_signed_policy_deployment entry for device $Device ."
+                        }
+                    }
+                }
                 ###################################################################
 
             } elseif (-not $results) {
@@ -490,7 +601,15 @@ function Deploy-WDACPolicies {
                 throw "No remote powershell results from attempting to refresh policies -- for all devices."
             }
 
-            #Write policy info to the database, including LastDeployedPolicyVersion
+            #Write policy info to the database, LastDeployedPolicyVersion
+            try {
+                if (-not (Set-WDACPolicyLastDeployedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to set LastDeployedPolicyVersion to match the one just deployed."
+                }
+            } catch {
+                Write-Verbose ($_ | Format-List -Property * | Out-String)
+                Write-Warning "Unable to set the LastDeployedPolicyVersion to be equal to the PolicyVersion: $($PolicyInfo.PolicyVersion) . Please set this value in the trust database."
+            }
 
             if (Test-Path $SignedStagedPolicyPath) {
                 Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
@@ -504,6 +623,24 @@ function Deploy-WDACPolicies {
         
     } catch {
         $theError = $_
+
+        if ($Transaction) {
+            $Transaction.Rollback()
+        }
+        if ($Connection) {
+            $Connection.Close()
+        }
+        if ($SignedStagedPolicyPath) {
+            if (Test-Path $SignedStagedPolicyPath) {
+                Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if ($UnsignedStagedPolicyPath) {
+            if (Test-Path $UnsignedStagedPolicyPath) {
+                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        
         Write-Verbose ($theError | Format-List -Property * | Out-String)
         throw $theError
     }

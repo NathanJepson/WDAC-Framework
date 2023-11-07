@@ -15,7 +15,8 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         $RemoteStagingDirectory,
         [switch]$Signed,
         [switch]$RestartRequired,
-        [switch]$ForceRestart
+        [switch]$ForceRestart,
+        [switch]$RemoveUEFI
     )
 
     $sess = New-PSSession -ComputerName $Machines -ErrorAction SilentlyContinue
@@ -24,7 +25,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         throw New-Object System.Management.Automation.Remoting.PSRemotingTransportException
     }
 
-    $Result = Invoke-Command -Session $sess -ArgumentList $CIPolicyFileName,$RemoteStagingDirectory,$X86_RefreshToolName,$AMD64_RefreshToolName,$ARM64_RefreshToolName,$Signed.ToBool(),$RestartRequired.ToBool(),$ForceRestart.ToBool() -ScriptBlock {
+    $Result = Invoke-Command -Session $sess -ArgumentList $CIPolicyFileName,$RemoteStagingDirectory,$X86_RefreshToolName,$AMD64_RefreshToolName,$ARM64_RefreshToolName,$Signed.ToBool(),$RestartRequired.ToBool(),$ForceRestart.ToBool(),$RemoveUEFI.ToBool() -ScriptBlock {
         Param (
             $CIPolicyFileName,
             $RemoteStagingDirectory,
@@ -33,7 +34,8 @@ function Invoke-ActivateAndRefreshWDACPolicy {
             $ARM64_RefreshToolName,
             $Signed,
             $RestartRequired,
-            $ForceRestart
+            $ForceRestart,
+            $RemoveUEFI
         )
 
         $ResultMessage = $null
@@ -43,15 +45,16 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         $CopyToEFIMount = $false
         $RefreshCompletedSuccessfully = $false
         $ReadyForARestart = $false
+        $UEFIRemoveSuccess = $false
         $Windows11 = $false
         $SysDrive = $null
         $Architecture = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
         if ($PSVersionTable.PSEdition -eq "Core") {
-            $Windows11 = (Get-CimInstance -Class Win32_OperatingSystem -Property Caption | Select-Object -ExpandProperty Caption) -Match "Windows 11"
-            $SysDrive =  (Get-CimInstance -Class Win32_OperatingSystem -ComputerName localhost -Property SystemDrive | Select-Object -ExpandProperty SystemDrive)
+            $Windows11 = (Get-CimInstance -Class Win32_OperatingSystem -Property Caption -ErrorAction Stop | Select-Object -ExpandProperty Caption) -Match "Windows 11"
+            $SysDrive =  (Get-CimInstance -Class Win32_OperatingSystem -ComputerName localhost -Property SystemDrive -ErrorAction Stop | Select-Object -ExpandProperty SystemDrive)
         } elseif ($PSVersionTable.PSEdition -eq "Desktop") {
-            $Windows11 = (Get-WmiObject Win32_OperatingSystem).Caption -Match "Windows 11"
-            $SysDrive = (Get-WmiObject Win32_OperatingSystem).SystemDrive
+            $Windows11 = (Get-WmiObject Win32_OperatingSystem -ErrorAction Stop).Caption -Match "Windows 11"
+            $SysDrive = (Get-WmiObject Win32_OperatingSystem -ErrorAction Stop).SystemDrive
         }
         $RefreshToolPath = $null
         
@@ -80,8 +83,12 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                 }
             }
         }
+
+        if (($null -eq $SysDrive) -and $Signed) {
+            $ResultMessage = "Unable to retrieve sys drive -- for mounting the UEFI partition."
+        }
         
-        if ( ($null -ne $RefreshToolPath) -or $Windows11) {
+        elseif ( ($null -ne $RefreshToolPath) -or $Windows11) {
             if (Test-Path (Join-Path $RemoteStagingDirectory -ChildPath $CIPolicyFileName)) {
 
                 $CIPolicyPath = (Join-Path $RemoteStagingDirectory -ChildPath $CIPolicyFileName)
@@ -118,7 +125,33 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                         }
                     }
 
-                    if ((-not $Signed) -or ($Signed -and $CopyToEFIMount)) {
+                    if ($RemoveUEFI) {
+
+                        try {
+                            #Part of the functionallity is pulled from this Microsoft help page:
+                            #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/disable-wdac-policies
+
+                            $MountPoint = "$SysDrive\EFIMount"
+                            $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
+                            $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
+
+                            if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop }
+                            mountvol $MountPoint $EFIPartition
+
+                            if (Test-Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName)) {
+                                Remove-Item -Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop
+                                mountvol $MountPoint /D
+                                $UEFIRemoveSuccess = $true
+                            } else {
+                                $ResultMessage += "UEFI-partitioned policy file not in the expected place for some reason."
+                            }
+
+                        } catch {
+                            $ResultMessage += ("Unable to remove signed WDAC policy from the UEFI partition: " + $_)
+                        }
+                    }
+
+                    if ( ((-not $Signed) -and (-not $RemoveUEFI)) -or ($Signed -and $CopyToEFIMount) -or ( (-not $Signed) -and $RemoveUEFI -and $UEFIRemoveSuccess)) {
                     #Run a refresh or prepare a restart
 
                         #$PolicyDest = Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName
@@ -211,7 +244,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         }
 
         $Result = @()
-        $Result += @{WinRMSuccess = $WinRMSuccess; ResultMessage = $ResultMessage; RefreshToolAndPolicyPresent = $RefreshToolAndPolicyPresent; CopyToCIPoliciesActiveSuccessfull = $CopyToCIPoliciesActiveSuccessfull; CopyToEFIMount = $CopyToEFIMount; RefreshCompletedSuccessfully = $RefreshCompletedSuccessfully; ReadyForARestart = $ReadyForARestart}
+        $Result += @{WinRMSuccess = $WinRMSuccess; ResultMessage = $ResultMessage; RefreshToolAndPolicyPresent = $RefreshToolAndPolicyPresent; CopyToCIPoliciesActiveSuccessfull = $CopyToCIPoliciesActiveSuccessfull; CopyToEFIMount = $CopyToEFIMount; RefreshCompletedSuccessfully = $RefreshCompletedSuccessfully; ReadyForARestart = $ReadyForARestart; UEFIRemoveSuccess = $UEFIRemoveSuccess}
         return ($Result | ForEach-Object {New-Object -TypeName pscustomobject | Add-Member -NotePropertyMembers $_ -PassThru})
     } -ErrorAction SilentlyContinue
 
