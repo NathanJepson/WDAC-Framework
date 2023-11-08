@@ -67,8 +67,8 @@ function Deploy-WDACPolicies {
     Then a RefreshPolicy action is enacted on that machine.
 
     .DESCRIPTION
-    This function determines what machines have the designated policy assigned to them, by checking the policy "pillar" attribute, 
-    as well as group assignments and ad-hoc assignments. (A policy set as a pillar is deployed to every device listed in the trust database.)
+    This function determines what machines have the designated policy assigned to them, by checking group assignments, ad-hoc assignments,
+    and the policy "pillar" attribute. (A policy set as a pillar is deployed to every device listed in the trust database.)
     It signs policies which need to be signed. (Using the SignTool.)
     Then, that designated policy (the signed / unsigned .CIP file) is deployed to each machine (ONLY IF the DB shows that that version has not been deployed yet.)
     For machines which cannot have their policy updated, the last deployed policy is recorded -- with all its parameters, in the deferred_policies table, 
@@ -381,6 +381,15 @@ function Deploy-WDACPolicies {
                 }
             }
 
+            if ($X86_Path) {
+                $X86_RefreshToolName = Split-Path $X86_Path -Leaf
+            }
+            if ($AMD64_Path) {
+                $AMD64_RefreshToolName = Split-Path $AMD64_Path -Leaf
+            }
+            if ($ARM64_Path) {
+                $ARM64_RefreshToolName = Split-Path $ARM64_Path -Leaf
+            }
             $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
             $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
             $SignedStagedPolicyPath = $null
@@ -438,7 +447,7 @@ function Deploy-WDACPolicies {
                 #Get Signed First
                 $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
-                Rename-Item -Path $SignedStagedPolicyPath -NewName $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
                 $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
 
                 #Copy to Machine(s)
@@ -447,7 +456,7 @@ function Deploy-WDACPolicies {
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
                 #NOTE: The "restartrequired" flag is not used here because that would prevent the refresh tool from being used
                 #...Instead, devices will simply be restarted below after the first initial transaction commit
-                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -Signed -ErrorAction Stop
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -ErrorAction Stop
                 
                 $results | ForEach-Object {
                     if ($_.RefreshCompletedSuccessfully -eq $true) {
@@ -464,7 +473,7 @@ function Deploy-WDACPolicies {
                     if (-not ($SuccessfulMachines -contains $CustomPSObjectComputerMap[$i].DeviceName)) {
                         $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
                     } elseif ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
-                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre-script checks for device not satisfied." -Connection $Connection -ErrorAction Stop
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre-script checks for device not satisfied or device not a test machine." -Connection $Connection -ErrorAction Stop
                     }
                 }
 
@@ -498,7 +507,7 @@ function Deploy-WDACPolicies {
                 Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -ErrorAction Stop
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -ErrorAction Stop
 
                 #Remove all entries in "first_signed_policy_deployments" for this policy
                 Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
@@ -509,21 +518,21 @@ function Deploy-WDACPolicies {
                     #Get Signed
                     $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
                     Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
-                    Rename-Item -Path $SignedStagedPolicyPath -NewName $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                    Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
                     $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
 
                     #Copy to Machine(s)
                     Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired:$RestartRequired -ForceRestart:$ForceRestart -ErrorAction Stop
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired:$RestartRequired -ForceRestart:$ForceRestart -ErrorAction Stop
 
                 } else {
                     #Copy to Machine(s)
                     Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName (Split-Path $X86_Path -Leaf) -AMD64_RefreshToolName (Split-Path $AMD64_Path -Leaf) -ARM64_RefreshToolName (Split-Path $ARM64_Path -Leaf) -RemoteStagingDirectory $RemoteStagingDirectory -ErrorAction Stop
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -ErrorAction Stop
 
                 }
             }
@@ -565,7 +574,7 @@ function Deploy-WDACPolicies {
                 ##Set All other Deferred Policies and Deferred Policy Assignments##
                 for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
                     if ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
-                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "Pre script check failures or pre-signed-deployment check not satisfied." -Connection $Connection -ErrorAction Stop
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "Pre script check failures or pre-signed-deployment check not satisfied or is not a test machine." -Connection $Connection -ErrorAction Stop
                     }
                 }
                 ###################################################################

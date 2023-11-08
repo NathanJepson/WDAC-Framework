@@ -112,10 +112,11 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                             #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/deploy-wdac-policies-with-script
                             $MountPoint = "$SysDrive\EFIMount"
                             $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
+                            #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
                             $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
-                            if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop }
+                            if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
                             mountvol $MountPoint $EFIPartition
-                            if (-Not (Test-Path $EFIDestinationFolder)) { New-Item -Path $EFIDestinationFolder -Type Directory -Force -ErrorAction Stop }
+                            if (-Not (Test-Path $EFIDestinationFolder)) { New-Item -Path $EFIDestinationFolder -Type Directory -Force -ErrorAction Stop | Out-Null }
 
                             Copy-Item -Path $CIPolicyPath -Destination $EFIDestinationFolder -Force -ErrorAction Stop
 
@@ -133,13 +134,15 @@ function Invoke-ActivateAndRefreshWDACPolicy {
 
                             $MountPoint = "$SysDrive\EFIMount"
                             $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
+
+                            #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
                             $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
 
-                            if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop }
+                            if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
                             mountvol $MountPoint $EFIPartition
 
                             if (Test-Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName)) {
-                                Remove-Item -Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop
+                                Remove-Item -Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop | Out-Null
                                 mountvol $MountPoint /D
                                 $UEFIRemoveSuccess = $true
                             } else {
@@ -196,7 +199,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                                     $ResultMessage = ("Error while logging users out to prep device for restart to activate policy: " + $_)
                                     try {
                                         Set-Location $RemoteStagingDirectory
-                                        Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop
+                                        Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop | Out-Null
                                     } catch {
                                         $ResultMessage += " Trouble with deleting previous .CIP files in WDAC staging directory."
                                     }
@@ -238,7 +241,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
 
         try {
             Set-Location $RemoteStagingDirectory -ErrorAction Stop
-            Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop
+            Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop | Out-Null
         } catch {
             $ResultMessage += " Trouble with deleting previous .CIP files in WDAC staging directory."
         }
