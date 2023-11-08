@@ -162,11 +162,15 @@ function Set-IncrementVersionNumber {
 function Format-SQLResult {
 #This converts all PSObject members of type [System.DBNull] to $null
     [cmdletbinding()]
-    Param ( 
-        [ValidateNotNullOrEmpty()]
-        [Parameter(Mandatory=$true)]
-        [PSCustomObject[]]$Object
+    Param (
+        $Object
     )
+
+    if (($null -eq $Object) -or ($Object -is [System.DBNull])) {
+        return $null
+    }
+
+    $Object = [PSCustomObject[]]$Object
 
     for ($i=0; $i -lt $Object.Count; $i++) {
         foreach ($Property in $Object[$i].PSObject.Properties) {

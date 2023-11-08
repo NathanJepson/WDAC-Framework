@@ -107,10 +107,13 @@ function Deploy-WDACPolicies {
     deployed on a device for the first time or when you are modifying a policy that is signed to be unsigned.
 
     .EXAMPLE
-    TODO
+    Deploy-WDACPolicies -PolicyGUID "4ac96917-6f84-43c3-ab68-e9a7bc87eb8f"
 
     .EXAMPLE
-    TODO
+    Deploy-WDACPolicies -PolicyGUID "4ac96917-6f84-43c3-ab68-e9a7bc87eb8f" -TestComputers PC1,PC2
+
+    .EXAMPLE
+    Deploy-WDACPolicies -PolicyGUID "4ac96917-6f84-43c3-ab68-e9a7bc87eb8f" -TestComputers PC1,StandoutPC -TestForce -SkipSetup -ForceRestart
     #>
     [cmdletbinding()]
     Param ( 
@@ -166,10 +169,10 @@ function Deploy-WDACPolicies {
         $Transaction = $Connection.BeginTransaction()
         
         if ($PolicyName) {
-            $PolicyInfo = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection
+            $PolicyInfo = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection -ErrorAction Stop
             $PolicyGUID = $PolicyInfo.PolicyGUID
         } elseif ($PolicyGUID) {
-            $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection
+            $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         }
 
         if ($PolicyInfo.IsSigned -eq $true) {
@@ -196,7 +199,7 @@ function Deploy-WDACPolicies {
                 throw "WDACCodeSigningCert subject name not in the correct format. Example: CN=WDACSigningCertificate "
             }
         }
-    
+            
         if ($Local) {
             #TODO
 
@@ -226,7 +229,7 @@ function Deploy-WDACPolicies {
             $X86_Path = $null
             $AMD64_Path = $null
             $ARM64_Path = $null
-
+            
             function Get-X86Path {
                 $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
                 if (-not $X86_Path -or ("" -eq $X86_Path)) {
@@ -588,7 +591,7 @@ function Deploy-WDACPolicies {
                                 throw "Unable to add first_signed_policy_deployment entry for device $Device ."
                             }
                         } catch {
-                            Write-Verbose ($theError | Format-List -Property * | Out-String)
+                            Write-Verbose ($_ | Format-List -Property * | Out-String)
                             Write-Warning "Unable to add first_signed_policy_deployment entry for device $Device ."
                         }
                     }
@@ -640,7 +643,6 @@ function Deploy-WDACPolicies {
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
             }
         }
-        
         Write-Verbose ($theError | Format-List -Property * | Out-String)
         throw $theError
     }
