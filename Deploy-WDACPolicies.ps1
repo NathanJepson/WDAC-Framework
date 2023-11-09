@@ -477,18 +477,29 @@ function Deploy-WDACPolicies {
                     }
                 } catch {
                     Write-Verbose ($_ | Format-List -Property * | Out-String)
-                    Write-Warning "Unable to set the LastDeployedPolicyVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) . Please set this value in the trust database."
+                    throw "Unable to set the LastDeployedPolicyVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
                 }
 
                 #Increment Version Number
-                New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $PolicyInfo.PolicyVersion -Connection $Connection -ErrorAction Stop
+                New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $PolicyInfo.PolicyVersion -Connection $Connection -ErrorAction Stop                
 
+                #Set deferred those devices which were not initially deployed with temporary signed policy
                 for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
                     if (-not ($SuccessfulMachines -contains $CustomPSObjectComputerMap[$i].DeviceName)) {
                         $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
                     } elseif ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
                         Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre-script checks for device not satisfied or device not a test machine." -Connection $Connection -ErrorAction Stop
                     }
+                }
+
+                #Set this temporary signed version number as the most recent signed version
+                try {
+                    if (-not (Set-WDACPolicyLastSignedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to set LastSignedVersion to match the temporary signed one just deployed."
+                    }
+                } catch {
+                    Write-Verbose ($_ | Format-List -Property * | Out-String)
+                    throw "Unable to set the LastSignedVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
                 }
 
                 $Transaction.Commit()

@@ -1064,6 +1064,52 @@ function Set-WDACPolicyLastDeployedVersion {
     }
 }
 
+function Set-WDACPolicyLastSignedVersion {
+    #This function sets the LastDeployedPolicyVersion to be the same as the current version of the policy
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        $PolicyVersion,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        if (-not $PolicyVersion) {
+            $PolicyVersion = Get-WDACPolicyVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        }
+        if (-not $PolicyVersion) {
+            if ($NoConnectionProvided -and $Connection) {
+                $Connection.close()
+            }
+            throw "Policy $PolicyGUID currently doesn't have a valid policy version number."
+        }
+
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE policies SET LastSignedVersion = @CurrentVersion WHERE PolicyGUID = @PolicyGUID"        
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("CurrentVersion",$PolicyVersion) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
 function Test-MustRemoveSignedPolicy {
     [cmdletbinding()]
     Param (
