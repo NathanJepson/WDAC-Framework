@@ -22,7 +22,11 @@ function Invoke-ActivateAndRefreshWDACPolicy {
     $sess = New-PSSession -ComputerName $Machines -ErrorAction SilentlyContinue
     
     if (-not $sess) {
-        throw New-Object System.Management.Automation.Remoting.PSRemotingTransportException
+        #throw New-Object System.Management.Automation.Remoting.PSRemotingTransportException
+        
+        #Easier to return null here in all other cases so the transaction is rolled back (rather than having to defer all devices)
+        #...In the case that a signed policy becomes unsigned, and NO connection is established after the first temporary signed policy is applied, then that machine IS deferred
+        return $null
     }
 
     $Result = Invoke-Command -Session $sess -ArgumentList $CIPolicyFileName,$RemoteStagingDirectory,$X86_RefreshToolName,$AMD64_RefreshToolName,$ARM64_RefreshToolName,$Signed.ToBool(),$RestartRequired.ToBool(),$ForceRestart.ToBool(),$RemoveUEFI.ToBool() -ScriptBlock {

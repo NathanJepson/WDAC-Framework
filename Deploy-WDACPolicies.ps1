@@ -106,6 +106,10 @@ function Deploy-WDACPolicies {
     All devices* will be forced to restart! -- *Only applies to when a signed base policy is 
     deployed on a device for the first time or when you are modifying a policy that is signed to be unsigned.
 
+    .PARAMETER SleepTime
+    This is how long to wait for before continuing script execution after a restart job is performed to remove boot-protection for signed
+    WDAC policies -- this ONLY applies when a previously signed policy becomes unsigned.
+
     .EXAMPLE
     Deploy-WDACPolicies -PolicyGUID "4ac96917-6f84-43c3-ab68-e9a7bc87eb8f"
 
@@ -128,7 +132,8 @@ function Deploy-WDACPolicies {
         [Alias("Force")]
         [switch]$TestForce,
         [switch]$SkipSetup,
-        [switch]$ForceRestart
+        [switch]$ForceRestart,
+        [int]$SleepTime=480
     )
     
     if ($PolicyName -and $PolicyGUID) {
@@ -465,6 +470,16 @@ function Deploy-WDACPolicies {
                     }
                 }
 
+                #Set most recently deployed version in Database
+                try {
+                    if (-not (Set-WDACPolicyLastDeployedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to set LastDeployedPolicyVersion to match the temporary signed one just deployed."
+                    }
+                } catch {
+                    Write-Verbose ($_ | Format-List -Property * | Out-String)
+                    Write-Warning "Unable to set the LastDeployedPolicyVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) . Please set this value in the trust database."
+                }
+
                 #Increment Version Number
                 New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $PolicyInfo.PolicyVersion -Connection $Connection -ErrorAction Stop
 
@@ -498,6 +513,9 @@ function Deploy-WDACPolicies {
                     }
                 }
 
+                #Wait for machines to boot back up, default 8 minutes
+                Start-Sleep -Seconds $SleepTime
+
                 #Get Unsigned Second
                 $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
                 ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
@@ -508,8 +526,16 @@ function Deploy-WDACPolicies {
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
                 $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -ErrorAction Stop
 
+                #If there are no results, or null is returned, then no WinRM session was successful
+                if (-not $results) {
+                    for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
+                        $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Unable to establish WinRM connection to machine to apply unsigned policy to machine after deploying temporary signed policy." -Connection $Connection -ErrorAction Stop
+                    }
+                } else {
                 #Remove all entries in "first_signed_policy_deployments" for this policy
-                Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+                    Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+                }
 
             } else {
                 if ($PolicyInfo.IsSigned -eq $true) {
@@ -606,7 +632,11 @@ function Deploy-WDACPolicies {
                 ###################################################################
 
             } elseif (-not $results) {
-                $Transaction.Rollback()
+                if ($SignedToUnsigned) {
+                    $Transaction.Commit()
+                } else {
+                    $Transaction.Rollback()
+                }
                 $Connection.Close()
                 throw "No remote powershell results from attempting to refresh policies -- for all devices."
             }
