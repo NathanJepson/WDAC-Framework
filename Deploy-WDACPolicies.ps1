@@ -545,7 +545,9 @@ function Deploy-WDACPolicies {
                     }
                 } else {
                 #Remove all entries in "first_signed_policy_deployments" for this policy
-                    Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+                    if (-not (Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                        Write-Warning "Unable to remove all entries first_signed_policy_deployments for Policy $PolicyGUID . It is recommended to clear these entries out before next running this script."
+                    }
                 }
 
             } else {
