@@ -480,9 +480,7 @@ function Test-DeferredWDACPolicy {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$DeferredDevicePolicyGUID,
-        [ValidateNotNullOrEmpty()]
-        [Parameter(Mandatory=$true)]
-        [string]$PolicyVersion,
+        $PolicyVersion=$null,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -496,7 +494,11 @@ function Test-DeferredWDACPolicy {
         }
         $Command = $Connection.CreateCommand()
 
-        $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID AND PolicyVersion = @PolicyVersion"
+        if (-not $PolicyVersion) {
+            $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID AND PolicyVersion is NULL"
+        } else {
+            $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID AND PolicyVersion = @PolicyVersion"
+        }
         $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$DeferredDevicePolicyGUID) | Out-Null
         $Command.Parameters.AddWithValue("PolicyVersion",$PolicyVersion) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
@@ -534,10 +536,8 @@ function Get-DeferredWDACPolicy {
     Param ( 
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
-        [string]$DeferredDevicePolicyGUID,
-        [ValidateNotNullOrEmpty()]
-        [Parameter(Mandatory=$true)]
-        [string]$PolicyVersion,
+        [string]$DeferredDevicePolicyGUID,     
+        $PolicyVersion=$null,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -551,9 +551,13 @@ function Get-DeferredWDACPolicy {
         }
         $Command = $Connection.CreateCommand()
 
-        $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID AND PolicyVersion = @PolicyVersion"
+        if ($PolicyVersion) {
+            $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID AND PolicyVersion = @PolicyVersion"
+            $Command.Parameters.AddWithValue("PolicyVersion",$PolicyVersion) | Out-Null
+        } else {
+            $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID AND PolicyVersion is NULL"
+        }
         $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$DeferredDevicePolicyGUID) | Out-Null
-        $Command.Parameters.AddWithValue("PolicyVersion",$PolicyVersion) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -622,9 +626,13 @@ function Get-WDACPolicyLatestDeployedSignedStatus {
 
         if ($PolicyInfo.LastSignedVersion -and $PolicyInfo.LastUnsignedVersion) {
             
-            if (Compare-Versions -Version1 $PolicyInfo.LastUnsignedVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion -eq -1) {
+            if ( (Compare-Versions -Version1 $PolicyInfo.LastUnsignedVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion) -eq -1) {
             #LastUnsignedVersion < LastDeployedPolicyVersion
             #This means that the most recently deployed policy would have to have been signed
+                return $true
+            } elseif ((Compare-Versions -Version1 $PolicyInfo.LastSignedVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion) -eq 0) {
+            #If the last deployed version number is the same as the most recent signed version, then that means the most recently
+            #...deployed version was signed
                 return $true
             } else {
                 return $false
@@ -691,10 +699,15 @@ function Add-DeferredWDACPolicy {
         $DeferredSigned = Get-WDACPolicyLatestDeployedSignedStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "INSERT INTO deferred_policies (DeferredDevicePolicyGUID,PolicyVersion,IsSigned) values (@DeferredDevicePolicyGUID,@PolicyVersion,@IsSigned)"
-            $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$PolicyGUID) | Out-Null
+        if ($DeferredVersion) {
+            $Command.Commandtext = "INSERT INTO deferred_policies (DeferredDevicePolicyGUID,PolicyVersion,IsSigned) values (@DeferredDevicePolicyGUID,@PolicyVersion,@IsSigned)"
             $Command.Parameters.AddWithValue("PolicyVersion",$DeferredVersion) | Out-Null
-            $Command.Parameters.AddWithValue("IsSigned",$DeferredSigned) | Out-Null
+        } else {
+            $Command.Commandtext = "INSERT INTO deferred_policies (DeferredDevicePolicyGUID,IsSigned) values (@DeferredDevicePolicyGUID,@IsSigned)"
+        }
+            
+        $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("IsSigned",$DeferredSigned) | Out-Null
             
         $Command.ExecuteNonQuery()
         if ($NoConnectionProvided -and $Connection) {
@@ -1083,7 +1096,7 @@ function Test-MustRemoveSignedPolicy {
                 return $false
             }
 
-            if (Compare-Versions -Version1 $LastUnsignedVersion -Version2 $LastSignedVersion -eq 1) {
+            if ( (Compare-Versions -Version1 $LastUnsignedVersion -Version2 $LastSignedVersion) -eq 1) {
             #If the more recent version is unsigned
 
                 if (Get-WDACPolicyLatestDeployedSignedStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {

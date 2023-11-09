@@ -1838,7 +1838,10 @@ function Get-WDACPolicy {
                     AuditMode = [bool]$Reader["AuditMode"];
                     IsPillar = [bool]$Reader["IsPillar"];
                     OriginLocation = $Reader["OriginLocation"];
-                    OriginLocationType = $Reader["OriginLocationType"]
+                    OriginLocationType = $Reader["OriginLocationType"];
+                    LastDeployedPolicyVersion = $Reader["LastDeployedPolicyVersion"];
+                    LastSignedVersion = $Reader["LastSignedVersion"];
+                    LastUnsignedVersion = $Reader["LastUnsignedVersion"]
                 }
             }
         }
@@ -2220,7 +2223,10 @@ function Get-WDACPoliciesById {
                     AuditMode = [bool]$Reader["AuditMode"];
                     IsPillar = [bool]$Reader["IsPillar"];
                     OriginLocation = $Reader["OriginLocation"];
-                    OriginLocationType = $Reader["OriginLocationType"]
+                    OriginLocationType = $Reader["OriginLocationType"];
+                    LastDeployedPolicyVersion = $Reader["LastDeployedPolicyVersion"];
+                    LastSignedVersion = $Reader["LastSignedVersion"];
+                    LastUnsignedVersion = $Reader["LastUnsignedVersion"]
                 }
             }
         }
@@ -2280,7 +2286,10 @@ function Get-WDACPolicyByName {
                     AuditMode = [bool]$Reader["AuditMode"];
                     IsPillar = [bool]$Reader["IsPillar"];
                     OriginLocation = $Reader["OriginLocation"];
-                    OriginLocationType = $Reader["OriginLocationType"]
+                    OriginLocationType = $Reader["OriginLocationType"];
+                    LastDeployedPolicyVersion = $Reader["LastDeployedPolicyVersion"];
+                    LastSignedVersion = $Reader["LastSignedVersion"];
+                    LastUnsignedVersion = $Reader["LastUnsignedVersion"]
                 }
             }
         }
@@ -2388,7 +2397,10 @@ function Get-AllWDACPoliciesAndAllInfo {
                     AuditMode = [bool]$Reader["AuditMode"];
                     IsPillar = [bool]$Reader["IsPillar"];
                     OriginLocation = $Reader["OriginLocation"];
-                    OriginLocationType = $Reader["OriginLocationType"]
+                    OriginLocationType = $Reader["OriginLocationType"];
+                    LastDeployedPolicyVersion = $Reader["LastDeployedPolicyVersion"];
+                    LastSignedVersion = $Reader["LastSignedVersion"];
+                    LastUnsignedVersion = $Reader["LastUnsignedVersion"]
                 }
             }
         }

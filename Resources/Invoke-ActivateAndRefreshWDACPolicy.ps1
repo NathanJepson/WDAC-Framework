@@ -115,7 +115,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                             #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
                             $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
                             if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
-                            mountvol $MountPoint $EFIPartition
+                            mountvol $MountPoint $EFIPartition | Out-Null
                             if (-Not (Test-Path $EFIDestinationFolder)) { New-Item -Path $EFIDestinationFolder -Type Directory -Force -ErrorAction Stop | Out-Null }
 
                             Copy-Item -Path $CIPolicyPath -Destination $EFIDestinationFolder -Force -ErrorAction Stop
@@ -139,11 +139,11 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                             $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
 
                             if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
-                            mountvol $MountPoint $EFIPartition
+                            mountvol $MountPoint $EFIPartition | Out-Null
 
                             if (Test-Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName)) {
                                 Remove-Item -Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop | Out-Null
-                                mountvol $MountPoint /D
+                                mountvol $MountPoint /D | Out-Null
                                 $UEFIRemoveSuccess = $true
                             } else {
                                 $ResultMessage += "UEFI-partitioned policy file not in the expected place for some reason."
@@ -217,12 +217,14 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                                 if ($null -ne $RefreshToolPath) {
                                     Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
                                     $RefreshCompletedSuccessfully = $true
+                                    $ResultMessage = "Refresh completed successfully."
                                 } elseif ($Windows11) {
                                     #CiTool --update-policy $PolicyDest
                                     #I'm not sure if this is redundant or not since we are copying to the CiPolicies\Active folder. Leaving commented for now.
 
                                     CiTool --refresh
                                     $RefreshCompletedSuccessfully = $true
+                                    $ResultMessage = "Refresh completed successfully."
                                 } else {
                                     $ResultMessage = "Unable to find the wherewithal to run a refresh on WDAC policies."
                                 }

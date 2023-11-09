@@ -311,8 +311,8 @@ function New-WDACTrustDB {
 
     CREATE TABLE deferred_policies (
         DeferredPolicyIndex Integer PRIMARY KEY,
-        DeferredDevicePolicyGUID Text,
-        PolicyVersion Text NOT NULL,
+        DeferredDevicePolicyGUID Text NOT NULL,
+        PolicyVersion Text,
         IsSigned Integer DEFAULT 0 NOT NULL
     );
 

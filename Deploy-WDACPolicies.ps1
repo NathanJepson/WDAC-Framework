@@ -436,8 +436,7 @@ function Deploy-WDACPolicies {
 
             #Copy WDAC Policies and Refresh Tools
             ##======================================================================================
-            if ($SignedToUnsigned) {    
-
+            if ($SignedToUnsigned) {
                 if (-not (Get-YesOrNoPrompt -Prompt "Devices will require a restart to fully remove UEFI boot protection of old, signed policy. Continue with script execution?")) {
                     $Transaction.Rollback()
                     $Connection.Close()
@@ -513,7 +512,6 @@ function Deploy-WDACPolicies {
                 Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
             } else {
-
                 if ($PolicyInfo.IsSigned -eq $true) {
                     #Get Signed
                     $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
@@ -623,14 +621,19 @@ function Deploy-WDACPolicies {
                 Write-Warning "Unable to set the LastDeployedPolicyVersion to be equal to the PolicyVersion: $($PolicyInfo.PolicyVersion) . Please set this value in the trust database."
             }
 
-            if (Test-Path $SignedStagedPolicyPath) {
-                Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
-            }
-            if (Test-Path $UnsignedStagedPolicyPath) {
-                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
-            }
             $Transaction.Commit()
             $Connection.Close()
+
+            if ($SignedStagedPolicyPath) {
+                if (Test-Path $SignedStagedPolicyPath -ErrorAction SilentlyContinue) {
+                    Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                }
+            }
+            if ($UnsignedStagedPolicyPath) {
+                if (Test-Path $UnsignedStagedPolicyPath -ErrorAction SilentlyContinue) {
+                    Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                }
+            }
         }
         
     } catch {
