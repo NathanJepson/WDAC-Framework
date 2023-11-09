@@ -692,7 +692,7 @@ function Add-DeferredWDACPolicy {
             if ($NoConnectionProvided -and $Connection) {
                 $Connection.close()
             }
-            return $false;
+            return $true;
         }
 
         #Find out if the latest deployed version of the policy is signed or not-signed
