@@ -608,14 +608,32 @@ function Deploy-WDACPolicies {
                     }
                 }
 
+                $RemoteFailures = @()
+
                 ##Set All other Deferred Policies and Deferred Policy Assignments##
                 for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
                     if ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
-                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "Pre script check failures or pre-signed-deployment check not satisfied or is not a test machine." -Connection $Connection -ErrorAction Stop
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre script check failures or pre-signed-deployment check not satisfied or is not a test machine." -Connection $Connection -ErrorAction Stop
+                        continue
+                    }
+                    
+                    $MachineNotPresent = $true
+                    foreach ($Computer in $results) {
+                        if ( ($CustomPSObjectComputerMap[$i].DeviceName) -eq $Computer.PSComputerName) {
+                            $MachineNotPresent = $false
+                        }
+                    }
+
+                    if ($MachineNotPresent) {
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "PowerShell Remoting (WinRM) failed on this device." -Connection $Connection -ErrorAction Stop
+                        $RemoteFailures += ($CustomPSObjectComputerMap[$i].DeviceName)
                     }
                 }
                 ###################################################################
 
+                if ($RemoteFailures.Count -ge 1) {
+                    Write-Warning ("Powershell remoting (WinRM) failed on these devices: " + ($RemoteFailures -join ","))
+                }
 
                 ## Restart Devices ################################################
                 if ($RestartRequired -and ($DevicesToRestart.Count -ge 1) -and (-not $SignedToUnsigned)) {
@@ -666,6 +684,8 @@ function Deploy-WDACPolicies {
 
             $Transaction.Commit()
             $Connection.Close()
+
+            Write-Host "Policy has been deployed."
 
             if ($SignedStagedPolicyPath) {
                 if (Test-Path $SignedStagedPolicyPath -ErrorAction SilentlyContinue) {
