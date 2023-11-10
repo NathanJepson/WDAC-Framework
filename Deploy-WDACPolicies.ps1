@@ -418,6 +418,7 @@ function Deploy-WDACPolicies {
                     for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
                         if (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Connection $Connection -ErrorAction Stop)) {
                             $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
+                            Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Comment "Machine has not yet received first signed deployment while other machines have." -Connection $Connection -ErrorAction Stop
                         }
                     }
                 }
