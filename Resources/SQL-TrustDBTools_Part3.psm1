@@ -565,18 +565,71 @@ function Get-DeferredWDACPolicy {
         while($Reader.HasRows) {
             if($Reader.Read()) {
                 $result = [PSCustomObject]@{
-                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
+                    DeferredPolicyIndex = [int]$Reader["DeferredPolicyIndex"];
                     DeferredDevicePolicyGUID = $Reader["DeferredDevicePolicyGUID"];
-                    PolicyName = $Reader["PolicyName"];
-                    PolicyID = $Reader["PolicyID"];
                     PolicyVersion = $Reader["PolicyVersion"];
-                    ParentPolicyGUID = $Reader["ParentPolicyGUID"];
-                    BaseOrSupplemental = [bool]$Reader["BaseOrSupplemental"];
-                    IsSigned = [bool]$Reader["IsSigned"];
-                    AuditMode = [bool]$Reader["AuditMode"];
-                    IsPillar = [bool]$Reader["IsPillar"];
-                    OriginLocation = $Reader["OriginLocation"];
-                    OriginLocationType = $Reader["OriginLocationType"]
+                    IsSigned = [bool]$Reader["IsSigned"]
+                }
+            }
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return (Format-SQLResult $result)
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Get-DeferredWDACPolicies {
+#The difference with Get-DeferredWDACPolicy is that this cmdlet gets ALL deferred policies for a given policy GUID
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$DeferredDevicePolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "SELECT * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID"
+        $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$DeferredDevicePolicyGUID) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                
+                if (-not $result) {
+                    $result = @()
+                }
+
+                $result += [PSCustomObject]@{
+                    DeferredPolicyIndex = [int]$Reader["DeferredPolicyIndex"];
+                    DeferredDevicePolicyGUID = $Reader["DeferredDevicePolicyGUID"];
+                    PolicyVersion = $Reader["PolicyVersion"];
+                    IsSigned = [bool]$Reader["IsSigned"]
                 }
             }
         }
@@ -749,6 +802,61 @@ function Test-PolicyDeferredOnDevice {
 
         $Command.Commandtext = "Select * from deferred_policies_assignments as dpa INNER JOIN deferred_policies as dp on dp.DeferredPolicyIndex = dpa.DeferredPolicyIndex WHERE dp.DeferredDevicePolicyGUID = @PolicyGUID AND dpa.DeviceName = @WorkstationName"
         $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("WorkstationName",$WorkstationName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Test-SpecificDeferredPolicyOnDevice {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$DeferredPolicyIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$WorkstationName,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "Select * from deferred_policies_assignments WHERE DeviceName = @WorkstationName AND DeferredPolicyIndex = @DeferredPolicyIndex"
+        $Command.Parameters.AddWithValue("DeferredPolicyIndex",$DeferredPolicyIndex) | Out-Null
         $Command.Parameters.AddWithValue("WorkstationName",$WorkstationName) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()

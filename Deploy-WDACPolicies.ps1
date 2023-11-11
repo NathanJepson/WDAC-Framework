@@ -1,3 +1,40 @@
+function Get-X86Path {
+    $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
+    if (-not $X86_Path -or ("" -eq $X86_Path)) {
+        throw "For remote machines with AMD64 architecture, specify the path of the AMD64 refresh tool in LocalStorage.json."
+    }
+    if (-not (Test-Path $X86_Path)) {
+        throw "Please provide the full, valid path of the X86 refresh tool executable in LocalStorage.json."
+    }
+
+    return $X86_Path
+}
+
+function Get-AMD64Path {
+    
+    $AMD64_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_AMD64"
+    if (-not $AMD64_Path -or ("" -eq $AMD64_Path)) {
+        throw "For remote machines with AMD64 architecture, specify the path of the AMD64 refresh tool in LocalStorage.json."
+    }
+    if (-not (Test-Path $AMD64_Path)) {
+        throw "Please provide the full, valid path of the AMD64 refresh tool executable in LocalStorage.json."
+    }
+
+    return $AMD64_Path
+}
+
+function Get-ARM64Path {
+    $ARM64_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_ARM64"
+    if (-not $ARM64_Path -or ("" -eq $ARM64_Path)) {
+        throw "For remote machines with ARM64 architecture, specify the path of the ARM64 refresh tool in LocalStorage.json."
+    }
+    if (-not (Test-Path $ARM64_Path)) {
+        throw "Please provide the full, valid path of the ARM64 refresh tool executable in LocalStorage.json."
+    }
+
+    return $ARM64_Path
+}
+
 function Get-YesOrNoPrompt {
     [CmdletBinding()]
     Param (
@@ -56,6 +93,23 @@ function Set-MachineDeferred {
             throw "Unable to add deferred policy assignment of deferred policy index $($DeferredPolicy.DeferredPolicyIndex) to device $DeviceName"
         }
     }
+}
+
+function Remove-MachineDeferred {
+    [cmdletbinding()]
+    Param ( 
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$PolicyGUID,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [string]$DeviceName,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    #TODO
 }
 
 function Deploy-WDACPolicies {
@@ -180,7 +234,9 @@ function Deploy-WDACPolicies {
             $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         }
 
-        if ($PolicyInfo.IsSigned -eq $true) {
+        $SignedToUnsigned = Test-MustRemoveSignedPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+        if ( ($PolicyInfo.IsSigned -eq $true) -or $SignedToUnsigned) {
         #Check if all local variables are correctly set to be able to sign and deploy WDAC policies
             $WDACodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
             if (-not $WDACodeSigningCert -or "" -eq $WDACodeSigningCert) {
@@ -192,7 +248,6 @@ function Deploy-WDACPolicies {
             #See if it's in the Local Cert Store
             $cert = Get-ChildItem -Path $WDACodeSigningCert -ErrorAction Stop
             
-            #Export-Certificate -Cert $cert -FilePath (Join-Path -Path $Destination -ChildPath "WDACCodeSigning.cer")
             $SignTool = (Get-LocalStorageJSON -ErrorAction Stop)."SignTool"
             if (-not $SignTool -or ("" -eq $SignTool) -or ("Full_Path_To_SignTool.exe" -eq $SignTool)) {
                 throw "Error: Empty, default, or null value for WDAC Policy signing certificate retreived from Local Storage."
@@ -230,47 +285,9 @@ function Deploy-WDACPolicies {
             }
 
             $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-            $SignedToUnsigned = Test-MustRemoveSignedPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             $X86_Path = $null
             $AMD64_Path = $null
             $ARM64_Path = $null
-            
-            function Get-X86Path {
-                $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
-                if (-not $X86_Path -or ("" -eq $X86_Path)) {
-                    throw "For remote machines with AMD64 architecture, specify the path of the AMD64 refresh tool in LocalStorage.json."
-                }
-                if (-not (Test-Path $X86_Path)) {
-                    throw "Please provide the full, valid path of the X86 refresh tool executable in LocalStorage.json."
-                }
-
-                return $X86_Path
-            }
-
-            function Get-AMD64Path {
-                
-                $AMD64_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_AMD64"
-                if (-not $AMD64_Path -or ("" -eq $AMD64_Path)) {
-                    throw "For remote machines with AMD64 architecture, specify the path of the AMD64 refresh tool in LocalStorage.json."
-                }
-                if (-not (Test-Path $AMD64_Path)) {
-                    throw "Please provide the full, valid path of the AMD64 refresh tool executable in LocalStorage.json."
-                }
-
-                return $AMD64_Path
-            }
-
-            function Get-ARM64Path {
-                $ARM64_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_ARM64"
-                if (-not $ARM64_Path -or ("" -eq $ARM64_Path)) {
-                    throw "For remote machines with ARM64 architecture, specify the path of the ARM64 refresh tool in LocalStorage.json."
-                }
-                if (-not (Test-Path $ARM64_Path)) {
-                    throw "Please provide the full, valid path of the ARM64 refresh tool executable in LocalStorage.json."
-                }
-
-                return $ARM64_Path
-            }
 
             $NewComputerMap = @()
 
@@ -397,6 +414,9 @@ function Deploy-WDACPolicies {
             }
             $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
             $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
+            if (Test-Path $UnsignedStagedPolicyPath) {
+                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+            }
             $SignedStagedPolicyPath = $null
             ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
 
@@ -747,6 +767,18 @@ function Restore-WDACWorkstations {
     .PARAMETER WorkstationName
     Specify this parameter if you only want to restore particular workstations to the current WDAC policy.
 
+    .PARAMETER SkipSetup
+    Cmdlet will not check whether staging directory or refresh tools are present on a device.
+
+    .PARAMETER ForceRestart
+    WARNING: Disruptive action.
+    All devices* will be forced to restart! -- *Only applies to when a signed base policy is 
+    deployed on a device for the first time or when you are modifying a policy that is signed to be unsigned.
+
+    .PARAMETER SleepTime
+    This is how long to wait for before continuing script execution after a restart job is performed to remove boot-protection for signed
+    WDAC policies -- this ONLY applies when a previously signed policy becomes unsigned.
+
     .EXAMPLE
     TODO
 
@@ -763,16 +795,28 @@ function Restore-WDACWorkstations {
         [string]$PolicyName,
         [ValidateNotNullOrEmpty()]
         [Alias("Workstations","Workstation","Device","Devices","PC","Computer","Computers")]
-        [string[]]$WorkstationName
+        [string[]]$WorkstationName,
+        [switch]$SkipSetup,
+        [switch]$ForceRestart,
+        [int]$SleepTime=480
     )
 
     if ($PolicyName -and $PolicyGUID) {
         throw "Cannot provide both a policy name and policy GUID."
     }
 
+    $Connection = $null
+    $Transaction = $null
+    $SignedStagedPolicyPath = $null
+    $UnsignedStagedPolicyPath = $null
+    $WDACodeSigningCert = $null
+    $SignTool = $null
+    $AMD64_Path = $null
+    $ARM64_Path = $null
+    $X86_Path = $null
+
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
-        $Transaction = $Connection.BeginTransaction()
         
         if ($PolicyName) {
             $PolicyInfo = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection
@@ -780,19 +824,353 @@ function Restore-WDACWorkstations {
         } elseif ($PolicyGUID) {
             $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection
         }
+
+        $RemoteStagingDirectory = (Get-LocalStorageJSON -ErrorAction Stop)."RemoteStagingDirectory"
+        if (-not $RemoteStagingDirectory -or ("" -eq $RemoteStagingDirectory)) {
+            throw "When deploying staged policies to remote machines, you must designate a RemoteStagingDirectory in LocalStorage.json."
+        }
+
+        try {
+            Split-Path $RemoteStagingDirectory -Qualifier -ErrorAction Stop | Out-Null
+        } catch {
+            throw "The RemoteStagingDirectory must have a qualifier such as `"C:\`" or `"D:\`" at the beginning."
+        }
+
+        if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+            $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+            Write-Verbose "The current file is in the SignedModules folder."
+        } else {
+            $PSModuleRoot = $PSScriptRoot
+        }
+
+        $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
+        $SignedStagedPolicyPath = $null
+        if (Test-Path $UnsignedStagedPolicyPath) {
+            Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+        }
+        $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
     
         #Deferred flag is set here, unlike the above cmdlet
-        $ComputerMapTemp = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Deferred -Connection $Connection -ErrorAction Stop
+        if ($PolicyInfo.IsPillar -eq $true) {
+            $ComputerMapTemp = Get-WDACDevicesAllNamesAndCPUInfo -Deferred -Connection $Connection -ErrorAction Stop
+        } else {
+            $ComputerMapTemp = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Deferred -Connection $Connection -ErrorAction Stop
+        }
+
         $ComputerMap = @{}
         if ($WorkstationName) {
             foreach ($Entry in $ComputerMapTemp.GetEnumerator()) {
-                if ($WorkstationName -contains $Entry.Name) {
-                    $ComputerMap += @{$Entry.Name = $Entry.Value}
+                $Name = $Entry.Name
+                $Value = $Entry.Value
+                if ($WorkstationName -contains $Name) {
+                    if (Test-PolicyDeferredOnDevice -WorkstationName $Name -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {
+                        $ComputerMap += @{$Name = $Value}
+                    }
+                }
+            }
+        } else {
+            foreach ($Entry in $ComputerMapTemp.GetEnumerator()) {
+                $Name = $Entry.Name
+                $Value = $Entry.Value
+                if (Test-PolicyDeferredOnDevice -WorkstationName $Name -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {
+                    $ComputerMap += @{$Name = $Value}
                 }
             }
         }
+
+        if ( (($null -eq $ComputerMap) -or $ComputerMap.Count -le 0)) {
+            throw "No deferred workstations currently assigned to policy $PolicyGUID"
+        }
+
+        $AllDeferred = Get-DeferredWDACPolicies -DeferredDevicePolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+        foreach ($DeferredPolicy in $AllDeferred) {
+            $results = $null
+            $restartNeededResults = $null
+            $restartNotNeededResults = $null
+            $NewComputerMap = @{}
+            $Transaction = $Connection.BeginTransaction()
+            if ($DeferredPolicy.PolicyVersion) {
+                Write-Verbose "Handling devices with old policy version $($DeferredPolicy.PolicyVersion)"
+            } elseif ($DeferredPolicy.DeferredPolicyIndex) {
+                Write-Verbose "Handling devices with deferred policy index $($DeferredPolicy.DeferredPolicyIndex)"
+            }
+
+            if ($null -ne $DeferredPolicy.PolicyVersion) {
+                $CompareVersionsVariable = Compare-Versions -Version1 $PolicyInfo.PolicyVersion -Version2 $DeferredPolicy.PolicyVersion
+
+                if (($CompareVersionsVariable -eq 0) -or ($CompareVersionsVariable -eq 1)) {
+                #Deferred policy versions should always be less than the current version number. (Otherwise, this if statement executes.)
+                    $Transaction.Rollback()
+                    $Connection.Close()
+                    if ($SignedStagedPolicyPath) {
+                        if (Test-Path $SignedStagedPolicyPath) {
+                            Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                    if ($UnsignedStagedPolicyPath) {
+                        if (Test-Path $UnsignedStagedPolicyPath) {
+                            Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                    throw "Deferred policy version greater than or equal to the current version number of policy $PolicyGUID"
+                }
+            }
+
+            if (($PolicyInfo.IsSigned -eq $true) -or (($DeferredPolicy.IsSigned -eq $true) -and ($PolicyInfo.IsSigned -eq $false))) {
+                if (($null -eq $WDACodeSigningCert) -and ($null -eq $SignTool)) {
+                    #Check if all local variables are correctly set to be able to sign and deploy WDAC policies
+                    $WDACodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
+                    if (-not $WDACodeSigningCert -or "" -eq $WDACodeSigningCert) {
+                        throw "Error: Empty or null value for WDAC Policy signing certificate retreived from Local Storage."
+                    } elseif (-not ($WDACodeSigningCert.ToLower() -match "cert\:\\")) {
+                        throw "Local cache does not specify a valid certificate path for the WDAC policy signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
+                    }
+                    
+                    #See if it's in the Local Cert Store
+                    $cert = Get-ChildItem -Path $WDACodeSigningCert -ErrorAction Stop
+                    
+                    $SignTool = (Get-LocalStorageJSON -ErrorAction Stop)."SignTool"
+                    if (-not $SignTool -or ("" -eq $SignTool) -or ("Full_Path_To_SignTool.exe" -eq $SignTool)) {
+                        throw "Error: Empty, default, or null value for WDAC Policy signing certificate retreived from Local Storage."
+                    } elseif (-not (Test-Path $SignTool)) {
+                        throw "Path for Sign tool does not exist or not a valid path."
+                    }
+
+                    if (-not ($cert.Subject -match "(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))")) {
+                        throw "WDACCodeSigningCert subject name not in the correct format. Example: CN=WDACSigningCertificate "
+                    }
+                }
+            }
+
+            foreach ($Computer in $ComputerMap.GetEnumerator()) {
+                $thisComputer = $Computer.Name
+                $CPU = $Computer.Value
+
+                if (-not (Test-SpecificDeferredPolicyOnDevice -DeferredPolicyIndex $DeferredPolicy.DeferredPolicyIndex -WorkstationName $Name -Connection $Connection -ErrorAction Stop)) {
+                    continue
+                }
+
+                if ($null -eq $CPU -or ($CPU -eq "") -or ($CPU -is [System.DBNull])) {
+                    $Architecture = $null
+                    try {
+                        $Architecture = Invoke-Command -ComputerName $thisComputer -ScriptBlock {cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"} -ErrorAction Stop
+                    } catch {
+                        Write-Verbose "Device $thisComputer not available for PowerShell remoting."
+                        $NewComputerMap += @{DeviceName = $thisComputer; CPU = $CPU; NewlyDeferred = $true; TestMachine = $false}
+                        continue
+                    }
+
+                    if ($Architecture) {
+                        if (-not (Add-WDACWorkstationProcessorArchitecture -DeviceName $thisComputer -ProcessorArchitecture $Architecture -Connection $Connection -ErrorAction Stop)) {
+                            Write-Verbose "Could not write CPU architecture $Architecture of device $thisComputer to database."
+                        }
+                        $CPU = $Architecture
+                    }
+                }
+
+                if ($CPU -eq "AMD64") {
+                    if ($null -eq $AMD64_Path) {
+                        $AMD64_Path = Get-AMD64Path
+                    }
+                } elseif ($CPU -eq "ARM64") {
+                    if ($null -eq $ARM64_Path) {
+                        $ARM64_Path = Get-ARM64Path
+                    }
+                } elseif ($CPU -eq "X86") {
+                    if ($null -eq $X86_Path) {
+                        $X86_Path = Get-X86Path
+                    }
+                } else {
+                    #The reason we commit here is because database values were written for CPU architectures
+                    $Transaction.Commit()
+                    $Connection.Close()
+                    throw "$CPU CPU architecture not supported for device $thisComputer"
+                }
+
+                $NewComputerMap += @{DeviceName = $thisComputer; CPU = $CPU; NewlyDeferred = $false; TestMachine = $false}
+            }
+
+            if ($X86_Path) {
+                $X86_RefreshToolName = Split-Path $X86_Path -Leaf
+            }
+            if ($AMD64_Path) {
+                $AMD64_RefreshToolName = Split-Path $AMD64_Path -Leaf
+            }
+            if ($ARM64_Path) {
+                $ARM64_RefreshToolName = Split-Path $ARM64_Path -Leaf
+            }
+
+            $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
+
+            $MachinesNeedingRestart = @()
+            $MachinesNotNeedingRestart = @()
+            $Machines = ($CustomPSObjectComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
+            $SignedToUnsigned = $false
+
+            if (($DeferredPolicy.IsSigned -eq $true) -and ($PolicyInfo.IsSigned -eq $false)) {
+                $SignedToUnsigned = $true
+            }
+
+            foreach ($Machine in $Machines) {
+                if (($DeferredPolicy.IsSigned -eq $true) -and (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Machine -Connection $Connection -ErrorAction Stop))) {
+                    $MachinesNeedingRestart += $Machine
+                } else {
+                    $MachinesNotNeedingRestart += $Machine
+                }
+            }
+
+            if (($null -eq $Machines) -or ($Machines.Count -le 0)) {
+                $Transaction.Commit()
+                continue
+            }
+
+            if ($SignedToUnsigned) {
+                if (-not (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully remove UEFI boot protection of old, signed policy. Continue with script execution?")) {
+                    $Transaction.Commit()
+                    #Transaction is commit here because there were some CPU write actions above and not many other write actions
+                    $Connection.Close()
+                    if ($UnsignedStagedPolicyPath) {
+                        if (Test-Path $UnsignedStagedPolicyPath) {
+                            Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                    if ($SignedStagedPolicyPath) {
+                        if (Test-Path $SignedStagedPolicyPath) {
+                            Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                        }
+                    }
+                    return
+                }
+
+                #TODO
+                throw "FIXME: Fixing signed deferred policies for currently signed policies will soon be implemented, but is not currently implemented"
+
+            } else {
+
+                if ($PolicyInfo.IsSigned -eq $true) {
+                    #Get Signed
+                    if ($null -eq $SignedStagedPolicyPath) {
+                        $SignedPolicyDir = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\Signed")
+                        $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory $SignedPolicyDir -ErrorAction Stop
+                        Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
+                        $SignedStagedPolicyPath = Join-Path ($SignedPolicyDir) -ChildPath (Split-Path $UnsignedStagedPolicyPath -Leaf)
+                    }
+
+                    #Copy to Machine(s)
+                    Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
+
+                    #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed                
+                    $restartNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired -ForceRestart:$ForceRestart -ErrorAction Stop
+                    $restartNotNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNotNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -ErrorAction Stop
+
+                    if ($VerbosePreference) {
+                        $restartNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                        $restartNotNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                    }
+
+                    $SuccessfulMachinesToRestart = @()
+
+                    $restartNeededResults | ForEach-Object {
+                        if (($_.WinRMSuccess -eq $true) -and ($_.ReadyForARestart -eq $true)) {
+                            $SuccessfulMachinesToRestart += $_.PSComputerName
+                            Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
+                        }
+                    }
+
+                    if ($SuccessfulMachinesToRestart.Count -ge 1) {
+                        if ($ForceRestart) {
+                            Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
+                        } else {
+                            $DevicesWithComma = $SuccessfulMachinesToRestart -join ","
+                            if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
+                                Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
+                            } else {
+                                Write-Host "Please restart devices soon so that the new signed policy can take effect."
+                            }
+                        }
+
+                        foreach ($FirstSignedMachine in $SuccessfulMachinesToRestart) {
+                            try {
+                                if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $FirstSignedMachine -Connection $Connection -ErrorAction Stop)) {
+                                    throw "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine ."
+                                }
+                            } catch {
+                                Write-Verbose ($_ | Format-List -Property * | Out-String)
+                                Write-Warning "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine ."
+                            }
+                        }
+                    }
+
+                    $restartNotNeededResults | ForEach-Object {
+                        if (($_.WinRMSuccess -eq $true) -and ($_.RefreshCompletedSuccessfully -eq $true)) {
+                            Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
+                        }
+                    }
+
+                } else {
+                    #Copy to Machine(s)
+                    Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
+
+                    #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -ErrorAction Stop
+
+                    if ($VerbosePreference) {
+                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                    }
+
+                    $results | ForEach-Object {
+                        if (($_.WinRMSuccess -eq $true) -and ($_.RefreshCompletedSuccessfully -eq $true)) {
+                            Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
+                        }
+                    }
+                }
+            }
+
+            $Transaction.Commit()
+            if ($results -or $restartNotNeededResults -or $restartNeededResults) {
+                if ($DeferredPolicy.PolicyVersion) {
+                    Write-Host "Deployed new policy to fix those workstations with old version: $($DeferredPolicy.PolicyVersion)"
+                } elseif ($DeferredPolicy.DeferredPolicyIndex) {
+                    Write-Host "Deployed new policy to fix those workstations with deferred policy index: $($DeferredPolicy.DeferredPolicyIndex)"
+                }
+            }
+        }
+
+        if ($Connection) {
+            $Connection.Close()
+        }
+        if ($SignedStagedPolicyPath) {
+            if (Test-Path $SignedStagedPolicyPath) {
+                Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if ($UnsignedStagedPolicyPath) {
+            if (Test-Path $UnsignedStagedPolicyPath) {
+                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+
     } catch {
-        $theError = $_
+       $theError = $_
+
+        if ($Transaction) {
+            $Transaction.Rollback()
+        }
+        if ($Connection) {
+            $Connection.Close()
+        }
+        if ($SignedStagedPolicyPath) {
+            if (Test-Path $SignedStagedPolicyPath) {
+                Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if ($UnsignedStagedPolicyPath) {
+            if (Test-Path $UnsignedStagedPolicyPath) {
+                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+            }
+        }
         Write-Verbose ($theError | Format-List -Property * | Out-String)
         throw $theError
     }

@@ -29,8 +29,7 @@ function Copy-StagedWDACPolicies {
             $Machines = ($ComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
         }
     } else {
-        #TODO
-        throw "Operation not currently supported for fixing deferred but will be added soon" #FIXME
+        $Machines = ($ComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
     }
 
     $CopyRefreshTool_ScriptBlock = {
