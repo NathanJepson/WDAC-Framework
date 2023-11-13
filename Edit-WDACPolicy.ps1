@@ -147,6 +147,7 @@ function Edit-WDACPolicy {
         [string]$PolicyName,
         [ValidateNotNullOrEmpty()]
         [string]$PolicyGUID,
+        [Alias("PSCodeSigner")]
         [switch]$AddPSCodeSigner,
         [switch]$UpdatePolicySigner,
         [switch]$SupplementalPolicySigner,
