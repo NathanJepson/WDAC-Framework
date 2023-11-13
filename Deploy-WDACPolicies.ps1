@@ -109,7 +109,27 @@ function Remove-MachineDeferred {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
-    #TODO
+    $DeferredPolicies = Get-DeferredWDACPolicies -DeferredDevicePolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+    foreach ($DeferredPolicy in $DeferredPolicies) {
+        if (Test-SpecificDeferredPolicyOnDevice -DeferredPolicyIndex $DeferredPolicy.DeferredPolicyIndex -WorkstationName $DeviceName -Connection $Connection -ErrorAction Stop) {
+            if (-not (Remove-DeferredWDACPolicyAssignment -DeferredPolicyIndex $DeferredPolicy.DeferredPolicyIndex -DeviceName $DeviceName -Connection $Connection -ErrorAction Stop)) {
+                throw "Unsuccessful in removing deferred policy assignment of this policy on device $DeviceName : $($DeferredPolicy.DeferredPolicyIndex)"
+            } else {
+                if (-not (Test-AnyDeferredWDACPolicyAssignments -DeferredPolicyIndex $DeferredPolicy.DeferredPolicyIndex -Connection $Connection -ErrorAction Stop)) {
+                    if (-not (Remove-DeferredWDACPolicy -DeferredPolicyIndex $DeferredPolicy.DeferredPolicyIndex -Connection $Connection -ErrorAction Stop)) {
+                        throw "Trouble removing deferred policy with index $($DeferredPolicy.DeferredPolicyIndex) after the removal of its last assignment."
+                    }
+                }
+            }
+        }
+    }
+
+    if (-not (Test-AnyPoliciesDeferredOnDevice -WorkstationName $DeviceName -Connection $Connection -ErrorAction Stop)) {
+        if (-not (Set-WDACDeviceDeferredStatus -DeviceName $DeviceName -Unset -Connection $Connection -ErrorAction Stop)) {
+            throw "Unable to reset deferred status on device $DeviceName back to normal. (This is the UpdateDeferring flag in the database)"
+        }
+    }
 }
 
 function Deploy-WDACPolicies {
@@ -886,6 +906,7 @@ function Restore-WDACWorkstations {
         $AllDeferred = Get-DeferredWDACPolicies -DeferredDevicePolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
         foreach ($DeferredPolicy in $AllDeferred) {
+            $GeneralSuccess = $false
             $results = $null
             $restartNeededResults = $null
             $restartNotNeededResults = $null
@@ -1076,6 +1097,8 @@ function Restore-WDACWorkstations {
                         if (($_.WinRMSuccess -eq $true) -and ($_.ReadyForARestart -eq $true)) {
                             $SuccessfulMachinesToRestart += $_.PSComputerName
                             Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
+                            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
+                            $GeneralSuccess = $true
                         }
                     }
 
@@ -1106,6 +1129,8 @@ function Restore-WDACWorkstations {
                     $restartNotNeededResults | ForEach-Object {
                         if (($_.WinRMSuccess -eq $true) -and ($_.RefreshCompletedSuccessfully -eq $true)) {
                             Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
+                            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
+                            $GeneralSuccess = $true
                         }
                     }
 
@@ -1123,18 +1148,22 @@ function Restore-WDACWorkstations {
                     $results | ForEach-Object {
                         if (($_.WinRMSuccess -eq $true) -and ($_.RefreshCompletedSuccessfully -eq $true)) {
                             Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
+                            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
+                            $GeneralSuccess = $true
                         }
                     }
                 }
             }
 
             $Transaction.Commit()
-            if ($results -or $restartNotNeededResults -or $restartNeededResults) {
+            if ( ($results -or $restartNotNeededResults -or $restartNeededResults) -and $GeneralSuccess) {
                 if ($DeferredPolicy.PolicyVersion) {
                     Write-Host "Deployed new policy to fix those workstations with old version: $($DeferredPolicy.PolicyVersion)"
                 } elseif ($DeferredPolicy.DeferredPolicyIndex) {
                     Write-Host "Deployed new policy to fix those workstations with deferred policy index: $($DeferredPolicy.DeferredPolicyIndex)"
                 }
+            } else {
+                Write-Host "No workstations were fixed which were assigned to deferred policy with policy index: $($DeferredPolicy.DeferredPolicyIndex)"
             }
         }
 
