@@ -921,8 +921,8 @@ function Restore-WDACWorkstations {
             if ($null -ne $DeferredPolicy.PolicyVersion) {
                 $CompareVersionsVariable = Compare-Versions -Version1 $PolicyInfo.PolicyVersion -Version2 $DeferredPolicy.PolicyVersion
 
-                if (($CompareVersionsVariable -eq 0) -or ($CompareVersionsVariable -eq 1)) {
-                #Deferred policy versions should always be less than the current version number. (Otherwise, this if statement executes.)
+                if (($CompareVersionsVariable -eq 0) -or ($CompareVersionsVariable -eq -1)) {
+                #Current version number should always be greater than the deferred policy version number. (Otherwise, this if statement executes.)
                     $Transaction.Rollback()
                     $Connection.Close()
                     Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue

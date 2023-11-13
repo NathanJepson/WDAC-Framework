@@ -120,7 +120,7 @@ function Copy-StagedWDACPolicies {
         $sess = New-PSSession $Machines -ErrorAction SilentlyContinue
 
         if (-not $sess) {
-            throw New-Object System.Management.Automation.Remoting.PSRemotingTransportException
+            throw "Unable to establish remote powershell sessions with any designated device."
         }
 
         $Result = Invoke-Command -Session $sess -ArgumentList $RemoteStagingDirectory,$X86_Path,$AMD64_Path,$ARM64_Path -ScriptBlock {
