@@ -81,7 +81,7 @@ function Add-WDACRuleComments {
 
     foreach ($Entry in $IDsAndComments.GetEnumerator()) {
         if (($Entry.Value) -and ($Entry.Value -ne $true)) {
-            $ID = $Entry.Key
+            $ID = "`"" + $Entry.Key + "`""
             $Comment = ("<!--" + $Entry.Value + "-->")
             $IDInstances = Select-String -Path $FilePath -Pattern $ID
 
