@@ -875,6 +875,7 @@ function Edit-WDACPolicy {
             } else {
                 $Transaction.Rollback()
                 $Connection.Close()
+                Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
                 throw "Unable to retrieve version information regarding a policy from the database."
             }
 

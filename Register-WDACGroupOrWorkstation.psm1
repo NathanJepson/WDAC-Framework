@@ -124,13 +124,13 @@ function Register-WDACGroup {
 
     } catch {
         $theError = $_
+        Write-Verbose ($theError | Format-List * -Force | Out-String)
         if ($Transaction) {
             $Transaction.Rollback()
         }
         if ($Connection) {
             $Connection.Close()
         }
-        Write-Verbose ($theError | Format-List * -Force | Out-String)
         throw $theError
     }
 }
@@ -223,6 +223,7 @@ function Register-WDACWorkstation {
 
     } catch {
         $theError = $_
+        Write-Verbose ($theError | Format-List * -Force | Out-String)
         if ($Transaction) {
             $Transaction.Rollback()
         }
@@ -230,7 +231,6 @@ function Register-WDACWorkstation {
             $Connection.Close()
         }
 
-        Write-Verbose ($theError | Format-List * -Force | Out-String)
         throw $theError
     }
 }
@@ -332,14 +332,13 @@ function Register-WDACWorkstationAdHoc {
 
     } catch {
         $theError = $_
-
+        Write-Verbose ($theError | Format-List * -Force | Out-String)
         if ($Transaction) {
             $Transaction.Rollback()
         }
         if ($Connection) {
             $Connection.Close()
         }
-        Write-Verbose ($theError | Format-List * -Force | Out-String)
         throw $theError
     }
 

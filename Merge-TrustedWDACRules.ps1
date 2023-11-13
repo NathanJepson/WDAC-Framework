@@ -506,6 +506,7 @@ function Merge-TrustedWDACRules {
                     }
                 } else {
                     $Transaction.Rollback()
+                    Remove-Variable Transaction -ErrorAction SilentlyContinue
                     if ($BackupOldPolicy) {
                         if (Test-Path $BackupOldPolicy) {
                             try {

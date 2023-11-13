@@ -710,6 +710,7 @@ function Deploy-WDACPolicies {
                     $Transaction.Rollback()
                 }
                 $Connection.Close()
+                Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
                 throw "No remote powershell results from attempting to refresh policies -- for all devices."
             }
 
@@ -742,7 +743,7 @@ function Deploy-WDACPolicies {
         
     } catch {
         $theError = $_
-
+        Write-Verbose ($theError | Format-List -Property * | Out-String)
         if ($Transaction) {
             $Transaction.Rollback()
         }
@@ -759,7 +760,6 @@ function Deploy-WDACPolicies {
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
             }
         }
-        Write-Verbose ($theError | Format-List -Property * | Out-String)
         throw $theError
     }
 }
@@ -925,6 +925,7 @@ function Restore-WDACWorkstations {
                 #Deferred policy versions should always be less than the current version number. (Otherwise, this if statement executes.)
                     $Transaction.Rollback()
                     $Connection.Close()
+                    Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
                     if ($SignedStagedPolicyPath) {
                         if (Test-Path $SignedStagedPolicyPath) {
                             Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
@@ -1182,8 +1183,8 @@ function Restore-WDACWorkstations {
         }
 
     } catch {
-       $theError = $_
-
+        $theError = $_
+        Write-Verbose ($theError | Format-List -Property * | Out-String)
         if ($Transaction) {
             $Transaction.Rollback()
         }
@@ -1200,7 +1201,7 @@ function Restore-WDACWorkstations {
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
             }
         }
-        Write-Verbose ($theError | Format-List -Property * | Out-String)
+        
         throw $theError
     }
 }
