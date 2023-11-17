@@ -41,5 +41,5 @@ function Restart-WDACDevices {
     }
 
     Invoke-Command -ComputerName $Devices -ScriptBlock $scriptLogOutUsers -ErrorAction SilentlyContinue
-    Restart-Computer -ComputerName $Devices -ErrorAction SilentlyContinue
+    Restart-Computer -ComputerName $Devices -Force -ErrorAction SilentlyContinue
 }

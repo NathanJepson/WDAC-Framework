@@ -242,6 +242,9 @@ function Deploy-WDACPolicies {
     $Transaction = $null
     $SignedStagedPolicyPath = $null
     $UnsignedStagedPolicyPath = $null
+    $RestartLocalDevice = $false
+    $LocalDeviceName = HOSTNAME.EXE
+    $ComputerMapDeferredDevices = $null
 
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -296,8 +299,12 @@ function Deploy-WDACPolicies {
 
             if ($PolicyInfo.IsPillar -eq $true) {
                 $ComputerMap = Get-WDACDevicesAllNamesAndCPUInfo -Connection $Connection -ErrorAction Stop
+
+                $ComputerMapDeferredDevices = Get-WDACDevicesAllNamesAndCPUInfo -Deferred -Connection $Connection -ErrorAction Stop
             } else {
                 $ComputerMap = Get-WDACDevicesNeedingWDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+                $ComputerMapDeferredDevices = Get-WDACDevicesNeedingWDACPolicy -Deferred -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             }
 
             if ( (($null -eq $ComputerMap) -or $ComputerMap.Count -le 0) -and (-not ($TestComputers -and $TestForce)) ) {
@@ -676,15 +683,22 @@ function Deploy-WDACPolicies {
                     Write-Warning ("Powershell remoting (WinRM) failed on these devices: " + ($RemoteFailures -join ","))
                 }
 
+                if (($DevicesToRestart -contains $LocalDeviceName) -and ($RestartRequired -and ($DevicesToRestart.Count -ge 1) -and (-not $SignedToUnsigned))) {
+                    $RestartLocalDevice = $true
+                    $DevicesToRestart = $DevicesToRestart | Where-Object {$_ -ne $LocalDeviceName}
+                }
+
                 ## Restart Devices ################################################
                 if ($RestartRequired -and ($DevicesToRestart.Count -ge 1) -and (-not $SignedToUnsigned)) {
 
                     if ($ForceRestart) {
                         Restart-WDACDevices -Devices $DevicesToRestart
+
                     } else {
                         $DevicesWithComma = $DevicesToRestart -join ","
                         if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
                             Restart-WDACDevices -Devices $DevicesToRestart
+                        
                         } else {
                             Write-Host "Please restart devices soon so that the new signed policy can take effect."
                         }
@@ -725,6 +739,16 @@ function Deploy-WDACPolicies {
             }
 
             $Transaction.Commit()
+            
+            if ($ComputerMapDeferredDevices -and ($ComputerMapDeferredDevices.Count -gt 0)) {
+            #Since these devices are behind on this deployment, then they must be deferred on this policy
+                $Transaction = $Connection.BeginTransaction()
+                foreach ($DeferredMachine in $ComputerMapDeferredDevices.GetEnumerator()) {
+                    Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.DeviceName -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
+                }
+                $Transaction.Commit()
+            }
+            
             $Connection.Close()
 
             Write-Host "Policy has been deployed."
@@ -737,6 +761,12 @@ function Deploy-WDACPolicies {
             if ($UnsignedStagedPolicyPath) {
                 if (Test-Path $UnsignedStagedPolicyPath -ErrorAction SilentlyContinue) {
                     Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                }
+            }
+
+            if ($RestartLocalDevice) {
+                if (Get-YesOrNoPrompt -Prompt "Your device will need to be restarted to apply the new policy. Select `"Y`" once you've saved your work.") {
+                    Restart-Computer -Force
                 }
             }
         }
