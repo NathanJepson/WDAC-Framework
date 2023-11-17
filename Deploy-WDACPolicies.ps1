@@ -509,7 +509,7 @@ function Deploy-WDACPolicies {
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
                 #NOTE: The "restartrequired" flag is not used here because that would prevent the refresh tool from being used
                 #...Instead, devices will simply be restarted below after the first initial transaction commit
-                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -ErrorAction Stop
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -LocalMachineName $LocalDeviceName -ErrorAction Stop
                 
                 $results | ForEach-Object {
                     if ($_.RefreshCompletedSuccessfully -eq $true) {
@@ -564,6 +564,7 @@ function Deploy-WDACPolicies {
                 if (($SuccessfulMachines.Count -ge 1)) {
 
                     if ($ForceRestart) {
+                        Write-Host "Performing a restart of some workstations..."
                         Restart-WDACDevices -Devices $SuccessfulMachines
                     } else {
                         $DevicesWithComma = $SuccessfulMachines -join ","
@@ -595,7 +596,7 @@ function Deploy-WDACPolicies {
                 Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                 #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -ErrorAction Stop
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
                 #If there are no results, or null is returned, then no WinRM session was successful
                 if (-not $results) {
@@ -625,14 +626,14 @@ function Deploy-WDACPolicies {
                     Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired:$RestartRequired -ForceRestart:$ForceRestart -ErrorAction Stop
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired:$RestartRequired -ForceRestart:$ForceRestart -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
                 } else {
                     #Copy to Machine(s)
                     Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -ErrorAction Stop
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
                 }
             }
@@ -649,7 +650,7 @@ function Deploy-WDACPolicies {
 
                 $results | ForEach-Object {
                     if ($SignedToUnsigned) {
-                        if ( (-not ($SuccessfulMachines -contains $_.PSComputerName)) -and (($_.PSComputerName -ne $LocalDeviceName) -or ($_.PSComputerName -eq $LocalDeviceName -and (-not $ClearUEFIBootLocalDevice)))) {
+                        if ( (-not ($SuccessfulMachines -contains $_.PSComputerName)) -and (($_.PSComputerName -ne $LocalDeviceName) -or ( ($_.PSComputerName -eq $LocalDeviceName) -and (-not $ClearUEFIBootLocalDevice)))) {
                             Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "Device did not deploy initial signed policy successfully before subsequent unsigned policy." -Connection $Connection -ErrorAction Stop
                         }
                     } elseif ($null -eq $_.ResultMessage) {
@@ -712,6 +713,7 @@ function Deploy-WDACPolicies {
                 if ($RestartRequired -and ($DevicesToRestart.Count -ge 1) -and (-not $SignedToUnsigned)) {
 
                     if ($ForceRestart) {
+                        Write-Host "Performing a restart of some workstations..."
                         Restart-WDACDevices -Devices $DevicesToRestart
 
                     } else {
@@ -856,11 +858,10 @@ function Restore-WDACWorkstations {
     WDAC policies -- this ONLY applies when a previously signed policy becomes unsigned.
 
     .EXAMPLE
-    TODO
+    Restore-WDACWorkstations -PolicyGUID "4ac96917-6f84-43c3-ab68-e9a7bc87eb8f" -ForceRestart -SkipSetup
 
     .EXAMPLE
-    TODO
-
+    Restore-WDACWorkstations -PolicyGUID "4ac96917-6f84-43c3-ab68-e9a7bc87eb8f" -WorkstationName PC1,PC2 -SleepTime 600
     #>
     [cmdletbinding()]
     Param ( 
@@ -890,6 +891,9 @@ function Restore-WDACWorkstations {
     $AMD64_Path = $null
     $ARM64_Path = $null
     $X86_Path = $null
+    $LocalDeviceName = HOSTNAME.EXE
+    $RestartLocalDevice = $false
+    $ClearUEFIBootLocalDevice = $false
 
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -1123,7 +1127,7 @@ function Restore-WDACWorkstations {
                 }
 
                 #TODO
-                throw "FIXME: Fixing signed deferred policies for currently signed policies will soon be implemented, but is not currently implemented"
+                throw "FIXME: Fixing signed deferred policies for currently deployed UNSIGNED policies will soon be implemented, but is not currently implemented"
 
             } else {
 
@@ -1140,8 +1144,8 @@ function Restore-WDACWorkstations {
                     Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed                
-                    $restartNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired -ForceRestart:$ForceRestart -ErrorAction Stop
-                    $restartNotNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNotNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -ErrorAction Stop
+                    $restartNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired -ForceRestart:$ForceRestart -LocalMachineName $LocalDeviceName -ErrorAction Stop
+                    $restartNotNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNotNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
                     if ($VerbosePreference) {
                         $restartNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
@@ -1159,8 +1163,22 @@ function Restore-WDACWorkstations {
                         }
                     }
 
+                    if ($SuccessfulMachinesToRestart -contains $LocalDeviceName) {
+                        $RestartLocalDevice = $true
+                        $SuccessfulMachinesToRestart = $SuccessfulMachinesToRestart | Where-Object {$_ -ne $LocalDeviceName}
+                        try {
+                            if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $LocalDeviceName -Connection $Connection -ErrorAction Stop)) {
+                                throw "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName ."
+                            }
+                        } catch {
+                            Write-Verbose ($_ | Format-List -Property * | Out-String)
+                            Write-Warning "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName ."
+                        }
+                    }
+
                     if ($SuccessfulMachinesToRestart.Count -ge 1) {
                         if ($ForceRestart) {
+                            Write-Host "Performing a restart of some workstations..."
                             Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
                         } else {
                             $DevicesWithComma = $SuccessfulMachinesToRestart -join ","
@@ -1196,7 +1214,7 @@ function Restore-WDACWorkstations {
                     Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -ErrorAction Stop
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
                     if ($VerbosePreference) {
                         $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
@@ -1236,6 +1254,14 @@ function Restore-WDACWorkstations {
             if (Test-Path $UnsignedStagedPolicyPath) {
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
             }
+        }
+
+        if ($RestartLocalDevice) {
+            if (Get-YesOrNoPrompt -Prompt "Your device will need to be restarted to apply the new policy. Select `"Y`" once you've saved your work.") {
+                Restart-Computer -Force
+            }
+        } elseif ($ClearUEFIBootLocalDevice) {
+            #TODO
         }
 
     } catch {

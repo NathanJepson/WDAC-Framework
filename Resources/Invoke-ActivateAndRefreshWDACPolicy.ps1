@@ -16,7 +16,8 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         [switch]$Signed,
         [switch]$RestartRequired,
         [switch]$ForceRestart,
-        [switch]$RemoveUEFI
+        [switch]$RemoveUEFI,
+        $LocalMachineName
     )
 
     $sess = New-PSSession -ComputerName $Machines -ErrorAction SilentlyContinue
@@ -29,7 +30,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         return $null
     }
 
-    $Result = Invoke-Command -Session $sess -ArgumentList $CIPolicyFileName,$RemoteStagingDirectory,$X86_RefreshToolName,$AMD64_RefreshToolName,$ARM64_RefreshToolName,$Signed.ToBool(),$RestartRequired.ToBool(),$ForceRestart.ToBool(),$RemoveUEFI.ToBool() -ScriptBlock {
+    $Result = Invoke-Command -Session $sess -ArgumentList $CIPolicyFileName,$RemoteStagingDirectory,$X86_RefreshToolName,$AMD64_RefreshToolName,$ARM64_RefreshToolName,$Signed.ToBool(),$RestartRequired.ToBool(),$ForceRestart.ToBool(),$RemoveUEFI.ToBool(),$LocalMachineName -ScriptBlock {
         Param (
             $CIPolicyFileName,
             $RemoteStagingDirectory,
@@ -39,7 +40,8 @@ function Invoke-ActivateAndRefreshWDACPolicy {
             $Signed,
             $RestartRequired,
             $ForceRestart,
-            $RemoveUEFI
+            $RemoveUEFI,
+            $LocalMachineName
         )
 
         $ResultMessage = $null
@@ -52,6 +54,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         $UEFIRemoveSuccess = $false
         $Windows11 = $false
         $SysDrive = $null
+        $Hostname = HOSTNAME.EXE
         $Architecture = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
         if ($PSVersionTable.PSEdition -eq "Core") {
             $Windows11 = (Get-CimInstance -Class Win32_OperatingSystem -Property Caption -ErrorAction Stop | Select-Object -ExpandProperty Caption) -Match "Windows 11"
@@ -166,8 +169,13 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                         if ($RestartRequired) {
                         #If this is the first time a signed policy has been deployed on the system, and memory integrity is enabled, then a restart of the system is required
                         #...rather than using the refresh tool to activate the policy
-
-                            if ($ForceRestart) {
+                            $ProceedForceRestart = $true
+                            if ($LocalMachineName -and $Hostname) {
+                                if ($LocalMachineName -eq $Hostname) {
+                                    $ProceedForceRestart = $false
+                                }
+                            }
+                            if ($ForceRestart -and $ProceedForceRestart) {
                                 try {
                                 #Log out every user
                                     
@@ -236,7 +244,6 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                                 $ResultMessage = "Refresh job was unsuccessful."
                             }
                         }
-                        
                     }
                 }
 
