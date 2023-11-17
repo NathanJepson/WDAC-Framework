@@ -243,6 +243,7 @@ function Deploy-WDACPolicies {
     $SignedStagedPolicyPath = $null
     $UnsignedStagedPolicyPath = $null
     $RestartLocalDevice = $false
+    $ClearUEFIBootLocalDevice = $false
     $LocalDeviceName = HOSTNAME.EXE
     $ComputerMapDeferredDevices = $null
 
@@ -553,6 +554,12 @@ function Deploy-WDACPolicies {
                 $Transaction.Commit()
                 $Transaction = $Connection.BeginTransaction()
 
+                #Remove Local Machine from Devices that Need to Be Restarted
+                if ($SuccessfulMachines -contains $LocalDeviceName) {
+                    $SuccessfulMachines = $SuccessfulMachines | Where-Object {$_ -ne $LocalDeviceName}
+                    $ClearUEFIBootLocalDevice = $true
+                }
+
                 #Restart Machines to Remove UEFI boot protection on Signed Policy 
                 if (($SuccessfulMachines.Count -ge 1)) {
 
@@ -579,6 +586,11 @@ function Deploy-WDACPolicies {
                 $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
                 ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
 
+                #Remove Local Machine from CustomPSObjectComputerMap if ClearUEFIBootLocalDevice is true
+                if ($ClearUEFIBootLocalDevice) {
+                    $CustomPSObjectComputerMap = $CustomPSObjectComputerMap | Where-Object {$_.DeviceName -ne $LocalDeviceName}
+                }
+
                 #Copy to Machine(s)
                 Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
 
@@ -588,6 +600,9 @@ function Deploy-WDACPolicies {
                 #If there are no results, or null is returned, then no WinRM session was successful
                 if (-not $results) {
                     for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
+                        if (($CustomPSObjectComputerMap[$i].DeviceName -eq $LocalDeviceName) -and ($ClearUEFIBootLocalDevice)) {
+                            continue
+                        }
                         $CustomPSObjectComputerMap[$i].NewlyDeferred = $true
                         Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Unable to establish WinRM connection to machine to apply unsigned policy to machine after deploying temporary signed policy." -Connection $Connection -ErrorAction Stop
                     }
@@ -634,7 +649,7 @@ function Deploy-WDACPolicies {
 
                 $results | ForEach-Object {
                     if ($SignedToUnsigned) {
-                        if (-not ($SuccessfulMachines -contains $_.PSComputerName)) {
+                        if ( (-not ($SuccessfulMachines -contains $_.PSComputerName)) -and (($_.PSComputerName -ne $LocalDeviceName) -or ($_.PSComputerName -eq $LocalDeviceName -and (-not $ClearUEFIBootLocalDevice)))) {
                             Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "Device did not deploy initial signed policy successfully before subsequent unsigned policy." -Connection $Connection -ErrorAction Stop
                         }
                     } elseif ($null -eq $_.ResultMessage) {
@@ -660,6 +675,11 @@ function Deploy-WDACPolicies {
 
                 ##Set All other Deferred Policies and Deferred Policy Assignments##
                 for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
+
+                    if (($CustomPSObjectComputerMap[$i].DeviceName -eq $LocalDeviceName) -and ($SignedToUnsigned) -and ($ClearUEFIBootLocalDevice)) {
+                        continue
+                    }
+
                     if ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
                         Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre script check failures or pre-signed-deployment check not satisfied or is not a test machine." -Connection $Connection -ErrorAction Stop
                         continue
@@ -766,6 +786,12 @@ function Deploy-WDACPolicies {
 
             if ($RestartLocalDevice) {
                 if (Get-YesOrNoPrompt -Prompt "Your device will need to be restarted to apply the new policy. Select `"Y`" once you've saved your work.") {
+                    Restart-Computer -Force
+                }
+            } elseif ($ClearUEFIBootLocalDevice -and $SignedToUnsigned) {
+                Write-Host "Your device will need to be restarted to remove the UEFI boot on the old signed policy."
+                Write-Host "Once your device has been restarted, re-run this cmdlet with the same policy GUID and the -local flag."
+                if (Get-YesOrNoPrompt -Prompt "Select `"Y`" once you've saved your work.") {
                     Restart-Computer -Force
                 }
             }
