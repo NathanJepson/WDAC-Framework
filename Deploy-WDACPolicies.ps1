@@ -766,7 +766,7 @@ function Deploy-WDACPolicies {
             #Since these devices are behind on this deployment, then they must be deferred on this policy
                 $Transaction = $Connection.BeginTransaction()
                 foreach ($DeferredMachine in $ComputerMapDeferredDevices.GetEnumerator()) {
-                    Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.DeviceName -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
+                    Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.Name -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
                 }
                 $Transaction.Commit()
             }
