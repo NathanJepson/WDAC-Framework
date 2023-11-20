@@ -318,7 +318,7 @@ function New-MicrosoftSecureBootFileNameRule {
         $ID_User = IncrementDenyID -RuleMap $RuleMap
         $RuleMap = $RuleMap + @{$ID_User=$true}
         $ID_Kernel = IncrementDenyID -RuleMap $RuleMap
-        if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
+        if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
             $RuleMap[$ID_User] = $RuleInfo.Comment
             $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
         } else {
@@ -340,7 +340,7 @@ function New-MicrosoftSecureBootFileNameRule {
         if ($RuleInfo.TrustedDriver -eq $true) {
             $kernelResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"FileName", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "FileRule", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
             $ID_Kernel = IncrementAllowID -RuleMap $RuleMap
-            if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
+            if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
                 $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
             } else {
                 $RuleMap = $RuleMap + @{$ID_Kernel=$true}
@@ -358,7 +358,7 @@ function New-MicrosoftSecureBootFileNameRule {
         if ($RuleInfo.TrustedUserMode -eq $true) {
             $userModeResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"FileName", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "FileRule", [Microsoft.SecureBoot.UserConfig.FileNameLevel]($RuleInfo.SpecificFileNameLevel))
             $ID_User = IncrementAllowID -RuleMap $RuleMap
-            if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
+            if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
                 $RuleMap = $RuleMap + @{$ID_User=$RuleInfo.Comment}
             } else {
                 $RuleMap = $RuleMap + @{$ID_User=$true}
@@ -390,7 +390,7 @@ function New-MicrosoftSecureBootLeafCertificateRule {
     )
 
     $HasComment = $false
-    if (($null -ne $RuleInfo.Comment) -and "" -ne $RuleInfo.Comment) {
+    if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
         $HasComment = $true       
     }
     $result = @()
@@ -495,7 +495,7 @@ function New-MicrosoftSecureBootPublisherRule {
 
     $result = @()
     $HasComment = $false
-    if (($null -ne $RuleInfo.Comment) -and "" -ne $RuleInfo.Comment) {
+    if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
         $HasComment = $true       
     }
     $LeafCommonName = $RuleInfo.LeafCertCN
@@ -588,7 +588,7 @@ function New-MicrosoftSecureBootFilePublisherRule {
         $ID_User = IncrementFileAttribID -RuleMap $RuleMap
         $RuleMap = $RuleMap + @{$ID_User=$true}
         $ID_Kernel = IncrementFileAttribID -RuleMap $RuleMap
-        if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
+        if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
             $RuleMap[$ID_User] = $RuleInfo.Comment
             $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
         } else {
