@@ -1235,7 +1235,7 @@ function Add-WDACApp {
         $ProductName,
         $PackageFamilyName,
         [bool]$UserWriteable=$false,
-        [bool]$FailedWHQL=$false,
+        $FailedWHQL,
         $RequestedSigningLevel,
         $ValidatedSigningLevel,
         [ValidateNotNullOrEmpty()]

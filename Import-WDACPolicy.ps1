@@ -98,16 +98,25 @@ function Import-WDACPolicy {
         $Rules = ($XMLFileContent.SIPolicy.Rules | Select-Object -Expand Rule)
         $IsSigned = $true
         $AuditMode = $false
-        for ($i=0; $i -lt $Rules.Count; $i++) {
-            $TempString = $Rules[$i].Option
-            if ($TempString -eq "Enabled:Audit Mode") {
+        if ($Rules.Count -eq 1) {
+            if ($Rules.Option -eq "Enabled:Audit Mode") {
                 $AuditMode = $true
             }
-            if ($TempString -eq "Enabled:Unsigned System Integrity Policy") {
+            if ($Rules.Option -eq "Enabled:Unsigned System Integrity Policy") {
                 $IsSigned = $false
             }
+        } else {
+            for ($i=0; $i -lt $Rules.Count; $i++) {
+                $TempString = $Rules[$i].Option
+                if ($TempString -eq "Enabled:Audit Mode") {
+                    $AuditMode = $true
+                }
+                if ($TempString -eq "Enabled:Unsigned System Integrity Policy") {
+                    $IsSigned = $false
+                }
+            }
         }
-
+        
         if ($IsSigned) {
             Write-Warning "This will be a signed policy. Verify if this is correct."
         }

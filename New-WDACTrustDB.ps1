@@ -72,7 +72,7 @@ function New-WDACTrustDB {
         ProductName Text,
         PackageFamilyName Text,
         UserWriteable Integer DEFAULT 0 NOT NULL,
-        FailedWHQL Integer DEFAULT 0 NOT NULL,
+        FailedWHQL Integer,
         Untrusted Integer DEFAULT 0 NOT NULL,
         TrustedDriver Integer DEFAULT 0 NOT NULL,
         TrustedUserMode Integer DEFAULT 0 NOT NULL,

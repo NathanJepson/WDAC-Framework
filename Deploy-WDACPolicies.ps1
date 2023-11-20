@@ -682,7 +682,7 @@ function Deploy-WDACPolicies {
                     }
 
                     if ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
-                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre script check failures or pre-signed-deployment check not satisfied or is not a test machine." -Connection $Connection -ErrorAction Stop
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre script check failures, or pre-signed-deployment check not satisfied, or machine is not a test machine." -Connection $Connection -ErrorAction Stop
                         continue
                     }
                     
@@ -1030,7 +1030,7 @@ function Restore-WDACWorkstations {
                 $thisComputer = $Computer.Name
                 $CPU = $Computer.Value
 
-                if (-not (Test-SpecificDeferredPolicyOnDevice -DeferredPolicyIndex $DeferredPolicy.DeferredPolicyIndex -WorkstationName $Name -Connection $Connection -ErrorAction Stop)) {
+                if (-not (Test-SpecificDeferredPolicyOnDevice -DeferredPolicyIndex $DeferredPolicy.DeferredPolicyIndex -WorkstationName $thisComputer -Connection $Connection -ErrorAction Stop)) {
                     continue
                 }
 
@@ -1084,6 +1084,14 @@ function Restore-WDACWorkstations {
                 $ARM64_RefreshToolName = Split-Path $ARM64_Path -Leaf
             }
 
+            if  (($null -eq $NewComputerMap) -or ($NewComputerMap.Count -le 0)) {
+            #No workstations under consideration assigned to Deferred policy in this loop iteration
+                #We commit here because CPU values have been written to the database
+                Write-Verbose "Of the workstations currently under consideration, none are assigned the deferred policy with index $($DeferredPolicy.DeferredPolicyIndex)"
+                $Transaction.Commit()
+                continue
+            }
+
             $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
 
             $MachinesNeedingRestart = @()
@@ -1096,7 +1104,7 @@ function Restore-WDACWorkstations {
             }
 
             foreach ($Machine in $Machines) {
-                if (($DeferredPolicy.IsSigned -eq $true) -and (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Machine -Connection $Connection -ErrorAction Stop))) {
+                if ((-not ($PolicyInfo.BaseOrSupplemental -eq $true)) -and ($DeferredPolicy.IsSigned -eq $true) -and (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Machine -Connection $Connection -ErrorAction Stop))) {
                     $MachinesNeedingRestart += $Machine
                 } else {
                     $MachinesNotNeedingRestart += $Machine
@@ -1144,12 +1152,21 @@ function Restore-WDACWorkstations {
                     Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed                
-                    $restartNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired -ForceRestart:$ForceRestart -LocalMachineName $LocalDeviceName -ErrorAction Stop
-                    $restartNotNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNotNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -LocalMachineName $LocalDeviceName -ErrorAction Stop
+                    if ($MachinesNeedingRestart -and ($MachinesNeedingRestart.Count -ge 1)) {
+                        $restartNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired -ForceRestart:$ForceRestart -LocalMachineName $LocalDeviceName -ErrorAction Stop
+                    }
+                    
+                    if ($MachinesNotNeedingRestart -and ($MachinesNotNeedingRestart.Count -ge 1)) {
+                        $restartNotNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNotNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -LocalMachineName $LocalDeviceName -ErrorAction Stop
+                    }
 
                     if ($VerbosePreference) {
-                        $restartNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
-                        $restartNotNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                        if ($restartNeededResults) {
+                            $restartNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                        }
+                        if ($restartNotNeededResults) {
+                            $restartNotNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                        }
                     }
 
                     $SuccessfulMachinesToRestart = @()
@@ -1163,40 +1180,43 @@ function Restore-WDACWorkstations {
                         }
                     }
 
-                    if ($SuccessfulMachinesToRestart -contains $LocalDeviceName) {
-                        $RestartLocalDevice = $true
-                        $SuccessfulMachinesToRestart = $SuccessfulMachinesToRestart | Where-Object {$_ -ne $LocalDeviceName}
-                        try {
-                            if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $LocalDeviceName -Connection $Connection -ErrorAction Stop)) {
-                                throw "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName ."
-                            }
-                        } catch {
-                            Write-Verbose ($_ | Format-List -Property * | Out-String)
-                            Write-Warning "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName ."
-                        }
-                    }
-
                     if ($SuccessfulMachinesToRestart.Count -ge 1) {
-                        if ($ForceRestart) {
-                            Write-Host "Performing a restart of some workstations..."
-                            Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
-                        } else {
-                            $DevicesWithComma = $SuccessfulMachinesToRestart -join ","
-                            if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
-                                Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
-                            } else {
-                                Write-Host "Please restart devices soon so that the new signed policy can take effect."
-                            }
-                        }
-
-                        foreach ($FirstSignedMachine in $SuccessfulMachinesToRestart) {
+                        if ($SuccessfulMachinesToRestart -contains $LocalDeviceName) {
+                            $RestartLocalDevice = $true
+                            $SuccessfulMachinesToRestart = $SuccessfulMachinesToRestart | Where-Object {$_ -ne $LocalDeviceName}
                             try {
-                                if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $FirstSignedMachine -Connection $Connection -ErrorAction Stop)) {
-                                    throw "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine ."
+                                if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $LocalDeviceName -Connection $Connection -ErrorAction Stop)) {
+                                    throw "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName ."
                                 }
                             } catch {
                                 Write-Verbose ($_ | Format-List -Property * | Out-String)
-                                Write-Warning "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine ."
+                                Write-Warning "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName ."
+                            }
+                        }
+
+                        if ($SuccessfulMachinesToRestart.Count -ge 1) {
+                        #We check this again because the size of the collection could've been decremented
+                            if ($ForceRestart) {
+                                Write-Host "Performing a restart of some workstations..."
+                                Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
+                            } else {
+                                $DevicesWithComma = $SuccessfulMachinesToRestart -join ","
+                                if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
+                                    Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
+                                } else {
+                                    Write-Host "Please restart devices soon so that the new signed policy can take effect."
+                                }
+                            }
+
+                            foreach ($FirstSignedMachine in $SuccessfulMachinesToRestart) {
+                                try {
+                                    if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $FirstSignedMachine -Connection $Connection -ErrorAction Stop)) {
+                                        throw "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine ."
+                                    }
+                                } catch {
+                                    Write-Verbose ($_ | Format-List -Property * | Out-String)
+                                    Write-Warning "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine ."
+                                }
                             }
                         }
                     }
