@@ -486,7 +486,7 @@ function Merge-TrustedWDACRules {
 
                 $FullPolicyPath = (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop)
                 $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $FullPolicyPath -ErrorAction Stop
-                Merge-CIPolicy -PolicyPaths $FullPolicyPath -Rules $RulesToMerge -OutputFilePath $TempFilePath -ErrorAction Stop
+                Merge-CIPolicy -PolicyPaths $FullPolicyPath -Rules $RulesToMerge -OutputFilePath $TempFilePath -ErrorAction Stop | Out-Null
                 #Since we've already checked for duplicate IDs, we can remove the _0 and _1 that Merge-CIPolicy puts at the end of each ID
                 Remove-UnderscoreDigits -FilePath $TempFilePath -ErrorAction Stop
                 Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $TempFilePath -ErrorAction Stop
