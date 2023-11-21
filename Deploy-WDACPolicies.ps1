@@ -580,23 +580,25 @@ function Deploy-WDACPolicies {
                     }
                 }
 
-                #Wait for machines to boot back up, default 8 minutes
-                Start-Sleep -Seconds $SleepTime
-
-                #Get Unsigned Second
-                $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-                ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
-
                 #Remove Local Machine from CustomPSObjectComputerMap if ClearUEFIBootLocalDevice is true
                 if ($ClearUEFIBootLocalDevice) {
                     $CustomPSObjectComputerMap = $CustomPSObjectComputerMap | Where-Object {$_.DeviceName -ne $LocalDeviceName}
                 }
 
-                #Copy to Machine(s)
-                Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
+                #Wait for machines to boot back up, default 8 minutes
+                if (($SuccessfulMachines.Count -ge 1) -and ($CustomPSObjectComputerMap.Count -ge 1)) {
+                    Start-Sleep -Seconds $SleepTime
 
-                #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
-                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -LocalMachineName $LocalDeviceName -ErrorAction Stop
+                    #Get Unsigned Second
+                    $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+                    ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+
+                    #Copy to Machine(s)
+                    Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -Test:($Test -and ($TestComputers.Count -ge 1)) -SkipSetup:$SkipSetup
+
+                    #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+                    $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -LocalMachineName $LocalDeviceName -ErrorAction Stop
+                }
 
                 #If there are no results, or null is returned, then no WinRM session was successful
                 if (-not $results) {
