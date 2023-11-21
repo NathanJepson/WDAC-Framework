@@ -290,6 +290,7 @@ Get-WDACApplockerScriptMsiEvent -SignerInformation
                     $SignerData = Get-WinEventData -EventRecord $_
 
                     if (-not (($SignerData.PublisherNameLength -eq 0) -and ($SignerData.IssuerNameLength -eq 0) -and ($SignerData.PublisherTBSHashSize -eq 0) -and ($SignerData.IssuerTBSHashSize -eq 0))) {
+                        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
                         $SigningStatus = 'Signed'
 
                         $PublisherTBSHash = $null
@@ -554,7 +555,10 @@ Return all kernel mode enforcement events.
 
                 $VerificationError = $VerificationErrorMapping[$SignerData.VerificationError]
 
-                if ($IgnoreDenyEvents -and ($VerificationError -eq 'Explicitly denied by WDAC policy')) { $ExplicitlyDeniedSigner = $True }
+                if ($IgnoreDenyEvents -and ($VerificationError -eq 'Explicitly denied by WDAC policy')) {
+                    [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')] 
+                    $ExplicitlyDeniedSigner = $True 
+                }
 
                 $Hash = $null
                 if ($SignerData.Hash) { $Hash = [BitConverter]::ToString($SignerData.Hash).Replace('-','') }
