@@ -413,6 +413,8 @@ function Deploy-WDACPolicies {
                 }
             }
 
+            $Transaction.Commit()
+            $Connection.Close()
             Write-Host "Policy has been locally deployed."
 
         } else {
