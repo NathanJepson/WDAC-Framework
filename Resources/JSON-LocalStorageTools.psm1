@@ -62,6 +62,6 @@ function Set-ValueLocalStorageJSON {
     try {
         Set-LocalStorageJSON -JSONObj $JSONObj -ErrorAction Stop
     } catch {
-        throw "Unable to set JSON value $Value within key $Key."
+        throw "Unable to set JSON value $Value within key $Key"
     }
 }

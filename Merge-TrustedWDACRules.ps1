@@ -188,7 +188,7 @@ function Merge-TrustedWDACRules {
         if ($PolicyName) {
             foreach ($Name in $PolicyName) {
                 if (-not (Find-WDACPolicyByName -PolicyName $Name -ErrorAction Stop)) {
-                    throw "No policy exists with name $Name ."
+                    throw "No policy exists with name $Name"
                 } else {
                     $Policies += ((Get-WDACPolicyByName -PolicyName $Name -ErrorAction Stop).PolicyGUID)
                 }
@@ -198,7 +198,7 @@ function Merge-TrustedWDACRules {
         if ($PolicyGUID) {
             foreach ($thisID in $PolicyGUID) {
                 if (-not (Find-WDACPolicy -PolicyGUID $thisID -ErrorAction Stop)) {
-                    throw "No policy exists with GUID $thisID ."
+                    throw "No policy exists with GUID $thisID"
                 } else {
                     $Policies += $thisID
                 }
@@ -208,7 +208,7 @@ function Merge-TrustedWDACRules {
         if ($PolicyID) {
             foreach ($thisID in $PolicyID) {
                 if (-not (Find-WDACPolicyByID -PolicyID $thisID -ErrorAction Stop)) {
-                    throw "No policy exists with ID $thisID ."
+                    throw "No policy exists with ID $thisID"
                 } else {
                     $policiesByID = Get-WDACPoliciesById -PolicyID $thisID -ErrorAction Stop
                     foreach ($thisPolicyByID in $policiesByID) {

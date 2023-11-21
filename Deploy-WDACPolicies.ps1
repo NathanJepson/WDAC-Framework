@@ -1327,11 +1327,11 @@ function Restore-WDACWorkstations {
                             $SuccessfulMachinesToRestart = $SuccessfulMachinesToRestart | Where-Object {$_ -ne $LocalDeviceName}
                             try {
                                 if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $LocalDeviceName -Connection $Connection -ErrorAction Stop)) {
-                                    throw "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName ."
+                                    throw "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName"
                                 }
                             } catch {
                                 Write-Verbose ($_ | Format-List -Property * | Out-String)
-                                Write-Warning "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName ."
+                                Write-Warning "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName"
                             }
                         }
 
@@ -1352,11 +1352,11 @@ function Restore-WDACWorkstations {
                             foreach ($FirstSignedMachine in $SuccessfulMachinesToRestart) {
                                 try {
                                     if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $FirstSignedMachine -Connection $Connection -ErrorAction Stop)) {
-                                        throw "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine ."
+                                        throw "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine"
                                     }
                                 } catch {
                                     Write-Verbose ($_ | Format-List -Property * | Out-String)
-                                    Write-Warning "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine ."
+                                    Write-Warning "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine"
                                 }
                             }
                         }

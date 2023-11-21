@@ -61,7 +61,7 @@ function Register-WDACGroup {
             if ($PolicyID) {
                 foreach ($thisID in $PolicyID) {
                     if (-not (Find-WDACPolicy -PolicyGUID $thisID -ErrorAction Stop)) {
-                        throw "There is no policy with ID $thisID ."
+                        throw "There is no policy with ID $thisID"
                     }
                 }
             } elseif ($PolicyName) {
@@ -69,7 +69,7 @@ function Register-WDACGroup {
                 $PoliciesWithNames = Get-WDACPoliciesGUIDandName -ErrorAction Stop
                 foreach ($thisName in $PolicyName) {
                     if (-not (Find-WDACPolicyByName -PolicyName $thisName -ErrorAction Stop)) {
-                        throw "There is no policy with name $thisName ."
+                        throw "There is no policy with name $thisName"
                     }
                     $PolicyID += ($PoliciesWithNames | Where-Object {$_.PolicyName -eq $thisName} | Select-Object PolicyGUID).PolicyGUID
                 }
@@ -120,7 +120,7 @@ function Register-WDACGroup {
         $Connection.Close()
         Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
 
-        Write-Host "Policies assigned successfully to group $GroupName ."
+        Write-Host "Policies assigned successfully to group $GroupName"
 
     } catch {
         $theError = $_
@@ -219,7 +219,7 @@ function Register-WDACWorkstation {
         $Connection.Close()
         Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
 
-        Write-Host "Workstations successfully instantiated and assigned to group $GroupName ."
+        Write-Host "Workstations successfully instantiated and assigned to group $GroupName"
 
     } catch {
         $theError = $_
@@ -285,11 +285,11 @@ function Register-WDACWorkstationAdHoc {
         } elseif ($PolicyID -or $PolicyName) {
             if ($PolicyID) {
                 if (-not (Find-WDACPolicy -PolicyGUID $PolicyID -ErrorAction Stop)) {
-                    throw "There is no policy with ID $PolicyID ."
+                    throw "There is no policy with ID $PolicyID"
                 }
             } elseif ($PolicyName) {
                 if (-not (Find-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop)) {
-                    throw "There is no policy with name $PolicyName ."
+                    throw "There is no policy with name $PolicyName"
                 }
                 $PolicyID = (Get-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop).PolicyGUID
             }

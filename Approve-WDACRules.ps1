@@ -240,7 +240,7 @@ function Write-WDACConferredTrust {
             #This will only write to the apps table (assumed that only a hash entry has 'untrusted' written to it)
                 
             if (-not (Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "Hash" -Untrusted $Untrusted.ToBool() -Connection $Connection -ErrorAction Stop)) {
-                throw "Unable to set `"Untrusted`" status for app with hash $PrimaryKeyPart1 ."
+                throw "Unable to set `"Untrusted`" status for app with hash $PrimaryKeyPart1"
             }
             return
         }
@@ -249,7 +249,7 @@ function Write-WDACConferredTrust {
             "Hash" {
                 foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "Hash" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
-                        throw "Unable to update trust for hash rule with hash $PrimaryKeyPart1 for policy $PolicyID ."
+                        throw "Unable to update trust for hash rule with hash $PrimaryKeyPart1 for policy $PolicyID"
                     }
                 }
 
@@ -260,7 +260,7 @@ function Write-WDACConferredTrust {
             "Publisher" {
                 foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "Publisher" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
-                        throw "Unable to update trust for publisher rule with publisher index $PrimaryKeyPart1 for policy $PolicyID ."
+                        throw "Unable to update trust for publisher rule with publisher index $PrimaryKeyPart1 for policy $PolicyID"
                     }
                 }
 
@@ -277,14 +277,14 @@ function Write-WDACConferredTrust {
 
                 foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -PrimaryKey2 $PrimaryKeyPart2 -PrimaryKey3 $NewVersionNumber -Level "FilePublisher" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -SpecificFileNameLevel $SpecificFileNameLevel -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
-                        throw "Unable to update trust for FilePublisher rule with PublisherIndex $PrimaryKeyPart1 and FileName $PrimaryKeyPart2 and MinimumFileVersion $CurrentVersionNum for policy $PolicyID ."
+                        throw "Unable to update trust for FilePublisher rule with PublisherIndex $PrimaryKeyPart1 and FileName $PrimaryKeyPart2 and MinimumFileVersion $CurrentVersionNum for policy $PolicyID"
                     }
                 }
             }
             "LeafCertificate" {
                 foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "LeafCertificate" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
-                        throw "Unable to update trust for LeafCertificate rule with TBSHash $PrimaryKeyPart1 for policy $PolicyID ."
+                        throw "Unable to update trust for LeafCertificate rule with TBSHash $PrimaryKeyPart1 for policy $PolicyID"
                     }
                 }
 
@@ -295,7 +295,7 @@ function Write-WDACConferredTrust {
             "PcaCertificate" {
                 foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -Level "PcaCertificate" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
-                        throw "Unable to update trust for PcaCertificate rule with TBSHash $PrimaryKeyPart1 for policy $PolicyID ."
+                        throw "Unable to update trust for PcaCertificate rule with TBSHash $PrimaryKeyPart1 for policy $PolicyID"
                     }
                 }
 
@@ -316,7 +316,7 @@ function Write-WDACConferredTrust {
 
                 foreach ($Result in ((Update-WDACTrust -PrimaryKey1 $PrimaryKeyPart1 -PrimaryKey2 $SpecificFileNameLevel -Level "FileName" -UserMode $TrustedUserMode.ToBool() -Driver $TrustedDriver.ToBool() -Block $Block.ToBool() -Connection $Connection -ErrorAction Stop))) {
                     if (-not $Result) {
-                        throw "Unable to update trust for FileName rule with name $PrimaryKeyPart1 and SpecificFileNameLevel $SpecificFileNameLevel for policy $PolicyID ."
+                        throw "Unable to update trust for FileName rule with name $PrimaryKeyPart1 and SpecificFileNameLevel $SpecificFileNameLevel for policy $PolicyID"
                     }
                 }
 
@@ -1006,7 +1006,7 @@ function Approve-WDACRules {
             if ($PolicyGUID) {
                 foreach ($TempPolicyGUID in $PolicyGUID) {
                     if (-not (Find-WDACPolicy -PolicyGUID $TempPolicyGUID -ErrorAction Stop)) {
-                        throw "There are no policies in the database with this GUID: $TempPolicyGUID ."
+                        throw "There are no policies in the database with this GUID: $TempPolicyGUID"
                     }
                 }
             }
@@ -1185,7 +1185,7 @@ function Approve-WDACRules {
 
                 } catch {
                     Write-Verbose ($_ | Format-List * -Force | Out-String)
-                    Write-Warning "Could not apply trust action to the database for this app: $($AppHash) ."
+                    Write-Warning "Could not apply trust action to the database for this app: $($AppHash)"
                     $Transaction.Rollback()
                     $ErrorCount += 1
                     continue
@@ -1214,7 +1214,7 @@ function Approve-WDACRules {
                         }
                     } catch {
                         Write-Verbose ($_ | Format-List * -Force | Out-String)
-                        Write-Warning "Could not purge this app from the database: $($AppHash) ."
+                        Write-Warning "Could not purge this app from the database: $($AppHash)"
                         $Transaction.Rollback()
                         $ErrorCount += 1
                         continue
