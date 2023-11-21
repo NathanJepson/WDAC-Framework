@@ -656,7 +656,7 @@ function Deploy-WDACPolicies {
                     }
                 } catch {
                     Write-Verbose ($_ | Format-List -Property * | Out-String)
-                    throw "Unable to set the LastDeployedPolicyVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
+                    throw "Unable to set the LastDeployedPolicyVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion)"
                 }
 
                 #Set this temporary signed version number as the most recent signed version
@@ -665,8 +665,7 @@ function Deploy-WDACPolicies {
                         throw "Unable to set LastSignedVersion to match the temporary signed one just deployed."
                     }
                 } catch {
-                    Write-Verbose ($_ | Format-List -Property * | Out-String)
-                    throw "Unable to set the LastSignedVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
+                    throw "Unable to set the LastSignedVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion)"
                 }
 
                 #Increment Version Number
@@ -733,11 +732,10 @@ function Deploy-WDACPolicies {
                 #Set this new policy version as the most recent Unsigned Version number
                 try {
                     if (-not (Set-WDACPolicyLastUnsignedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
-                        throw "Unable to set LastSignedVersion to match the temporary signed one just deployed."
+                        throw "Unable to set LastUnsigned version to match the Policy just deployed."
                     }
                 } catch {
-                    Write-Verbose ($_ | Format-List -Property * | Out-String)
-                    throw "Unable to set the LastSignedVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
+                    Write-Warning "Unable to set the LastUnsignedSignedVersion to be equal to the current PolicyVersion: $($PolicyInfo.PolicyVersion)"
                 }
 
                 #If there are no results, or null is returned, then no WinRM session was successful
@@ -752,7 +750,7 @@ function Deploy-WDACPolicies {
                 } else {
                 #Remove all entries in "first_signed_policy_deployments" for this policy
                     if (-not (Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
-                        Write-Warning "Unable to remove all entries first_signed_policy_deployments for Policy $PolicyGUID . It is recommended to clear these entries out before next running this script."
+                        Write-Warning "Unable to remove all entries first_signed_policy_deployments for Policy $PolicyGUID `n It is recommended to clear these entries out before next running this script."
                     }
                 }
 
