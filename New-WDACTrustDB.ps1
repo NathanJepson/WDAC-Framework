@@ -234,6 +234,7 @@ function New-WDACTrustDB {
         MinimumAllowedVersionPivot Text,
         MinimumTolerableMinimum Text,
         SpecificFileNameLevel Text NOT NULL,
+        FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE CASCADE,
         PRIMARY KEY(PublisherIndex,FileName,SpecificFileNameLevel)
     );
 
@@ -245,6 +246,7 @@ function New-WDACTrustDB {
         MinimumTolerableMinimum Text,
         SpecificFileNameLevel Text NOT NULL,
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
+        FOREIGN KEY(PublisherIndex) REFERENCES publishers(PublisherIndex) ON DELETE CASCADE,
         PRIMARY KEY (FileName,PublisherIndex,PolicyGUID,SpecificFileNameLevel)
     );
     
