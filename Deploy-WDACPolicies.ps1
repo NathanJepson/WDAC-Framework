@@ -908,7 +908,7 @@ function Deploy-WDACPolicies {
                 }
             } catch {
                 Write-Verbose ($_ | Format-List -Property * | Out-String)
-                Write-Warning "Unable to set the LastDeployedPolicyVersion to be equal to the PolicyVersion: $($PolicyInfo.PolicyVersion) . Please set this value in the trust database."
+                Write-Warning "Unable to set the LastDeployedPolicyVersion to be equal to the PolicyVersion: $($PolicyInfo.PolicyVersion) `nPlease set this value in the trust database."
             }
 
             $Transaction.Commit()
@@ -1122,8 +1122,9 @@ function Restore-WDACWorkstations {
             if ($null -ne $DeferredPolicy.PolicyVersion) {
                 $CompareVersionsVariable = Compare-Versions -Version1 $PolicyInfo.PolicyVersion -Version2 $DeferredPolicy.PolicyVersion
 
-                if (($CompareVersionsVariable -eq 0) -or ($CompareVersionsVariable -eq -1)) {
-                #Current version number should always be greater than the deferred policy version number. (Otherwise, this if statement executes.)
+                if ($CompareVersionsVariable -eq -1) {
+                #Current version number should always be greater than or equal to the deferred policy version number. Otherwise, this if statement executes.
+                #...I would also compare equality here ($CompareVersionsVariable -eq -0), but there's currently problems with deferring using the correct version number
                     $Transaction.Rollback()
                     $Connection.Close()
                     Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
