@@ -395,7 +395,7 @@ function Deploy-WDACPolicies {
                 }
 
                 #Copy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active
-                    Copy-item -Path $SignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
+                    Copy-item -Path $UnsignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
 
                 #Use Refresh Tool
                 if ($RefreshToolPath) {
@@ -657,6 +657,16 @@ function Deploy-WDACPolicies {
                     throw "Unable to set the LastDeployedPolicyVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
                 }
 
+                #Set this temporary signed version number as the most recent signed version
+                try {
+                    if (-not (Set-WDACPolicyLastSignedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to set LastSignedVersion to match the temporary signed one just deployed."
+                    }
+                } catch {
+                    Write-Verbose ($_ | Format-List -Property * | Out-String)
+                    throw "Unable to set the LastSignedVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
+                }
+
                 #Increment Version Number
                 New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $PolicyInfo.PolicyVersion -Connection $Connection -ErrorAction Stop                
 
@@ -667,16 +677,6 @@ function Deploy-WDACPolicies {
                     } elseif ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
                         Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $CustomPSObjectComputerMap[$i].DeviceName -Comment "Pre-script checks for device not satisfied or device not a test machine." -Connection $Connection -ErrorAction Stop
                     }
-                }
-
-                #Set this temporary signed version number as the most recent signed version
-                try {
-                    if (-not (Set-WDACPolicyLastSignedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
-                        throw "Unable to set LastSignedVersion to match the temporary signed one just deployed."
-                    }
-                } catch {
-                    Write-Verbose ($_ | Format-List -Property * | Out-String)
-                    throw "Unable to set the LastSignedVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
                 }
 
                 $Transaction.Commit()
@@ -726,6 +726,16 @@ function Deploy-WDACPolicies {
 
                     #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
                     $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -LocalMachineName $LocalDeviceName -ErrorAction Stop
+                }
+
+                #Set this new policy version as the most recent Unsigned Version number
+                try {
+                    if (-not (Set-WDACPolicyLastUnsignedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to set LastSignedVersion to match the temporary signed one just deployed."
+                    }
+                } catch {
+                    Write-Verbose ($_ | Format-List -Property * | Out-String)
+                    throw "Unable to set the LastSignedVersion to be equal to the temporary signed PolicyVersion: $($PolicyInfo.PolicyVersion) ."
                 }
 
                 #If there are no results, or null is returned, then no WinRM session was successful
