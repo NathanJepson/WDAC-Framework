@@ -162,7 +162,12 @@ function Deploy-WDACPolicies {
     Name of the policy (exact)
 
     .PARAMETER Local
+    WARNING: When running with this parameter, the cmdlet makes no reference to group assignments or the last deployed policy version. Use at your own risk.
     Use this switch if you merely want to update the policy on your current machine (local)
+
+    .PARAMETER RemoveUEFISignedLocal
+    This parameter only valid when "Local" also selected. Use this flag for when you want to remove the old, signed policy from the EFI partition
+    on your local machine.
 
     .PARAMETER TestComputers
     Specify test computers where you would like to deploy the policy first. First, a check is performed if a test computer is actually assigned the particular policy.
@@ -201,6 +206,8 @@ function Deploy-WDACPolicies {
         [ValidateNotNullOrEmpty()]
         [string]$PolicyName,
         [switch]$Local,
+        [Alias("LocalRemoveUEFI","EFILocalRemove","RemoveUEFI","RemoveSignedLocal")]
+        [switch]$RemoveUEFISignedLocal,
         [Alias("TestMachines","TestMachine","TestDevices","TestDevice","TestComputer")]
         [string[]]$TestComputers,
         [Alias("Force")]
@@ -216,6 +223,10 @@ function Deploy-WDACPolicies {
 
     if ($TestForce -and (-not $TestComputers)) {
         throw "Cannot set TestForce without providing a list of test computers."
+    }
+
+    if ($RemoveUEFISignedLocal -and (-not $Local)) {
+        throw "Cannot set the -RemoveUEFISignedLocal flag when the -Local flag is also not set."
     }
 
     if (-not $Local) {
@@ -285,7 +296,124 @@ function Deploy-WDACPolicies {
         }
             
         if ($Local) {
-            #TODO
+            $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
+            $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+            ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+            $CPU = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
+            $Windows11 = $false
+            $SysDrive = $null
+            $RefreshToolPath = $null
+            if ($PSVersionTable.PSEdition -eq "Core") {
+                $Windows11 = (Get-CimInstance -Class Win32_OperatingSystem -Property Caption -ErrorAction Stop | Select-Object -ExpandProperty Caption) -Match "Windows 11"
+                $SysDrive =  (Get-CimInstance -Class Win32_OperatingSystem -ComputerName localhost -Property SystemDrive -ErrorAction Stop | Select-Object -ExpandProperty SystemDrive)
+            } elseif ($PSVersionTable.PSEdition -eq "Desktop") {
+                $Windows11 = (Get-WmiObject Win32_OperatingSystem -ErrorAction Stop).Caption -Match "Windows 11"
+                $SysDrive = (Get-WmiObject Win32_OperatingSystem -ErrorAction Stop).SystemDrive
+            }
+
+            if ($CPU -eq "X86") {
+                $RefreshToolPath = Get-X86Path -ErrorAction Stop
+            } elseif ($CPU -eq "AMD64") {
+                $RefreshToolPath = Get-AMD64Path -ErrorAction Stop
+            } elseif ($CPU -eq "ARM64") {
+                $RefreshToolPath = Get-ARM64Path -ErrorAction Stop
+            } else {
+                if (-not $Windows11) {
+                    throw "CPU architecture for local device not supported."
+                }
+            }
+
+            if ($PolicyInfo.IsSigned -eq $true) {
+                #Get Signed
+                $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
+                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
+                $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
+                
+                #Copy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active
+                    Copy-item -Path $SignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
+
+                #Copy to EFI Mount
+                #Put the signed WDAC policy into the UEFI partition 
+                    #Instructions Provided by Microsoft:
+                    #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/deploy-wdac-policies-with-script
+                    $MountPoint = "$SysDrive\EFIMount"
+                    $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
+                    #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
+                    $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
+                    if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
+                    mountvol $MountPoint $EFIPartition | Out-Null
+                    if (-Not (Test-Path $EFIDestinationFolder)) { New-Item -Path $EFIDestinationFolder -Type Directory -Force -ErrorAction Stop | Out-Null }
+
+                    Copy-Item -Path $SignedStagedPolicyPath -Destination $EFIDestinationFolder -Force -ErrorAction Stop
+
+                #Either Restart Device or Use Refresh Tool
+                if ($PolicyInfo.BaseOrSupplemental -eq $true) {
+                    if ($RefreshToolPath) {
+                        Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
+                        Write-Host "Refresh completed successfully."
+                    } elseif ($Windows11) {
+                        CiTool --refresh
+                        Write-Host "Refresh completed successfully."
+                    }
+                } elseif (Get-YesOrNoPrompt -Prompt "If this is the first time this signed base policy has been deployed locally, select `"Y`" to restart your device, otherwise select `"N`" to use the refresh tool.") {
+                    Restart-Computer -Force
+                } else {
+                    if ($RefreshToolPath) {
+                        Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
+                        Write-Host "Refresh completed successfully."
+                    } elseif ($Windows11) {
+                        CiTool --refresh
+                        Write-Host "Refresh completed successfully."
+                    }
+                }
+
+                if ($SignedStagedPolicyPath) {
+                    if (Test-Path $SignedStagedPolicyPath) {
+                        Remove-Item -Path $SignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                    }
+                }
+
+            } else {
+
+                if ($RemoveUEFISignedLocal) {
+                    $CIPolicyFileName = Split-Path $UnsignedStagedPolicyPath -Leaf
+                    $MountPoint = "$SysDrive\EFIMount"
+                    $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
+
+                    #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
+                    $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
+
+                    if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
+                    mountvol $MountPoint $EFIPartition | Out-Null
+
+                    if (Test-Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName)) {
+                        Remove-Item -Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop | Out-Null
+                    } else {
+                        Write-Warning "No policy file with name $CIPolicyFileName located in the EFI partition."
+                    }
+                }
+
+                #Copy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active
+                    Copy-item -Path $SignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
+
+                #Use Refresh Tool
+                if ($RefreshToolPath) {
+                    Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
+                    Write-Host "Refresh completed successfully."
+                } elseif ($Windows11) {
+                    CiTool --refresh
+                    Write-Host "Refresh completed successfully."
+                }
+
+                if ($UnsignedStagedPolicyPath) {
+                    if (Test-Path $UnsignedStagedPolicyPath) {
+                        Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                    }
+                }
+            }
+
+            Write-Host "Policy has been locally deployed."
 
         } else {
         #Push to Remote Machines
@@ -731,11 +859,11 @@ function Deploy-WDACPolicies {
                     foreach ($Device in $DevicesToRestart) {
                         try {
                             if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Device -Connection $Connection -ErrorAction Stop)) {
-                                throw "Unable to add first_signed_policy_deployment entry for device $Device ."
+                                throw "Unable to add first_signed_policy_deployment entry for device $Device"
                             }
                         } catch {
                             Write-Verbose ($_ | Format-List -Property * | Out-String)
-                            Write-Warning "Unable to add first_signed_policy_deployment entry for device $Device ."
+                            Write-Warning "Unable to add first_signed_policy_deployment entry for device $Device"
                         }
                     }
                 }
@@ -752,6 +880,17 @@ function Deploy-WDACPolicies {
                 throw "No remote powershell results from attempting to refresh policies -- for all devices."
             }
 
+            if ($ComputerMapDeferredDevices -and ($ComputerMapDeferredDevices.Count -gt 0)) {
+                #Since these devices are behind on this deployment, then they must be deferred on this policy
+                foreach ($DeferredMachine in $ComputerMapDeferredDevices.GetEnumerator()) {
+                    try {
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.Name -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
+                    } catch {
+                        Write-Verbose ($_ | Format-List -Property * | Out-String)
+                    }
+                }
+            }
+
             #Write policy info to the database, LastDeployedPolicyVersion
             try {
                 if (-not (Set-WDACPolicyLastDeployedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
@@ -763,16 +902,6 @@ function Deploy-WDACPolicies {
             }
 
             $Transaction.Commit()
-            
-            if ($ComputerMapDeferredDevices -and ($ComputerMapDeferredDevices.Count -gt 0)) {
-            #Since these devices are behind on this deployment, then they must be deferred on this policy
-                $Transaction = $Connection.BeginTransaction()
-                foreach ($DeferredMachine in $ComputerMapDeferredDevices.GetEnumerator()) {
-                    Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.Name -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
-                }
-                $Transaction.Commit()
-            }
-            
             $Connection.Close()
 
             Write-Host "Policy has been deployed."
@@ -794,7 +923,7 @@ function Deploy-WDACPolicies {
                 }
             } elseif ($ClearUEFIBootLocalDevice -and $SignedToUnsigned) {
                 Write-Host "Your device will need to be restarted to remove the UEFI boot on the old signed policy."
-                Write-Host "Once your device has been restarted, re-run this cmdlet with the same policy GUID and the -local flag."
+                Write-Host "Once your device has been restarted, re-run this cmdlet with the same policy GUID and the -RemoveUEFISignedLocal and -local flags."
                 if (Get-YesOrNoPrompt -Prompt "Select `"Y`" once you've saved your work.") {
                     Restart-Computer -Force
                 }
