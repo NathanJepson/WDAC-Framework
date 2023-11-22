@@ -22,7 +22,7 @@
     Description = 'A module to organize deployment of WDAC policies in an organization via Remote Powershell (WinRM).'
     
     # Minimum version of the Windows PowerShell engine required by this module
-    PowerShellVersion = '5.0'
+    PowerShellVersion = '7.3.10'
     
     # Name of the Windows PowerShell host required by this module
     # PowerShellHostName = ''
@@ -80,7 +80,8 @@
                         'Deploy-WDACPolicies',
                         'Restore-WDACWorkstations',
                         'Invoke-SignTool',
-                        'Restart-WDACDevices'
+                        'Restart-WDACDevices',
+                        'Remove-EFIWDACPolicy'
                         
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     # CmdletsToExport = '*'

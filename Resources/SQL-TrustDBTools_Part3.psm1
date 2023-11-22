@@ -76,11 +76,8 @@ function Get-WDACWorkstationProcessorArchitecture {
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
         while($Reader.HasRows) {
-            if (-not $result) {
-                $result = @()
-            }
             if($Reader.Read()) {
-                $result += $Reader["processor_architecture"]
+                $result = $Reader["processor_architecture"]
             }
         }
         $Reader.Close()

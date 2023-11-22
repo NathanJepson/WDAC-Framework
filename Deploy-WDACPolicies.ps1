@@ -716,6 +716,9 @@ function Deploy-WDACPolicies {
 
                 #Wait for machines to boot back up, default 8 minutes
                 if (($SuccessfulMachines.Count -ge 1) -and ($CustomPSObjectComputerMap.Count -ge 1)) {
+
+                    Write-Host "Sleeping for $SleepTime seconds while waiting for machines to power back on..."
+
                     Start-Sleep -Seconds $SleepTime
 
                     #Get Unsigned Second
@@ -788,10 +791,19 @@ function Deploy-WDACPolicies {
                     $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
                 }
 
+                $RemoveEFIFailure = @()
+
                 $results | ForEach-Object {
                     if ($SignedToUnsigned) {
                         if ( (-not ($SuccessfulMachines -contains $_.PSComputerName)) -and (($_.PSComputerName -ne $LocalDeviceName) -or ( ($_.PSComputerName -eq $LocalDeviceName) -and (-not $ClearUEFIBootLocalDevice)))) {
+                            #Defer
                             Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "Device did not deploy initial signed policy successfully before subsequent unsigned policy." -Connection $Connection -ErrorAction Stop
+                        } elseif ( (($_.UEFIRemoveSuccess -eq $false) -or (-not $_.UEFIRemoveSuccess)) -and ($_.CopyToCIPoliciesActiveSuccessfull -eq $true)) {
+                            #Don't defer, but add to a list of devices and send warning console using the list
+                            $RemoveEFIFailure += $_.PSComputerName
+                        } else {
+                            #Defer
+                            Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                         }
                     } elseif ($null -eq $_.ResultMessage) {
                         #Defer
@@ -810,6 +822,11 @@ function Deploy-WDACPolicies {
                             Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                         }
                     }
+                }
+
+                if ($RemoveEFIFailure.Count -ge 1) {
+                    $RemoveEFIFailureWithComma = $RemoveEFIFailure -join ","
+                    Write-Warning "Failed to remove old WDAC policy $PolicyGUID from the EFI partition for these devices: $RemoveEFIFailureWithComma `n Run the cmdlet Remove-EFIWDACPolicy with the -Refresh flag for those devices when you get the chance."
                 }
 
                 $RemoteFailures = @()
@@ -932,7 +949,7 @@ function Deploy-WDACPolicies {
                     Restart-Computer -Force
                 }
             } elseif ($ClearUEFIBootLocalDevice -and $SignedToUnsigned) {
-                Write-Host "Your device will need to be restarted to remove the UEFI boot on the old signed policy."
+                Write-Host "Your device will need to be restarted to remove the UEFI boot protection on the old signed policy."
                 Write-Host "Once your device has been restarted, re-run this cmdlet with the same policy GUID and the -RemoveUEFISignedLocal and -local flags."
                 if (Get-YesOrNoPrompt -Prompt "Select `"Y`" once you've saved your work.") {
                     Restart-Computer -Force
@@ -1032,20 +1049,25 @@ function Restore-WDACWorkstations {
     $AMD64_Path = $null
     $ARM64_Path = $null
     $X86_Path = $null
+    $X86_RefreshToolName = $null
+    $AMD64_RefreshToolName = $null
+    $ARM64_RefreshToolName = $null
     $LocalDeviceName = HOSTNAME.EXE
     $RestartLocalDevice = $false
     $ClearUEFIBootLocalDevice = $false
+    $SuccessfulMachinesFinalRemove = @()
+    $ComputerMap2 = @{}
+
+    $Connection = New-SQLiteConnection -ErrorAction Stop
+
+    if ($PolicyName) {
+        $PolicyInfo = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection -ErrorAction Stop
+        $PolicyGUID = $PolicyInfo.PolicyGUID
+    } elseif ($PolicyGUID) {
+        $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+    }
 
     try {
-        $Connection = New-SQLiteConnection -ErrorAction Stop
-        
-        if ($PolicyName) {
-            $PolicyInfo = Get-WDACPolicyByName -PolicyName $PolicyName -Connection $Connection
-            $PolicyGUID = $PolicyInfo.PolicyGUID
-        } elseif ($PolicyGUID) {
-            $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection
-        }
-
         $RemoteStagingDirectory = (Get-LocalStorageJSON -ErrorAction Stop)."RemoteStagingDirectory"
         if (-not $RemoteStagingDirectory -or ("" -eq $RemoteStagingDirectory)) {
             throw "When deploying staged policies to remote machines, you must designate a RemoteStagingDirectory in LocalStorage.json."
@@ -1216,13 +1238,13 @@ function Restore-WDACWorkstations {
                 $NewComputerMap += @{DeviceName = $thisComputer; CPU = $CPU; NewlyDeferred = $false; TestMachine = $false}
             }
 
-            if ($X86_Path) {
+            if ($X86_Path -and (-not $X86_RefreshToolName)) {
                 $X86_RefreshToolName = Split-Path $X86_Path -Leaf
             }
-            if ($AMD64_Path) {
+            if ($AMD64_Path -and (-not $AMD64_RefreshToolName)) {
                 $AMD64_RefreshToolName = Split-Path $AMD64_Path -Leaf
             }
-            if ($ARM64_Path) {
+            if ($ARM64_Path -and (-not $ARM64_RefreshToolName)) {
                 $ARM64_RefreshToolName = Split-Path $ARM64_Path -Leaf
             }
 
@@ -1245,11 +1267,20 @@ function Restore-WDACWorkstations {
                 $SignedToUnsigned = $true
             }
 
-            foreach ($Machine in $Machines) {
-                if ((-not ($PolicyInfo.BaseOrSupplemental -eq $true)) -and ($DeferredPolicy.IsSigned -eq $true) -and (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Machine -Connection $Connection -ErrorAction Stop))) {
-                    $MachinesNeedingRestart += $Machine
-                } else {
-                    $MachinesNotNeedingRestart += $Machine
+            if (-not ($SignedToUnsigned)) {
+                foreach ($Machine in $Machines) {
+                    if ((-not ($PolicyInfo.BaseOrSupplemental -eq $true)) -and (($DeferredPolicy.IsSigned -eq $true) -or ($PolicyInfo.IsSigned -eq $true)) -and (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Machine -Connection $Connection -ErrorAction Stop))) {
+                        $MachinesNeedingRestart += $Machine
+                    } else {
+                        $MachinesNotNeedingRestart += $Machine
+                    }
+                }
+            } else {
+                foreach ($Machine in $Machines) {
+                    if (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Machine -Connection $Connection -ErrorAction Stop)) {
+                        Write-Warning "Skipping device $Machine since it never received a first signed policy deployment as it was expected to."
+                        $Machines = $Machines | Where-Object {$_ -ne $Machine}
+                    }
                 }
             }
 
@@ -1259,7 +1290,7 @@ function Restore-WDACWorkstations {
             }
 
             if ($SignedToUnsigned) {
-                if (-not (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully remove UEFI boot protection of old, signed policy. Continue with script execution?")) {
+                if (-not (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully remove UEFI boot protection of old, deferred policy $($DeferredPolicy.DeferredPolicyIndex) `nContinue with script execution knowing that some devices will need a restart?")) {
                     $Transaction.Commit()
                     #Transaction is commit here because there were some CPU write actions above and not many other write actions
                     $Connection.Close()
@@ -1276,8 +1307,55 @@ function Restore-WDACWorkstations {
                     return
                 }
 
-                #TODO
-                throw "FIXME: Fixing signed deferred policies for currently deployed UNSIGNED policies will soon be implemented, but is not currently implemented"
+                #Get Signed
+                if ($null -eq $SignedStagedPolicyPath) {
+                    $SignedPolicyDir = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\Signed")
+                    $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory $SignedPolicyDir -ErrorAction Stop
+                    Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
+                    $SignedStagedPolicyPath = Join-Path ($SignedPolicyDir) -ChildPath (Split-Path $UnsignedStagedPolicyPath -Leaf)
+                }
+
+                #Copy to Machine(s)
+                Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
+
+                #Copy to CiPolicies\Active and Use Refresh Tool
+                $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -LocalMachineName $LocalDeviceName -ErrorAction Stop
+
+                $SuccessfulMachines = @()
+
+                $results | ForEach-Object {
+                    if (($_.WinRMSuccess -eq $true) -and ($_.RefreshCompletedSuccessfully -eq $true) -and ($_.CopyToEFIMount -eq $true)) {
+                        if ($_.PSComputerName -ne $LocalDeviceName) {
+                            $SuccessfulMachines += $_.PSComputerName
+                        } else {
+                            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
+                            $ClearUEFIBootLocalDevice = $true
+                        }
+                    }
+                }
+
+                if ( ($results.Count -ge 1) -and ($SuccessfulMachines.Count -ge 1)) {
+                    if ($ForceRestart) {
+                        Write-Host "Performing a restart of some workstations..."
+                        Restart-WDACDevices -Devices $SuccessfulMachines
+                    } else {
+                        $DevicesWithComma = $SuccessfulMachines -join ","
+                        if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully remove UEFI boot protection of old, signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
+                            Restart-WDACDevices -Devices $SuccessfulMachines
+                        } else {
+                            #There's got to be a better way of doing this
+                            while (-not (Get-YesOrNoPrompt -Prompt "This script cannot continue execution until devices can be restarted. `n Device might blue-screen if you do not restart them. To restart, select `"Y`"")) {
+                                continue
+                            }
+                            Restart-WDACDevices -Devices $SuccessfulMachines
+                        }
+                    }
+
+                    foreach ($SuccessDevice in $SuccessfulMachines) {
+                        $SuccessfulMachinesFinalRemove += $SuccessDevice
+                        $ComputerMap2 += @{DeviceName = $SuccessDevice; CPU = $NewComputerMap[$SuccessDevice]; NewlyDeferred = $true; TestMachine = $false}
+                    }
+                }
 
             } else {
 
@@ -1293,7 +1371,7 @@ function Restore-WDACWorkstations {
                     #Copy to Machine(s)
                     Copy-StagedWDACPolicies -CIPolicyPath $SignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
 
-                    #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed                
+                    #Copy to CiPolicies\Active and Use Refresh Tool              
                     if ($MachinesNeedingRestart -and ($MachinesNeedingRestart.Count -ge 1)) {
                         $restartNeededResults = Invoke-ActivateAndRefreshWDACPolicy -Machines $MachinesNeedingRestart -CIPolicyFileName (Split-Path $SignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -Signed -RestartRequired -ForceRestart:$ForceRestart -LocalMachineName $LocalDeviceName -ErrorAction Stop
                     }
@@ -1375,10 +1453,10 @@ function Restore-WDACWorkstations {
                     #Copy to Machine(s)
                     Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
 
-                    #Copy to CiPolicies\Active and Use Refresh Tool and Set Policy as Deployed
+                    #Copy to CiPolicies\Active and Use Refresh Tool
                     $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
-                    if ($VerbosePreference) {
+                    if ($VerbosePreference -and ($results.Count -ge 1)) {
                         $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
                     }
 
@@ -1404,6 +1482,58 @@ function Restore-WDACWorkstations {
             }
         }
 
+        if ( ($SuccessfulMachinesFinalRemove.Count -ge 1) -and ($ComputerMap2.Count -ge 1)) {
+        #This if statement should only run when $SignedToUnsigned was true on one iteration
+
+            Write-Host "Sleeping for $SleepTime seconds while waiting for machines to power back on..."
+            
+            Start-Sleep -Seconds $SleepTime
+
+            $Transaction = $Connection.BeginTransaction()
+            
+            foreach ($SuccessMachine in $SuccessfulMachinesFinalRemove) {
+                Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $SuccessMachine -Connection $Connection -ErrorAction Stop
+            }
+            
+            $Transaction.Commit()
+            
+            $CustomPSObjectComputerMap = $ComputerMap2 | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
+
+            Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
+
+            $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachinesFinalRemove -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -LocalMachineName $LocalDeviceName -ErrorAction Stop
+
+            if ($VerbosePreference -and ($results.Count -ge 1)) {
+                $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+            }
+
+            $Transaction = $Connection.BeginTransaction()
+
+            $FailToRemoveEFIPolicy = @()
+            $results | ForEach-Object {
+                if ( (($_.UEFIRemoveSuccess -eq $false) -or (-not $_.UEFIRemoveSuccess)) -and ($_.CopyToCIPoliciesActiveSuccessfull -eq $true)) {
+                    $FailToRemoveEFIPolicy += $_.PSComputerName
+                } elseif (($_.CopyToCIPoliciesActiveSuccessfull -eq $false) -or (-not ($_.CopyToCIPoliciesActiveSuccessfull))) {
+                #Machine is re-deferred even after having its deferred status removed a few lines above. This is so administrators know to re-try to deploy 
+                #...an unsigned version of the policy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active.
+                #...But it shouldn't break anything if it's not deployed ultimately. Hence why I felt comfortable removing the deferred status above.
+                    if (-not $_.ResultMessage) {
+                        Write-Warning "No valid result message for device $($_.PSComputerName)"
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "WinRM Failure: No valid result message for device $($_.PSComputerName)" -Connection $Connection -ErrorAction Stop
+                        continue
+                    }
+                    Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
+                }
+            }
+
+            $Transaction.Commit()
+
+            if ($FailToRemoveEFIPolicy.Count -ge 1) {
+                $RemoveEFIFailureWithComma = $FailToRemoveEFIPolicy -join ","
+                Write-Warning "Failed to remove old WDAC policy $PolicyGUID from the EFI partition for these devices: $RemoveEFIFailureWithComma `n Run the cmdlet Remove-EFIWDACPolicy with the -Refresh flag for those devices when you get the chance."
+            }
+        }
+
         if ($Connection) {
             $Connection.Close()
         }
@@ -1423,7 +1553,11 @@ function Restore-WDACWorkstations {
                 Restart-Computer -Force
             }
         } elseif ($ClearUEFIBootLocalDevice) {
-            #TODO
+            Write-Host "Your device will need to be restarted to remove the UEFI boot protection on the old signed policy."
+            Write-Host "Once your device has been restarted, run the Deploy-WDACPolicies cmdlet with policy GUID $PolicyGUID and the -RemoveUEFISignedLocal and -local flags set."
+            if (Get-YesOrNoPrompt -Prompt "Select `"Y`" once you've saved your work.") {
+                Restart-Computer -Force
+            }
         }
 
     } catch {
