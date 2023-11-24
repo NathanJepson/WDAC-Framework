@@ -354,17 +354,23 @@ function New-WDACTrustDB {
         return;
     }
 
-    New-Item -Path $Destination -Name $DBName | Out-Null
-
-    $sDatabaseConnectionString=[string]::Format("data source={0}",$Database)
-    $oSQLiteDBConnection = New-Object System.Data.SQLite.SQLiteConnection
-    $oSQLiteDBConnection.ConnectionString = $sDatabaseConnectionString
-    $oSQLiteDBConnection.open()
-
-    $oSQLiteDBCommand=$oSQLiteDBConnection.CreateCommand()
-    $oSQLiteDBCommand.Commandtext=$MakeTables
-    $oSQLiteDBCommand.CommandType = [System.Data.CommandType]::Text
-    $oSQLiteDBCommand.ExecuteNonQuery()
-
-    $oSQLiteDBConnection.close()
+    try {
+        New-Item -Path $Destination -Name $DBName -ErrorAction Stop | Out-Null
+        $sDatabaseConnectionString=[string]::Format("data source={0}",$Database)
+        $oSQLiteDBConnection = New-Object System.Data.SQLite.SQLiteConnection
+        $oSQLiteDBConnection.ConnectionString = $sDatabaseConnectionString
+        $oSQLiteDBConnection.open()
+    
+        $oSQLiteDBCommand=$oSQLiteDBConnection.CreateCommand()
+        $oSQLiteDBCommand.Commandtext=$MakeTables
+        $oSQLiteDBCommand.CommandType = [System.Data.CommandType]::Text
+        $oSQLiteDBCommand.ExecuteNonQuery()
+    
+        $oSQLiteDBConnection.close()
+        Remove-Variable oSQLiteDBConnection -ErrorAction SilentlyContinue
+        Write-Host "New trust database created successfully."
+    } catch {
+        Write-Verbose ($_ | Format-List -Property * | Out-String)
+        throw $_
+    }   
 }
