@@ -7,7 +7,7 @@
     ModuleVersion = '1.0.0.0'
     
     # Supported PSEditions
-    # CompatiblePSEditions = @()
+    CompatiblePSEditions = @("Core")
     
     # ID used to uniquely identify this module
     #GUID = 'aaaaaaaa-aaaa-aaaa-aaaa-aaaaaaaaaaaa'
@@ -40,13 +40,13 @@
     # ProcessorArchitecture = ''
     
     # Modules that must be imported into the global environment prior to importing this module
-    # RequiredModules = @()
+    # RequiredModules = @("ConfigCI")
     
     # Assemblies that must be loaded prior to importing this module
-    #RequiredAssemblies = ''
+    # RequiredAssemblies = ''
     
     # Script files (.ps1) that are run in the caller's environment prior to importing this module.
-    # ScriptsToProcess = @()
+    # ScriptsToProcess = @("WDAC-Framework-Setup.ps1")
     
     # Type files (.ps1xml) to be loaded when importing this module
     # TypesToProcess = @()

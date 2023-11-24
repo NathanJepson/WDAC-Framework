@@ -25,7 +25,7 @@ function Import-SQLite {
 
     if (-not $SqliteAssembly) {
         try {
-            $TrueSqliteAssembly = (Get-LocalStorageJSON)."SqliteAssembly"
+            $TrueSqliteAssembly = (Get-LocalStorageJSON -ErrorAction Stop)."SqliteAssembly"
             if (-not $TrueSqliteAssembly) {
                 throw "No valid value for Sqlite binary provided from local storage."
             }

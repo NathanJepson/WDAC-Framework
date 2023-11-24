@@ -17,3 +17,21 @@ for ($i=0; $i -lt $Scripts.Count; $i++) {
         . (Join-Path -Path $PSScriptRoot -ChildPath $($Scripts[$i]))
     }
 }
+
+function Get-SQLiteAssemblyPath {
+    return ((Get-LocalStorageJSON -ErrorAction Stop)."SqliteAssembly")
+}
+
+$SqliteAssembly = Get-SQLiteAssemblyPath -ErrorAction Stop
+try {
+    #This could throw off some EDR or anti-virus solutions
+    if ((Split-Path $SqliteAssembly -Extension -ErrorAction Stop) -eq ".dll") {
+        [Reflection.Assembly]::LoadFile($SqliteAssembly) | Out-Null
+    } else {
+        throw "You must set the SqliteAssembly variable in LocalStorage.json to the valid path of the Sqlite .dll binary. `nRun the WDAC-Framework-Setup.ps1 script to set all required variables in this JSON file.";
+    }
+} catch [NotSupportedException] {
+    throw "This Sqlite binary is not supported in this version of PowerShell.";
+} catch {
+    throw "You must set the SqliteAssembly variable in LocalStorage.json to the valid path of the Sqlite .dll binary. `nRun the WDAC-Framework-Setup.ps1 script to set all required variables in this JSON file.";
+}
