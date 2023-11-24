@@ -805,7 +805,7 @@ function Deploy-WDACPolicies {
                         } elseif ( (($_.UEFIRemoveSuccess -eq $false) -or (-not $_.UEFIRemoveSuccess)) -and ($_.CopyToCIPoliciesActiveSuccessfull -eq $true)) {
                             #Don't defer, but add to a list of devices and send warning console using the list
                             $RemoveEFIFailure += $_.PSComputerName
-                        } else {
+                        } elseif ( ($_.WinRMSuccess -eq $false) -or ($_.RefreshCompletedSuccessfully -eq $false) -or ($_.CopyToCIPoliciesActiveSuccessfull -eq $false)) {
                             #Defer
                             Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                         }
