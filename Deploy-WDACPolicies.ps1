@@ -786,7 +786,13 @@ function Deploy-WDACPolicies {
             #......If it is a first signed deployment, then restart devices and add relevant "first_signed_policy_deployment" entries (only for successes)
 
                 if ($VerbosePreference) {
-                    $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                    if ($SignedToUnsigned) {
+                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart,UEFIRemoveSuccess | Format-List -Property *
+                    } elseif ($PolicyInfo.IsSigned -eq $true) {
+                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                    } else {
+                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                    }
                 }
 
                 $RemoveEFIFailure = @()
