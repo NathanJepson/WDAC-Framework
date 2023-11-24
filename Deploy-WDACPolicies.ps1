@@ -400,10 +400,8 @@ function Deploy-WDACPolicies {
                 #Use Refresh Tool
                 if ($RefreshToolPath) {
                     Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
-                    Write-Host "Refresh completed successfully."
                 } elseif ($Windows11) {
                     CiTool --refresh
-                    Write-Host "Refresh completed successfully."
                 }
 
                 if ($UnsignedStagedPolicyPath) {
