@@ -1279,13 +1279,6 @@ function Restore-WDACWorkstations {
                         $MachinesNotNeedingRestart += $Machine
                     }
                 }
-            } else {
-                foreach ($Machine in $Machines) {
-                    if (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Machine -Connection $Connection -ErrorAction Stop)) {
-                        Write-Warning "Skipping device $Machine since it never received a first signed policy deployment as it was expected to."
-                        $Machines = $Machines | Where-Object {$_ -ne $Machine}
-                    }
-                }
             }
 
             if (($null -eq $Machines) -or ($Machines.Count -le 0)) {
@@ -1357,7 +1350,7 @@ function Restore-WDACWorkstations {
 
                     foreach ($SuccessDevice in $SuccessfulMachines) {
                         $SuccessfulMachinesFinalRemove += $SuccessDevice
-                        $ComputerMap2 += @{DeviceName = $SuccessDevice; CPU = $NewComputerMap[$SuccessDevice]; NewlyDeferred = $true; TestMachine = $false}
+                        $ComputerMap2 += @{DeviceName = $SuccessDevice; CPU = $ComputerMap[$SuccessDevice]; NewlyDeferred = $true; TestMachine = $false}
                     }
                 }
 
@@ -1511,27 +1504,30 @@ function Restore-WDACWorkstations {
                 $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart,UEFIRemoveSuccess | Format-List -Property *
             }
 
-            $Transaction = $Connection.BeginTransaction()
-
             $FailToRemoveEFIPolicy = @()
-            $results | ForEach-Object {
-                if ( (($_.UEFIRemoveSuccess -eq $false) -or (-not $_.UEFIRemoveSuccess)) -and ($_.CopyToCIPoliciesActiveSuccessfull -eq $true)) {
-                    $FailToRemoveEFIPolicy += $_.PSComputerName
-                } elseif (($_.CopyToCIPoliciesActiveSuccessfull -eq $false) -or (-not ($_.CopyToCIPoliciesActiveSuccessfull))) {
-                #Machine is re-deferred even after having its deferred status removed a few lines above. This is so administrators know to re-try to deploy 
-                #...an unsigned version of the policy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active.
-                #...But it shouldn't break anything if it's not deployed ultimately. Hence why I felt comfortable removing the deferred status above.
-                    if (-not $_.ResultMessage) {
-                        Write-Warning "No valid result message for device $($_.PSComputerName)"
-                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "WinRM Failure: No valid result message for device $($_.PSComputerName)" -Connection $Connection -ErrorAction Stop
-                        continue
+
+            if ($results -and ($results.Count -ge 1)) {
+                $Transaction = $Connection.BeginTransaction()
+
+                $results | ForEach-Object {
+                    if ( (($_.UEFIRemoveSuccess -eq $false) -or (-not $_.UEFIRemoveSuccess)) -and ($_.CopyToCIPoliciesActiveSuccessfull -eq $true)) {
+                        $FailToRemoveEFIPolicy += $_.PSComputerName
+                    } elseif (($_.CopyToCIPoliciesActiveSuccessfull -eq $false) -or (-not ($_.CopyToCIPoliciesActiveSuccessfull))) {
+                    #Machine is re-deferred even after having its deferred status removed a few lines above. This is so administrators know to re-try to deploy 
+                    #...an unsigned version of the policy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active.
+                    #...But it shouldn't break anything if it's not deployed ultimately. Hence why I felt comfortable removing the deferred status above.
+                        if (-not $_.ResultMessage) {
+                            Write-Warning "No valid result message for device $($_.PSComputerName)"
+                            Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "WinRM Failure: No valid result message for device $($_.PSComputerName)" -Connection $Connection -ErrorAction Stop
+                            continue
+                        }
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                     }
-                    Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                 }
+    
+                $Transaction.Commit()
             }
-
-            $Transaction.Commit()
-
+            
             if ($FailToRemoveEFIPolicy.Count -ge 1) {
                 $RemoveEFIFailureWithComma = $FailToRemoveEFIPolicy -join ","
                 Write-Warning "Failed to remove old WDAC policy $PolicyGUID from the EFI partition for these devices: $RemoveEFIFailureWithComma `n Run the cmdlet Remove-EFIWDACPolicy with the -Refresh flag for those devices when you get the chance."

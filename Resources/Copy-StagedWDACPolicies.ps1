@@ -32,6 +32,10 @@ function Copy-StagedWDACPolicies {
         $Machines = ($ComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
     }
 
+    if ($Machines.Count -le 0) {
+        throw "Unexpected: This instance Copy-StagedWDACPolicies resulted in no devices receiving a WDAC policy file. This is likely the result of a bug."
+    }
+
     $CopyRefreshTool_ScriptBlock = {
     #This script block uses SMB as the first try and PowerShell remoting (WinRM) as the second try
     #Note: PowerShell remoting will fail if a non-audit WDAC policy is on the remote machine (due to Constrained Language Mode)
