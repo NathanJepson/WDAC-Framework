@@ -1508,7 +1508,7 @@ function Restore-WDACWorkstations {
             $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachinesFinalRemove -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
             if ($VerbosePreference -and ($results.Count -ge 1)) {
-                $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart,UEFIRemoveSuccess | Format-List -Property *
             }
 
             $Transaction = $Connection.BeginTransaction()
