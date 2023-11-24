@@ -964,8 +964,10 @@ function Deploy-WDACPolicies {
     } catch {
         $theError = $_
         Write-Verbose ($theError | Format-List -Property * | Out-String)
-        if ($Transaction) {
-            $Transaction.Rollback()
+        if ($Transaction -and $Connection) {
+            if ($Connection.AutoCommit -eq $false) {
+                $Transaction.Rollback()
+            }
         }
         if ($Connection) {
             $Connection.Close()
@@ -1563,8 +1565,10 @@ function Restore-WDACWorkstations {
     } catch {
         $theError = $_
         Write-Verbose ($theError | Format-List -Property * | Out-String)
-        if ($Transaction) {
-            $Transaction.Rollback()
+        if ($Transaction -and $Connection) {
+            if ($Connection.AutoCommit -eq $false) {
+                $Transaction.Rollback()
+            }
         }
         if ($Connection) {
             $Connection.Close()

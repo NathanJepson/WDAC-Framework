@@ -1186,7 +1186,11 @@ function Approve-WDACRules {
                 } catch {
                     Write-Verbose ($_ | Format-List * -Force | Out-String)
                     Write-Warning "Could not apply trust action to the database for this app: $($AppHash)"
-                    $Transaction.Rollback()
+                    if ($Transaction -and $Connection) {
+                        if ($Connection.AutoCommit -eq $false) {
+                            $Transaction.Rollback()
+                        }
+                    }
                     $ErrorCount += 1
                     continue
                 }
@@ -1215,7 +1219,11 @@ function Approve-WDACRules {
                     } catch {
                         Write-Verbose ($_ | Format-List * -Force | Out-String)
                         Write-Warning "Could not purge this app from the database: $($AppHash)"
-                        $Transaction.Rollback()
+                        if ($Transaction -and $Connection) {
+                            if ($Connection.AutoCommit -eq $false) {
+                                $Transaction.Rollback()
+                            }
+                        }
                         $ErrorCount += 1
                         continue
                     }
@@ -1226,8 +1234,10 @@ function Approve-WDACRules {
 
         } catch {
             $theError = $_
-            if ($Transaction) {
-                $Transaction.Rollback()
+            if ($Transaction -and $Connection) {
+                if ($Connection.AutoCommit -eq $false) {
+                    $Transaction.Rollback()
+                }
             }
             if ($Connection) {
                 $Connection.Close()

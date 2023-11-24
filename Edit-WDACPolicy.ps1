@@ -889,8 +889,10 @@ function Edit-WDACPolicy {
             }
         }
 
-        if ($Transaction) {
-            $Transaction.Rollback()
+        if ($Transaction -and $Connection) {
+            if ($Connection.AutoCommit -eq $false) {
+                $Transaction.Rollback()
+            }
         }
 
         if ($Connection) {
