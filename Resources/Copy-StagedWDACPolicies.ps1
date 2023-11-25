@@ -33,7 +33,7 @@ function Copy-StagedWDACPolicies {
     }
 
     if ($Machines.Count -le 0) {
-        throw "Unexpected: This instance Copy-StagedWDACPolicies resulted in no devices receiving a WDAC policy file. This is likely the result of a bug."
+        throw "Unexpected: The usage of Copy-StagedWDACPolicies resulted in no devices receiving a WDAC policy file. This is likely the result of a bug."
     }
 
     $CopyRefreshTool_ScriptBlock = {
