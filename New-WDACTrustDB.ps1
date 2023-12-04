@@ -269,7 +269,7 @@ function New-WDACTrustDB {
     );
 
     CREATE TABLE policies (
-        PolicyGUID Text NOT NULL PRIMARY KEY,
+        PolicyGUID Text NOT NULL COLLATE NOCASE PRIMARY KEY,
         PolicyID Text,
         PolicyHash Text,
         PolicyName Text UNIQUE NOT NULL,
