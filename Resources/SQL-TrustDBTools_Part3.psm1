@@ -405,9 +405,6 @@ function Get-WDACDevicesNeedingWDACPolicy {
 function Get-WDACDevicesAllNamesAndCPUInfo {
     [cmdletbinding()]
     Param ( 
-        [ValidateNotNullOrEmpty()]
-        [Parameter(Mandatory=$true)]
-        [string]$PolicyGUID,
         [switch]$Deferred,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
