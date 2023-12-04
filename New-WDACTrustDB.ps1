@@ -81,8 +81,8 @@ function New-WDACTrustDB {
         Deferred Integer DEFAULT 0 NOT NULL,
         Skipped Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
-        BlockingPolicyID Text NOT NULL,
-        AllowedPolicyID Text,
+        BlockingPolicyID Text NOT NULL COLLATE NOCASE,
+        AllowedPolicyID Text COLLATE NOCASE,
         DeferredPolicyIndex Integer,
         Comment Text,
         AppIndex Integer UNIQUE NOT NULL,
@@ -112,8 +112,8 @@ function New-WDACTrustDB {
         Deferred Integer DEFAULT 0 NOT NULL,
         Skipped Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
-        BlockingPolicyID Text NOT NULL,
-        AllowedPolicyID Text,
+        BlockingPolicyID Text NOT NULL COLLATE NOCASE,
+        AllowedPolicyID Text COLLATE NOCASE,
         DeferredPolicyIndex Integer,
         Comment Text,
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
@@ -151,10 +151,10 @@ function New-WDACTrustDB {
         Revoked Integer DEFAULT 0 NOT NULL,
         Deferred Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
-        AllowedPolicyID Text,
+        AllowedPolicyID Text COLLATE NOCASE,
         DeferredPolicyIndex Integer,
         Comment Text,
-        BlockingPolicyID Text,
+        BlockingPolicyID Text COLLATE NOCASE,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
@@ -171,10 +171,10 @@ function New-WDACTrustDB {
         Revoked Integer DEFAULT 0 NOT NULL,
         Deferred Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
-        AllowedPolicyID Text,
+        AllowedPolicyID Text COLLATE NOCASE,
         DeferredPolicyIndex Integer,
         Comment Text,
-        BlockingPolicyID Text,
+        BlockingPolicyID Text COLLATE NOCASE,
         PublisherIndex Integer UNIQUE NOT NULL,
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
@@ -192,10 +192,10 @@ function New-WDACTrustDB {
         Revoked Integer DEFAULT 0 NOT NULL,
         Deferred Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
-        AllowedPolicyID Text,
+        AllowedPolicyID Text COLLATE NOCASE,
         DeferredPolicyIndex Integer,
         Comment Text,
-        BlockingPolicyID Text,
+        BlockingPolicyID Text COLLATE NOCASE,
         MinimumAllowedVersion Text NOT NULL,
         MaximumAllowedVersion Text,
         FileName Text NOT NULL,
@@ -217,10 +217,10 @@ function New-WDACTrustDB {
         Revoked Integer DEFAULT 0 NOT NULL,
         Deferred Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
-        AllowedPolicyID Text,
+        AllowedPolicyID Text COLLATE NOCASE,
         DeferredPolicyIndex Integer,
         Comment Text,
-        BlockingPolicyID Text,
+        BlockingPolicyID Text COLLATE NOCASE,
         PRIMARY KEY(FileName,SpecificFileNameLevel),
         FOREIGN KEY(AllowedPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
         FOREIGN KEY(BlockingPolicyID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT,
@@ -241,7 +241,7 @@ function New-WDACTrustDB {
     CREATE TABLE policy_file_publisher_options (
         FileName Text NOT NULL,
         PublisherIndex Integer NOT NULL,
-        PolicyGUID Text NOT NULL,
+        PolicyGUID Text NOT NULL COLLATE NOCASE,
         MinimumAllowedVersionPivot Text,
         MinimumTolerableMinimum Text,
         SpecificFileNameLevel Text NOT NULL,
@@ -251,7 +251,7 @@ function New-WDACTrustDB {
     );
     
     CREATE TABLE policy_versioning_options (
-        PolicyGUID Text PRIMARY KEY,
+        PolicyGUID Text COLLATE NOCASE PRIMARY KEY,
         VersioningType Integer NOT NULL,
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE CASCADE
     );
@@ -274,7 +274,7 @@ function New-WDACTrustDB {
         PolicyHash Text,
         PolicyName Text UNIQUE NOT NULL,
         PolicyVersion Text NOT NULL,
-        ParentPolicyGUID Text,
+        ParentPolicyGUID Text COLLATE NOCASE,
         BaseOrSupplemental INTEGER DEFAULT 0 NOT NULL,
         IsSigned Integer DEFAULT 0 NOT NULL,
         AuditMode Integer DEFAULT 1 NOT NULL,
@@ -289,14 +289,14 @@ function New-WDACTrustDB {
 
     CREATE TABLE policy_assignments (
         GroupName Text NOT NULL,
-        PolicyGUID Text NOT NULL,
+        PolicyGUID Text NOT NULL COLLATE NOCASE,
         PRIMARY KEY(GroupName,PolicyGUID),
         FOREIGN KEY(GroupName) REFERENCES groups(GroupName) ON DELETE RESTRICT,
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
 
     CREATE TABLE ad_hoc_policy_assignments (
-        PolicyGUID Text NOT NULL,
+        PolicyGUID Text NOT NULL COLLATE NOCASE,
         DeviceName Text NOT NULL,
         PRIMARY KEY(PolicyGUID,DeviceName),
         FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE CASCADE,
@@ -313,7 +313,7 @@ function New-WDACTrustDB {
 
     CREATE TABLE deferred_policies (
         DeferredPolicyIndex Integer PRIMARY KEY,
-        DeferredDevicePolicyGUID Text NOT NULL,
+        DeferredDevicePolicyGUID Text NOT NULL COLLATE NOCASE,
         PolicyVersion Text,
         IsSigned Integer DEFAULT 0 NOT NULL
     );
@@ -328,7 +328,7 @@ function New-WDACTrustDB {
     );
 
     CREATE TABLE first_signed_policy_deployments (
-        PolicyGUID Text NOT NULL,
+        PolicyGUID Text NOT NULL COLLATE NOCASE,
         DeviceName Text NOT NULL,
         PRIMARY KEY(PolicyGUID,DeviceName),
         FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE CASCADE,
