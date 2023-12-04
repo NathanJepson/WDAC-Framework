@@ -211,7 +211,7 @@ function Remove-EFIWDACPolicy {
                 Remove-Item -Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop | Out-Null
                 $UEFIRemoveSuccess = $true
             } else {
-                $ResultMessage += "UEFI-partitioned policy file not in the expected place for some reason."
+                $ResultMessage += "Policy file is not present in the EFI partition. (Verify if this should be the case)."
             }
         } catch {
             $ResultMessage += ("Unable to remove signed WDAC policy from the UEFI partition: " + $_)
