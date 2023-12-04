@@ -322,7 +322,7 @@ function Edit-WDACPolicy {
 
         if ($PolicyGUID) {
             if (-not (Find-WDACPolicy -PolicyGUID $PolicyGUID -ErrorAction Stop)) {
-                throw "No policy with GUID $PolicyGUID  exists in the database."
+                throw "No policy with GUID $PolicyGUID exists in the database."
             }
         } elseif ($PolicyName) {
             if (-not (Find-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop)) {
@@ -333,7 +333,7 @@ function Edit-WDACPolicy {
         
     } catch {
         Write-Verbose $_
-        throw "Failed to import Sqlite OR a problem with connecting to the trust database."
+        throw "Failed to find policy OR import Sqlite OR a problem with connecting to the trust database."
     }
 
     $BackupPolicyLocation = $null
