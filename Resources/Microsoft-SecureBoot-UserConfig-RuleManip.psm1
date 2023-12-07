@@ -310,6 +310,8 @@ function New-MicrosoftSecureBootFileNameRule {
 
     $result = @()
     $Name = $RuleInfo.FileName
+    #For some reason, using an actual file name with extension results in this error: "Operation is not supported on this platform. (0x80131539)"
+    $Name += "_FileName"
     $TemporaryFile = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.DriverFile" -ArgumentList $Name
 
     if ($RuleInfo.Blocked -eq $true) {
