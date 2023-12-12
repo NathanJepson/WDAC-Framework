@@ -134,6 +134,26 @@ function Set-XMLPolicyVersion {
     }
 }
 
+function Set-TempXMLPolicyVersion {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FilePath,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$Version
+    )
+
+    try {
+        [XML]$XML = Get-Content -Path $FilePath -ErrorAction Stop
+        $XML.SiPolicy.VersionEx = $Version
+        $XML.save($FilePath)
+    } catch {
+        throw $_
+    }
+}
+
 function New-WDACPolicyVersionIncrementOne {
     [cmdletbinding()]
     Param (
@@ -195,4 +215,67 @@ function Backup-CurrentPolicy {
         throw $theError
     }
 
+}
+
+function Get-WDACHollowPolicy {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        [XML]$XMLFileContent = Get-PolicyXML -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        $TempPolicyPath = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( ([string](New-Guid)) + ".xml")))
+        
+        if ($XMLFileContent.SiPolicy.CiSigners) {
+            $XMLFileContent.SiPolicy.CiSigners.innerText = $null
+        }
+        if ($XMLFileContent.SiPolicy.Signers) {
+            $XMLFileContent.SiPolicy.Signers.innerText = $null
+        }
+        if ($XMLFileContent.SiPolicy.UpdatePolicySigners) {
+            $XMLFileContent.SiPolicy.UpdatePolicySigners.innerText = $null
+        }
+        if ($XMLFileContent.SiPolicy.SupplementalPolicySigners) {
+            $XMLFileContent.SiPolicy.SupplementalPolicySigners.innerText = $null
+        }
+        if ($XMLFileContent.SiPolicy.FileRules) {
+            $XMLFileContent.SiPolicy.FileRules.innerText = $null
+        }
+        if ($XMLFileContent.SiPolicy.EKUs) {
+            $XMLFileContent.SiPolicy.EKUs.innerText = $null
+        }
+    
+        foreach ($SigningScenario in $XMLFileContent.SiPolicy.SigningScenarios.SigningScenario.ID) {
+            if (($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.AllowedSigners) {
+                ($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.AllowedSigners.innerText = $null
+            }
+            if (($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.DeniedSigners) {
+                ($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.DeniedSigners.innerText = $null
+            }
+            if (($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.FileRulesRef) {
+                ($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.FileRulesRef.innerText = $null
+            }
+        }
+    
+        $XMLFileContent.Save($TempPolicyPath)
+    
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $TempPolicyPath
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
 }

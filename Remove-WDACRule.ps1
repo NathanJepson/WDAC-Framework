@@ -1,0 +1,250 @@
+function CommentPreserving {
+    [CmdletBinding()]
+    param (
+        $IDsAndComments,
+        $FilePath
+    )
+
+    $FileContent = Get-Content $FilePath -ErrorAction Stop
+    $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-Z0-9]+(?=")'
+    $CommentPattern = "(?<=<!--).+(?=-->)"
+
+    for ($i=0; $i -lt $FileContent.Count; $i++) {
+        if ( (($FileContent[$i] -match $Pattern1) -or ($FileContent[$i] -match $Pattern2) -or ($FileContent[$i] -match $Pattern3) -or ($FileContent[$i] -match $Pattern4)) -and ($i -gt 0)) {
+            $TempID = $Matches[0]
+            if ($IDsAndComments[$TempID] -eq $true -and ($FileContent[$i -1] -match $CommentPattern)) {
+                $IDsAndComments[$TempID] = $Matches[0]
+            }
+        }
+    }
+
+    return $IDsAndComments
+}
+
+function Add-LineBeforeSpecificLine {
+    [CmdletBinding()]
+    param (
+        $Line,
+        $LineNumber,
+        $FilePath
+    )
+
+    if ($LineNumber -le 1) {
+        throw "Cannot append line at this location."
+    }
+
+    $FileContent = Get-Content -Path $FilePath
+    $result = @()
+    for ($i=0; $i -lt $FileContent.Count; $i++) {
+        $result += $FileContent[$i]
+        if ($i -eq ($LineNumber - 2)) {
+        #The reason we subtract 2 here instead of 1 is because the count starts at 0 while the line numbers start at 1
+            $result += $Line
+        }
+    }
+
+    $result | Set-Content -Path $FilePath -Force
+}
+
+function Add-WDACRuleComments {
+    [CmdletBinding()]
+    param (
+        $IDsAndComments,
+        $FilePath
+    )
+
+    foreach ($Entry in $IDsAndComments.GetEnumerator()) {
+        if (($Entry.Value) -and ($Entry.Value -ne $true)) {
+            $ID = "`"" + $Entry.Key + "`""
+            $Comment = ("<!--" + $Entry.Value + "-->")
+            $IDInstances = Select-String -Path $FilePath -Pattern $ID
+
+            for ($i=0; $i -lt $IDInstances.Count; $i++) {
+                #The reason we grab a second time for each instance is that line numbers are all changed once a line is appended to a location
+                $IDInstances2 = Select-String -Path $FilePath -Pattern $ID
+
+                foreach ($IDInstance in $IDInstances2) {
+                    if (($IDInstances[$i]).Line -eq $IDInstance.Line) {
+                        if ( ($IDInstance.LineNumber) -gt 1) {
+                            if (-not (((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "<!--") -or ((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "-->"))) {
+                            #If there is not already a comment above the line where the ID appears
+                            
+                                Add-LineBeforeSpecificLine -Line $Comment -LineNumber $IDInstance.LineNumber -FilePath $FilePath -ErrorAction Stop
+                                break;
+                            } else {
+                                continue;
+                            }
+                        }
+                    }
+                }
+            }
+        }
+    }
+}
+
+function Remove-UnderscoreDigits {
+    #This function removes the underscore digits at the end since we've already accounted for duplicates
+    [CmdletBinding()]
+    param (
+        $FilePath
+    )
+
+    $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-Z0-9]+(?=")'
+    $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-Z0-9]+(?=")'
+    
+    $FileContent = Get-Content -Path $FilePath -ErrorAction Stop
+
+    for ($i=0; $i -lt $FileContent.Count; $i++) {
+        if ( ($FileContent[$i] -match $Pattern1) -or ($FileContent[$i] -match $Pattern2) -or ($FileContent[$i] -match $Pattern3) -or ($FileContent[$i] -match $Pattern4)) {
+            $FileContent[$i] = $FileContent[$i].replace($Matches[0],$Matches[0].Substring(0,$Matches[0].Length-2))
+        }
+    }
+
+    $FileContent | Set-Content -Path $FilePath -Force -ErrorAction Stop
+}
+
+function Remove-WDACRule {
+    <#
+    .SYNOPSIS
+    Remove a rule by ID that is present in a WDAC policy
+
+    .DESCRIPTION
+    By specifying a rule by ID--which rule is in the policy designated by the provided policy GUID--the file for this policy pointed to by 
+    Get-FullPolicyPath--will be edited so that that this rule is removed.
+    While currently there is a Remove-CIPolicyRule documented on Microsoft's website, they say not to use it, and it's unclear if it saves comments (hence
+    why I made this cmdlet.)
+
+    Author: Nathan Jepson
+    License: MIT License
+
+    .PARAMETER RuleID
+    The ID of the rule you want to remove, i.e., ID_DENY_WSL or ID_FILEATTRIB_SANDBOX
+
+    .PARAMETER PolicyGUID
+    GUID of the policy you would like to remove the rule(s) from
+
+    .PARAMETER DontIncrementVersion
+    Don't increment the version number of the policy after removing the rule(s)
+
+    .EXAMPLE
+    Remove-WDACRule -RuleID "ID_DENY_WSL" -PolicyGUID "fd3ea102-c502-4875-9d5c-42f92f9944da"
+
+    .EXAMPLE
+    Remove-WDACRule -RuleID "ID_DENY_WSL","ID_FILEATTRIB_SANDBOX" -PolicyGUID "fd3ea102-c502-4875-9d5c-42f92f9944da" -DontIncrementVersion
+    #>
+
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string[]]$RuleID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [switch]$DontIncrementVersion
+    )
+
+    $TempPolicyPath = $null
+    $BackupOldPolicy = $null
+    $Connection = $null
+    $Transaction = $null
+
+    if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+        $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+        Write-Verbose "The current file is in the SignedModules folder."
+    } else {
+        $PSModuleRoot = $PSScriptRoot
+    }
+
+    try {
+        $IDsAndComments = @{}
+        $Connection = New-SQLiteConnection -ErrorAction Stop
+        $Transaction = $Connection.BeginTransaction()
+        $FullPolicyPath = (Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)
+        $TempPolicyPath = Get-WDACHollowPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        $BackupOldPolicy = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( ([string](New-Guid)) + ".xml")))
+        Copy-Item $FullPolicyPath -Destination $BackupOldPolicy -Force -ErrorAction Stop
+        $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $FullPolicyPath -ErrorAction Stop
+        $CurrentPolicyVersion = Get-WDACPolicyVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+        $IDsAndComments = PowerShell {
+        #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
+        [CmdletBinding()]
+        Param(
+            $FullPolicyPath,
+            $TempPolicyPath,
+            $IDsAndComments,
+            $RuleID
+        )
+
+            try {
+                $RulesToMerge = @()
+                $CurrentPolicyRules = Get-CIPolicy -FilePath $FullPolicyPath -ErrorAction Stop
+                foreach ($currentRule in $CurrentPolicyRules) {
+                    if (-not ($IDsAndComments[$currentRule.Id])) {
+                        $IDsAndComments = $IDsAndComments + @{$currentRule.Id = $true}
+                    }
+                }
+                foreach ($currentRule in $CurrentPolicyRules) {
+                    if (-not ($RuleID -contains $currentRule.Id)) {
+                        $RulesToMerge += $currentRule
+                    }
+                }
+                
+                Merge-CIPolicy -PolicyPaths $TempPolicyPath -Rules $RulesToMerge -OutputFilePath $FullPolicyPath -ErrorAction Stop | Out-Null
+            } catch {
+                Write-Warning $_
+                return $null
+            }
+           
+            return $IDsAndComments
+
+        } -args $FullPolicyPath,$TempPolicyPath,$IDsAndComments,$RuleID
+        
+        if ($null -eq $IDsAndComments) {
+            throw "Unable to remove rule, problems with merging other rules."
+        }
+
+        Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $FullPolicyPath -ErrorAction Stop
+        Remove-UnderscoreDigits -FilePath $FullPolicyPath -ErrorAction Stop
+        if (-not $DontIncrementVersion) {
+            New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $CurrentPolicyVersion -Connection $Connection -ErrorAction Stop
+        }
+
+        $Transaction.Commit()
+
+        if (Test-Path $TempPolicyPath) {
+            Remove-Item -Path $TempPolicyPath -Force -ErrorAction SilentlyContinue
+        }
+        if (Test-Path $BackupOldPolicy) {
+            Remove-Item -Path $BackupOldPolicy -Force -ErrorAction SilentlyContinue
+        }
+    } catch {
+        if ($Transaction -and $Connection) {
+            if ($Connection.AutoCommit -eq $false) {
+                $Transaction.Rollback()
+            }
+        }
+        if ($Connection) {
+            $Connection.Close()
+        }
+        if ($TempPolicyPath) {
+            if (Test-Path $TempPolicyPath) {
+                Remove-Item -Path $TempPolicyPath -Force -ErrorAction SilentlyContinue
+            }
+        }
+        if ($BackupOldPolicy) {
+            if ( (Test-Path $BackupOldPolicy) -and $FullPolicyPath) {
+                Copy-Item -Path $BackupOldPolicy -Destination $FullPolicyPath -Force -ErrorAction SilentlyContinue
+                Remove-Item -Path $BackupOldPolicy -Force -ErrorAction SilentlyContinue
+            }
+        }
+        Write-Verbose ($_ | Format-List -Property * | Out-String)
+        throw $_
+    }
+}
