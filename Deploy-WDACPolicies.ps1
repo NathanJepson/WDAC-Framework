@@ -897,16 +897,16 @@ function Deploy-WDACPolicies {
                             Write-Warning "Unable to add first_signed_policy_deployment entry for device $Device"
                         }
                     }
+                }
 
-                    if ($RestartLocalDevice) {
-                        try {
-                            if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $LocalDeviceName -Connection $Connection -ErrorAction Stop)) {
-                                throw "Unable to add first_signed_policy_deployment entry to database for device $LocalDeviceName"
-                            }
-                        } catch {
-                            Write-Verbose ($_ | Format-List -Property * | Out-String)
-                            Write-Warning "Unable tabulate first signed deployment for device $LocalDeviceName"
+                if ($RestartLocalDevice) {
+                    try {
+                        if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $LocalDeviceName -Connection $Connection -ErrorAction Stop)) {
+                            throw "Unable to add first_signed_policy_deployment entry to database for device $LocalDeviceName"
                         }
+                    } catch {
+                        Write-Verbose ($_ | Format-List -Property * | Out-String)
+                        Write-Warning "Unable tabulate first signed deployment for device $LocalDeviceName"
                     }
                 }
                 ###################################################################
