@@ -1,29 +1,3 @@
-function CommentPreserving {
-    [CmdletBinding()]
-    param (
-        $IDsAndComments,
-        $FilePath
-    )
-
-    $FileContent = Get-Content $FilePath -ErrorAction Stop
-    $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-Z0-9]+(?=")'
-    $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-Z0-9]+(?=")'
-    $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-Z0-9]+(?=")'
-    $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-Z0-9]+(?=")'
-    $CommentPattern = "(?<=<!--).+(?=-->)"
-
-    for ($i=0; $i -lt $FileContent.Count; $i++) {
-        if ( (($FileContent[$i] -match $Pattern1) -or ($FileContent[$i] -match $Pattern2) -or ($FileContent[$i] -match $Pattern3) -or ($FileContent[$i] -match $Pattern4)) -and ($i -gt 0)) {
-            $TempID = $Matches[0]
-            if ($IDsAndComments[$TempID] -eq $true -and ($FileContent[$i -1] -match $CommentPattern)) {
-                $IDsAndComments[$TempID] = $Matches[0]
-            }
-        }
-    }
-
-    return $IDsAndComments
-}
-
 function Add-LineBeforeSpecificLine {
     [CmdletBinding()]
     param (
@@ -65,13 +39,11 @@ function Add-WDACRuleComments {
             for ($i=0; $i -lt $IDInstances.Count; $i++) {
                 #The reason we grab a second time for each instance is that line numbers are all changed once a line is appended to a location
                 $IDInstances2 = Select-String -Path $FilePath -Pattern $ID
-
                 foreach ($IDInstance in $IDInstances2) {
                     if (($IDInstances[$i]).Line -eq $IDInstance.Line) {
                         if ( ($IDInstance.LineNumber) -gt 1) {
                             if (-not (((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "<!--") -or ((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "-->"))) {
                             #If there is not already a comment above the line where the ID appears
-                            
                                 Add-LineBeforeSpecificLine -Line $Comment -LineNumber $IDInstance.LineNumber -FilePath $FilePath -ErrorAction Stop
                                 break;
                             } else {
@@ -169,7 +141,6 @@ function Remove-WDACRule {
         $TempPolicyPath = Get-WDACHollowPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         $BackupOldPolicy = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( ([string](New-Guid)) + ".xml")))
         Copy-Item $FullPolicyPath -Destination $BackupOldPolicy -Force -ErrorAction Stop
-        $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $FullPolicyPath -ErrorAction Stop
         $CurrentPolicyVersion = Get-WDACPolicyVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
         $IDsAndComments = PowerShell {
@@ -181,7 +152,32 @@ function Remove-WDACRule {
             $IDsAndComments,
             $RuleID
         )
-
+            function CommentPreserving {
+                [CmdletBinding()]
+                param (
+                    $IDsAndComments,
+                    $FilePath
+                )
+            
+                $FileContent = Get-Content $FilePath -ErrorAction Stop
+                $Pattern1 = '(?<=")ID_ALLOW_[A-Z][_A-Z0-9]+(?=")'
+                $Pattern2 = '(?<=")ID_DENY_[A-Z][_A-Z0-9]+(?=")'
+                $Pattern3 = '(?<=")ID_SIGNER_[A-Z][_A-Z0-9]+(?=")'
+                $Pattern4 = '(?<=")ID_FILEATTRIB_[A-Z][_A-Z0-9]+(?=")'
+                $CommentPattern = "(?<=<!--).+(?=-->)"
+            
+                for ($i=0; $i -lt $FileContent.Count; $i++) {
+                    if ( (($FileContent[$i] -match $Pattern1) -or ($FileContent[$i] -match $Pattern2) -or ($FileContent[$i] -match $Pattern3) -or ($FileContent[$i] -match $Pattern4)) -and ($i -gt 0)) {
+                        $TempID = $Matches[0]
+                        if ($IDsAndComments[$TempID] -eq $true -and ($FileContent[$i -1] -match $CommentPattern)) {
+                            $IDsAndComments[$TempID] = $Matches[0]
+                        }
+                    }
+                }
+            
+                return $IDsAndComments
+            }
+            
             try {
                 $RulesToMerge = @()
                 $CurrentPolicyRules = Get-CIPolicy -FilePath $FullPolicyPath -ErrorAction Stop
@@ -190,6 +186,9 @@ function Remove-WDACRule {
                         $IDsAndComments = $IDsAndComments + @{$currentRule.Id = $true}
                     }
                 }
+                
+                $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $FullPolicyPath -ErrorAction Stop
+
                 foreach ($currentRule in $CurrentPolicyRules) {
                     if (-not ($RuleID -contains $currentRule.Id)) {
                         $RulesToMerge += $currentRule
@@ -210,13 +209,16 @@ function Remove-WDACRule {
             throw "Unable to remove rule, problems with merging other rules."
         }
 
-        Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $FullPolicyPath -ErrorAction Stop
         Remove-UnderscoreDigits -FilePath $FullPolicyPath -ErrorAction Stop
+        Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $FullPolicyPath -ErrorAction Stop
+        
         if (-not $DontIncrementVersion) {
             New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $CurrentPolicyVersion -Connection $Connection -ErrorAction Stop
         }
 
         $Transaction.Commit()
+
+        Write-Host "Successfully removed rule(s)."
 
         if (Test-Path $TempPolicyPath) {
             Remove-Item -Path $TempPolicyPath -Force -ErrorAction SilentlyContinue
