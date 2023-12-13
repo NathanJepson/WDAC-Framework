@@ -125,6 +125,7 @@ function Remove-WDACRule {
     $BackupOldPolicy = $null
     $Connection = $null
     $Transaction = $null
+    $HVCIOption = $null
 
     if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
         $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
@@ -137,6 +138,7 @@ function Remove-WDACRule {
         $IDsAndComments = @{}
         $Connection = New-SQLiteConnection -ErrorAction Stop
         $Transaction = $Connection.BeginTransaction()
+        $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         $FullPolicyPath = (Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)
         $TempPolicyPath = Get-WDACHollowPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         $BackupOldPolicy = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( ([string](New-Guid)) + ".xml")))
@@ -214,10 +216,23 @@ function Remove-WDACRule {
         
         if (-not $DontIncrementVersion) {
             New-WDACPolicyVersionIncrementOne -PolicyGUID $PolicyGUID -CurrentVersion $CurrentPolicyVersion -Connection $Connection -ErrorAction Stop
+        } else {
+            Set-XMLPolicyVersion -PolicyGUID $PolicyGUID -Version $CurrentPolicyVersion -Connection $Connection -ErrorAction Stop
         }
 
-        $Transaction.Commit()
+        try {
+            if ($HVCIOption) {
+                if ( (Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ne $HVCIOption) {
+                    Set-HVCIPolicySetting -PolicyGUID $PolicyGUID -HVCIOption $HVCIOption -Connection $Connection -ErrorAction Stop
+                }
+            }
+        } catch {
+            Write-Warning $_
+        }
+        
 
+        $Transaction.Commit()
+        $Connection.Close()
         Write-Host "Successfully removed rule(s)."
 
         if (Test-Path $TempPolicyPath) {

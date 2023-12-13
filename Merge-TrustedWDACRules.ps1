@@ -169,13 +169,19 @@ function Merge-TrustedWDACRules {
         $Levels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
     }
     $Policies = @()
-    $MostRecentPolicy = $null
     if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
         $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
         Write-Verbose "The current file is in the SignedModules folder."
     } else {
         $PSModuleRoot = $PSScriptRoot
     }
+
+    $MostRecentPolicy = $null
+    $TempFilePath = $null
+    $HVCIOption = $null
+    $Connection = $null
+    $Transaction = $null
+    $BackupOldPolicy = $null
 
     try {
         if ($GroupName) {
@@ -223,7 +229,8 @@ function Merge-TrustedWDACRules {
         }
     
         $Connection = New-SQLiteConnection -ErrorAction Stop
-        
+        $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
         foreach ($Policy in $Policies) {
             $RulesAdded = 0
             $RulesToMerge = @()
@@ -523,6 +530,20 @@ function Merge-TrustedWDACRules {
             }
         }
 
+        try {
+            if ($HVCIOption) {
+                if ( (Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ne $HVCIOption) {
+                    Set-HVCIPolicySetting -PolicyGUID $PolicyGUID -HVCIOption $HVCIOption -Connection $Connection -ErrorAction Stop
+                }
+            }
+        } catch {
+            Write-Warning $_
+        }
+
+        if ($Connection) {
+            $Connection.Close()
+        }
+        
     } catch {
         if ($Transaction -and $Connection) {
             if ($Connection.AutoCommit -eq $false) {

@@ -339,6 +339,7 @@ function Edit-WDACPolicy {
     $BackupPolicyLocation = $null
     $OldPolicyPath = (Get-FullPolicyPath -PolicyGUID $PolicyGUID -ErrorAction Stop)
     $TempPolicyPath = $null
+    $HVCIOption = $null
 
     try {
         $RandomGUID = New-Guid
@@ -347,6 +348,7 @@ function Edit-WDACPolicy {
         $BackupPolicyLocation = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\$($PolicyName)_$RandomGUID2.xml")
         $Connection = New-SQLiteConnection -ErrorAction Stop
         $Transaction = $Connection.BeginTransaction()
+        $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         $IDsAndComments = @{}
         $CurrentPolicyRules = Get-CIPolicy -FilePath (Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ErrorAction Stop
         foreach ($currentRule in $CurrentPolicyRules) {
@@ -851,6 +853,16 @@ function Edit-WDACPolicy {
                     if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Unsigned -Connection $Connection -ErrorAction Stop)) {
                         throw "Could not set LastUnsignedVersion attribute on Policy $PolicyGUID"
                     }
+                }
+
+                try {
+                    if ($HVCIOption) {
+                        if ( (Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ne $HVCIOption) {
+                            Set-HVCIPolicySetting -PolicyGUID $PolicyGUID -HVCIOption $HVCIOption -Connection $Connection -ErrorAction Stop
+                        }
+                    }
+                } catch {
+                    Write-Warning $_
                 }
 
                 $Transaction.Commit()

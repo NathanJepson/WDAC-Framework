@@ -279,3 +279,88 @@ function Get-WDACHollowPolicy {
         throw $theError
     }
 }
+
+function Get-HVCIPolicySetting {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        [XML]$XMLFileContent = Get-PolicyXML -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        
+        $result = $null
+
+        if ($XMLFileContent.SiPolicy.HvciOptions) {
+            $result = $XMLFileContent.SiPolicy.HvciOptions
+        }
+        
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
+function Set-HVCIPolicySetting {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$HVCIOption,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        
+        $FullPolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+
+        switch ($HVCIOption) {
+            0 {
+                Set-HVCIOptions -FilePath $FullPolicyPath -None -ErrorAction Stop
+            }
+            1 {
+                Set-HVCIOptions -FilePath $FullPolicyPath -Enabled -ErrorAction Stop
+            }
+            2 {
+                Set-HVCIOptions -FilePath $FullPolicyPath -Strict -ErrorAction Stop
+            }
+            Default {
+                throw "$HVCIOption is not a valid HVCI option."
+            }
+        }
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+
+}
