@@ -1363,7 +1363,7 @@ function Restore-WDACWorkstations {
 
                     foreach ($SuccessDevice in $SuccessfulMachines) {
                         $SuccessfulMachinesFinalRemove += $SuccessDevice
-                        $ComputerMap2 += @{DeviceName = $SuccessDevice; CPU = $ComputerMap[$SuccessDevice]; NewlyDeferred = $true; TestMachine = $false}
+                        $ComputerMap2 += @{DeviceName = $SuccessDevice; CPU = $ComputerMap[$SuccessDevice]; NewlyDeferred = $false; TestMachine = $false}
                     }
                 }
 
