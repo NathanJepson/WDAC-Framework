@@ -349,6 +349,7 @@ function Edit-WDACPolicy {
         $Connection = New-SQLiteConnection -ErrorAction Stop
         $Transaction = $Connection.BeginTransaction()
         $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        $IsSupplemental = Get-WDACPolicySupplementalStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         $IDsAndComments = @{}
         $CurrentPolicyRules = Get-CIPolicy -FilePath (Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ErrorAction Stop
         foreach ($currentRule in $CurrentPolicyRules) {
@@ -657,35 +658,35 @@ function Edit-WDACPolicy {
         #...(hence the "elseifs" instead of just "else")
     
             #Case 0: 'Enabled:UMCI'
-            if ($UMCI) {
+            if ($UMCI -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 0
             } elseif ($RemoveUMCI) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 0 -Delete
             }
 
             #Case 1: 'Enabled:Boot Menu Protection'
-            if ($BootMenuProtection) {
+            if ($BootMenuProtection -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 1
             } elseif ($RemoveBootMenuProtection) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 1 -Delete
             }
 
             #Case 2: 'Required:WHQL'
-            if ($WHQL) {
+            if ($WHQL -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 2
             } elseif ($RemoveWHQL) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 2 -Delete
             }
 
             #Case 3: 'Enabled:Audit Mode'
-            if ($Audit) {
+            if ($Audit -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 3
             } elseif ($RemoveAudit) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 3 -Delete
             }
 
             #Case 4: 'Disabled:Flight Signing'
-            if ($DisableFlightSigning) {
+            if ($DisableFlightSigning -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 4
             } elseif ($RemoveDisableFlightSigning) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 4 -Delete
@@ -712,28 +713,28 @@ function Edit-WDACPolicy {
             #Not yet supported by Microsoft
 
             #Case 9: 'Enabled:Advanced Boot Options Menu'
-            if ($AdvancedBootOptionsMenu) {
+            if ($AdvancedBootOptionsMenu -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 9
             } elseif ($RemoveAdvancedBootOptionsMenu) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 9 -Delete
             }
 
             #Case 10: 'Enabled:Boot Audit On Failure'
-            if ($BootAuditOnFailure) {
+            if ($BootAuditOnFailure -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 10
             } elseif ($RemoveBootAuditOnFailure) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 10 -Delete
             }
 
             #Case 11: 'Disabled:Script Enforcement'
-            if ($DisableScriptEnforcement) {
+            if ($DisableScriptEnforcement -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 11
             } elseif ($RemoveDisableScriptEnforcement) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 11 -Delete
             }
 
             #Case 12: 'Required:Enforce Store Applications'
-            if ($EnforceStoreApps) {
+            if ($EnforceStoreApps -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 12
             } elseif ($RemoveEnforceStoreApps) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 12 -Delete
@@ -754,21 +755,21 @@ function Edit-WDACPolicy {
             }
 
             #Case 15:'Enabled:Invalidate EAs on Reboot'
-            if ($InvalidateEAsOnReboot) {
+            if ($InvalidateEAsOnReboot -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 15
             } elseif ($RemoveInvalidateEAsOnReboot) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 15 -Delete
             }
 
             #Case 16:'Enabled:Update Policy No Reboot'
-            if ($UpdatePolicyNoReboot) {
+            if ($UpdatePolicyNoReboot -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 16
             } elseif ($RemoveUpdatePolicyNoReboot) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 16 -Delete
             }
 
             #Case 17:'Enabled:Allow Supplemental Policies'
-            if ($AllowSupplementalPolicies) {
+            if ($AllowSupplementalPolicies -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 17
             } elseif ($RemoveAllowSupplementalPolicies) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 17 -Delete
@@ -782,14 +783,14 @@ function Edit-WDACPolicy {
             }
 
             #Case 19:'Enabled:Dynamic Code Security'
-            if ($DynamicCodeSecurity) {
+            if ($DynamicCodeSecurity -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 19
             } elseif ($RemoveDynamicCodeSecurity) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 19 -Delete
             }
 
             #Case 20:'Enabled:Revoked Expired As Unsigned'
-            if ($TreatRevokedAsUnsigned) {
+            if ($TreatRevokedAsUnsigned -and (-not $IsSupplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 20
             } elseif ($RemoveTreatRevokedAsUnsigned) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 20 -Delete

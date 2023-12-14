@@ -89,6 +89,7 @@ function New-WDACPolicy {
     When this is set, the policy will be merged with the Allow Microsoft Mode WDAC policy provided by Microsoft.
 
     .PARAMETER Supplemental
+    When this parameter is set, you signify that you want this policy to be a supplemental policy (and you will need to designate the base policy ID as well.)
 
     .PARAMETER Signed
 
@@ -533,31 +534,31 @@ function New-WDACPolicy {
 
             #Apply Policy Options ======================================================
             #Case 0: 'Enabled:UMCI'
-            if ($UMCI) {
+            if ($UMCI -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 0
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 0 -Delete
             }
             #Case 1: 'Enabled:Boot Menu Protection'
-            if ($BootMenuProtection) {
+            if ($BootMenuProtection -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 1
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 1 -Delete
             }
             #Case 2: 'Required:WHQL'
-            if ($WHQL) {
+            if ($WHQL -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 2
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 2 -Delete
             }
             #Case 3: 'Enabled:Audit Mode'
-            if ($Audit) {
+            if ($Audit -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 3
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 3 -Delete
             }
             #Case 4: 'Disabled:Flight Signing'
-            if ($DisableFlightSigning) {
+            if ($DisableFlightSigning -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 4
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 4 -Delete
@@ -582,25 +583,25 @@ function New-WDACPolicy {
             #Not yet supported by Microsoft
 
             #Case 9: 'Enabled:Advanced Boot Options Menu'
-            if ($AdvancedBootOptionsMenu) {
+            if ($AdvancedBootOptionsMenu -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 9
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 9 -Delete
             }
             #Case 10: 'Enabled:Boot Audit On Failure'
-            if ($BootAuditOnFailure) {
+            if ($BootAuditOnFailure -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 10
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 10 -Delete
             }
             #Case 11: 'Disabled:Script Enforcement'
-            if ($DisableScriptEnforcement) {
+            if ($DisableScriptEnforcement -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 11
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 11 -Delete
             }
             #Case 12: 'Required:Enforce Store Applications'
-            if ($EnforceStoreApps) {
+            if ($EnforceStoreApps -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 12
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 12 -Delete
@@ -618,19 +619,19 @@ function New-WDACPolicy {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 14 -Delete
             }
             #Case 15:'Enabled:Invalidate EAs on Reboot'
-            if ($InvalidateEAsOnReboot) {
+            if ($InvalidateEAsOnReboot -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 15
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 15 -Delete
             }
             #Case 16:'Enabled:Update Policy No Reboot'
-            if ($UpdatePolicyNoReboot) {
+            if ($UpdatePolicyNoReboot -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 16
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 16 -Delete
             }
             #Case 17:'Enabled:Allow Supplemental Policies'
-            if ($AllowSupplementalPolicies) {
+            if ($AllowSupplementalPolicies -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 17
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 17 -Delete
@@ -642,13 +643,13 @@ function New-WDACPolicy {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 18 -Delete
             }
             #Case 19:'Enabled:Dynamic Code Security'
-            if ($DynamicCodeSecurity) {
+            if ($DynamicCodeSecurity -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 19
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 19 -Delete
             }
             #Case 20:'Enabled:Revoked Expired As Unsigned'
-            if ($TreatRevokedAsUnsigned) {
+            if ($TreatRevokedAsUnsigned -and (-not $Supplemental)) {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 20
             } else {
                 Set-RuleOption -FilePath $TempPolicyPath -Option 20 -Delete
@@ -657,7 +658,8 @@ function New-WDACPolicy {
             if ($HVCI) {
                 Set-HVCIOptions -Enabled -FilePath $TempPolicyPath
             } else {
-                #TODO: Provide an option to set the -strict flag (which will set it to "2")
+                #TODO: Provide an option to set the -strict flag (which will set it to "2").
+                #You can use Edit-WDACPolicy in order to set it to strict currently.
             }
             #===========================================================================
 
