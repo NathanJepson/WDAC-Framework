@@ -180,6 +180,8 @@ function Remove-WDACRule {
                 return $IDsAndComments
             }
             
+            $RuleNotPresent = $true
+
             try {
                 $RulesToMerge = @()
                 $CurrentPolicyRules = Get-CIPolicy -FilePath $FullPolicyPath -ErrorAction Stop
@@ -194,7 +196,13 @@ function Remove-WDACRule {
                 foreach ($currentRule in $CurrentPolicyRules) {
                     if (-not ($RuleID -contains $currentRule.Id)) {
                         $RulesToMerge += $currentRule
+                    } else {
+                        $RuleNotPresent = $false
                     }
+                }
+
+                if ($RuleNotPresent) {
+                    return "RuleNotPresent"
                 }
                 
                 Merge-CIPolicy -PolicyPaths $TempPolicyPath -Rules $RulesToMerge -OutputFilePath $FullPolicyPath -ErrorAction Stop | Out-Null
@@ -209,6 +217,8 @@ function Remove-WDACRule {
         
         if ($null -eq $IDsAndComments) {
             throw "Unable to remove rule, problems with merging other rules."
+        } elseif ($IDsAndComments -eq "RuleNotPresent") {
+            throw "Designated rule(s) not present in this policy."
         }
 
         Remove-UnderscoreDigits -FilePath $FullPolicyPath -ErrorAction Stop

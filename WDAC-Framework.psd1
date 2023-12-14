@@ -19,7 +19,7 @@
     Copyright = 'MIT License'
     
     # Description of the functionality provided by this module
-    Description = 'A module to organize deployment of WDAC policies in an organization via Remote Powershell (WinRM).'
+    Description = 'A module to organize deployment of WDAC policies in an organization via Remote Powershell (WinRM) and Sqlite.'
     
     # Minimum version of the Windows PowerShell engine required by this module
     PowerShellVersion = '7.3.10'
