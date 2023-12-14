@@ -681,6 +681,13 @@ function Get-WDACPolicyLatestDeployedSignedStatus {
             #If the last deployed version number is the same as the most recent signed version, then that means the most recently
             #...deployed version was signed
                 return $true
+            } elseif (((Compare-Versions -Version1 $PolicyInfo.LastUnsignedVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion) -eq 1) -and ((Compare-Versions -Version1 $PolicyInfo.LastSignedVersion -Version2 $PolicyInfo.LastDeployedPolicyVersion) -eq 1)) {
+            #If the last signed version and last unsigned version numbers > latest deployed policy version
+                if ($PolicyInfo.DeployedSigned -eq $true) {
+                    return $true
+                } else {
+                    return $false
+                }
             } else {
                 return $false
             }
@@ -1505,6 +1512,90 @@ function Test-FirstSignedPolicyDeployment {
     }
 }
 
+function Get-DeployedSignedPolicyStatus {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select DeployedSigned from policies WHERE PolicyGUID = @PolicyGUID"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = [bool]$Reader["DeployedSigned"]
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Set-ToggledDeployedSignedStatus {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [switch]$Remove,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $Command = $Connection.CreateCommand()
+        if ($Remove) {
+            $Command.Commandtext = "UPDATE policies SET DeployedSigned = 0 WHERE PolicyGUID = @PolicyGUID"
+        } else {
+            $Command.Commandtext = "UPDATE policies SET DeployedSigned = 1 WHERE PolicyGUID = @PolicyGUID"
+        }
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
 function Add-FirstSignedPolicyDeployment {
     [cmdletbinding()]
     Param (
@@ -1523,6 +1614,12 @@ function Add-FirstSignedPolicyDeployment {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $NoConnectionProvided = $true
+        }
+
+        if (-not (Get-DeployedSignedPolicyStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+            if (-not (Set-ToggledDeployedSignedStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                throw "Unable to set DeployedSigned flag for policy $PolicyGUID"
+            }
         }
 
         $Command = $Connection.CreateCommand()
@@ -1558,6 +1655,13 @@ function Remove-AllFirstSignedPolicyDeployments {
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $NoConnectionProvided = $true
         }
+
+        if (Get-DeployedSignedPolicyStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {
+            if (-not (Set-ToggledDeployedSignedStatus -PolicyGUID $PolicyGUID -Remove -Connection $Connection -ErrorAction Stop)) {
+                throw "Unable to unset DeployedSigned flag for policy $PolicyGUID"
+            }
+        }
+
         $Command = $Connection.CreateCommand()
         $Command.CommandText = "PRAGMA foreign_keys=ON;"
             #This PRAGMA is needed so that foreign key constraints will work upon deleting
@@ -1678,3 +1782,4 @@ function Set-WDACDeviceDeferredStatus {
         throw $theError
     }
 }
+

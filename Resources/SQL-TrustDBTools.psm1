@@ -1841,7 +1841,8 @@ function Get-WDACPolicy {
                     OriginLocationType = $Reader["OriginLocationType"];
                     LastDeployedPolicyVersion = $Reader["LastDeployedPolicyVersion"];
                     LastSignedVersion = $Reader["LastSignedVersion"];
-                    LastUnsignedVersion = $Reader["LastUnsignedVersion"]
+                    LastUnsignedVersion = $Reader["LastUnsignedVersion"];
+                    DeployedSigned = [bool]$Reader["DeployedSigned"]
                 }
             }
         }
@@ -2226,7 +2227,8 @@ function Get-WDACPoliciesById {
                     OriginLocationType = $Reader["OriginLocationType"];
                     LastDeployedPolicyVersion = $Reader["LastDeployedPolicyVersion"];
                     LastSignedVersion = $Reader["LastSignedVersion"];
-                    LastUnsignedVersion = $Reader["LastUnsignedVersion"]
+                    LastUnsignedVersion = $Reader["LastUnsignedVersion"];
+                    DeployedSigned = [bool]$Reader["DeployedSigned"]
                 }
             }
         }
@@ -2289,7 +2291,8 @@ function Get-WDACPolicyByName {
                     OriginLocationType = $Reader["OriginLocationType"];
                     LastDeployedPolicyVersion = $Reader["LastDeployedPolicyVersion"];
                     LastSignedVersion = $Reader["LastSignedVersion"];
-                    LastUnsignedVersion = $Reader["LastUnsignedVersion"]
+                    LastUnsignedVersion = $Reader["LastUnsignedVersion"];
+                    DeployedSigned = [bool]$Reader["DeployedSigned"]
                 }
             }
         }
@@ -2400,7 +2403,8 @@ function Get-AllWDACPoliciesAndAllInfo {
                     OriginLocationType = $Reader["OriginLocationType"];
                     LastDeployedPolicyVersion = $Reader["LastDeployedPolicyVersion"];
                     LastSignedVersion = $Reader["LastSignedVersion"];
-                    LastUnsignedVersion = $Reader["LastUnsignedVersion"]
+                    LastUnsignedVersion = $Reader["LastUnsignedVersion"];
+                    DeployedSigned = [bool]$Reader["DeployedSigned"]
                 }
             }
         }

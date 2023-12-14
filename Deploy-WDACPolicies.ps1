@@ -751,7 +751,7 @@ function Deploy-WDACPolicies {
                 } else {
                 #Remove all entries in "first_signed_policy_deployments" for this policy
                     if (-not (Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
-                        Write-Warning "Unable to remove all entries first_signed_policy_deployments for Policy $PolicyGUID `n It is recommended to clear these entries out before next running this script."
+                        Write-Warning "Unable to remove all entries first_signed_policy_deployments or unsetting DeployedSigned flag for Policy $PolicyGUID `n It is recommended to clear these entries out before next running this script."
                     }
                 }
 
@@ -890,11 +890,11 @@ function Deploy-WDACPolicies {
                     foreach ($Device in $DevicesToRestart) {
                         try {
                             if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $Device -Connection $Connection -ErrorAction Stop)) {
-                                throw "Unable to add first_signed_policy_deployment entry for device $Device"
+                                throw "Unable to add first_signed_policy_deployment entry for device $Device or set DeployedSigned flag for policy $PolicyGUID"
                             }
                         } catch {
                             Write-Verbose ($_ | Format-List -Property * | Out-String)
-                            Write-Warning "Unable to add first_signed_policy_deployment entry for device $Device"
+                            Write-Warning "Unable to add first_signed_policy_deployment entry for device $Device or set DeployedSigned flag for policy $PolicyGUID"
                         }
                     }
                 }
@@ -902,11 +902,11 @@ function Deploy-WDACPolicies {
                 if ($RestartLocalDevice) {
                     try {
                         if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $LocalDeviceName -Connection $Connection -ErrorAction Stop)) {
-                            throw "Unable to add first_signed_policy_deployment entry to database for device $LocalDeviceName"
+                            throw "Unable to add first_signed_policy_deployment entry to database for device $LocalDeviceName or set DeployedSigned flag for policy $PolicyGUID"
                         }
                     } catch {
                         Write-Verbose ($_ | Format-List -Property * | Out-String)
-                        Write-Warning "Unable tabulate first signed deployment for device $LocalDeviceName"
+                        Write-Warning "Unable to tabulate first signed deployment for device $LocalDeviceName"
                     }
                 }
                 ###################################################################
@@ -1416,11 +1416,11 @@ function Restore-WDACWorkstations {
                             $SuccessfulMachinesToRestart = $SuccessfulMachinesToRestart | Where-Object {$_ -ne $LocalDeviceName}
                             try {
                                 if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $LocalDeviceName -Connection $Connection -ErrorAction Stop)) {
-                                    throw "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName"
+                                    throw "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName or set DeployedSigned flag for policy $PolicyGUID"
                                 }
                             } catch {
                                 Write-Verbose ($_ | Format-List -Property * | Out-String)
-                                Write-Warning "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName"
+                                Write-Warning "Unable to add first_signed_policy_deployment entry for device $LocalDeviceName or set DeployedSigned flag for policy $PolicyGUID"
                             }
                         }
 
@@ -1441,11 +1441,11 @@ function Restore-WDACWorkstations {
                             foreach ($FirstSignedMachine in $SuccessfulMachinesToRestart) {
                                 try {
                                     if (-not (Add-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $FirstSignedMachine -Connection $Connection -ErrorAction Stop)) {
-                                        throw "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine"
+                                        throw "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine or set DeployedSigned flag for policy $PolicyGUID"
                                     }
                                 } catch {
                                     Write-Verbose ($_ | Format-List -Property * | Out-String)
-                                    Write-Warning "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine"
+                                    Write-Warning "Unable to add first_signed_policy_deployment entry for device $FirstSignedMachine or set DeployedSigned flag for policy $PolicyGUID"
                                 }
                             }
                         }
