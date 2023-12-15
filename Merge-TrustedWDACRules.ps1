@@ -229,7 +229,6 @@ function Merge-TrustedWDACRules {
         }
     
         $Connection = New-SQLiteConnection -ErrorAction Stop
-        $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
         foreach ($Policy in $Policies) {
             $RulesAdded = 0
@@ -238,6 +237,7 @@ function Merge-TrustedWDACRules {
             $Transaction = $Connection.BeginTransaction()
             $MostRecentPolicy = $Policy
             $BackupOldPolicy = $null
+            $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
             $CurrentPolicyRules = Get-CIPolicy -FilePath (Get-FullPolicyPath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop) -ErrorAction Stop
             foreach ($currentRule in $CurrentPolicyRules) {
                 if (-not ($IDsAndComments[$currentRule.Id])) {
@@ -528,16 +528,16 @@ function Merge-TrustedWDACRules {
             } else {
                 $Transaction.Rollback()
             }
-        }
 
-        try {
-            if ($HVCIOption) {
-                if ( (Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ne $HVCIOption) {
-                    Set-HVCIPolicySetting -PolicyGUID $PolicyGUID -HVCIOption $HVCIOption -Connection $Connection -ErrorAction Stop
+            try {
+                if ($HVCIOption) {
+                    if ( (Get-HVCIPolicySetting -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop) -ne $HVCIOption) {
+                        Set-HVCIPolicySetting -PolicyGUID $Policy -HVCIOption $HVCIOption -Connection $Connection -ErrorAction Stop
+                    }
                 }
+            } catch {
+                Write-Warning $_
             }
-        } catch {
-            Write-Warning $_
         }
 
         if ($Connection) {
