@@ -149,7 +149,6 @@ function New-WDACPolicy {
 
     [CmdletBinding()]
     Param (
-        [ValidateScript({-not $Supplemental}, ErrorMessage = "A policy cannot be both a supplemental policy and a Pillar.")]
         [switch]$Pillar,
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
@@ -181,7 +180,6 @@ function New-WDACPolicy {
         [switch]$DefaultWindowsMode,
         [Alias("Microsoft")]
         [switch]$AllowMicrosoftMode,
-        [ValidateScript({-not $Pillar}, ErrorMessage = "A policy cannot be both a supplemental policy and a Pillar.")]
         [switch]$Supplemental,
         [ValidateScript({-not $Unsigned}, ErrorMessage = "A policy cannot be both signed and unsigned. You cannot serve two masters.")]
         [switch]$Signed,
@@ -227,10 +225,6 @@ function New-WDACPolicy {
 
         if (Test-InvalidValidFileNameChars -FileChars $PolicyName) {
             throw "The policy name contains invalid characters. Please use valid characters which are valid for file paths and file names."
-        }
-
-        if ($Supplemental -and ($DenyByDefaultPolicy -or $AllowByDefaultPolicy)) {
-            throw "Error: Allow-by-default or deny-by-default is inherited from the base policy when -supplemental is set."
         }
 
         if (-not $DenyByDefaultPolicy -and -not $AllowByDefaultPolicy -and (-not $Supplemental)) {
