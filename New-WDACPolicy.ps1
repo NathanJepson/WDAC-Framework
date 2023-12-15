@@ -245,6 +245,10 @@ function New-WDACPolicy {
         #TODO: Give the user a list of vaild Base Policy IDs from the database
             throw "Please provide the BasePolicy ID"
         }
+
+        if ($Supplemental -and $SupplementalPolicySigner) {
+            throw "Cannot add a supplemental policy signer to a supplemental policy; it must be added to a base policy."
+        }
         
         if (-not $Signed -and -not $Unsigned) {
         #Unsigned policy is the default

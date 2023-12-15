@@ -350,6 +350,9 @@ function Edit-WDACPolicy {
         $Transaction = $Connection.BeginTransaction()
         $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         $IsSupplemental = Get-WDACPolicySupplementalStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
+        if ($IsSupplemental -and $SupplementalPolicySigner) {
+            throw "Cannot add a supplemental policy signer to a supplemental policy; it must be added to the base policy."
+        }
         $IDsAndComments = @{}
         $CurrentPolicyRules = Get-CIPolicy -FilePath (Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ErrorAction Stop
         foreach ($currentRule in $CurrentPolicyRules) {
@@ -638,13 +641,13 @@ function Edit-WDACPolicy {
                 $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             }
 
-            if ($UpdatePolicySigner -or $SupplementalPolicySigner) {
+            if ($UpdatePolicySigner -or ($SupplementalPolicySigner -and (-not $IsSupplemental))) {
                 Export-CodeSignerAsCER -Destination (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -WDACCodeSigner -ErrorAction Stop | Out-Null
                 if ($UpdatePolicySigner) {
                     Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Update -ErrorAction Stop
                     $IDsAndComments = Set-RepairedIDsAfterNewSigner -Comment "WDAC Update Certificate" -FilePath $TempPolicyPath -IDsAndComments $IDsAndComments -ErrorAction Stop
                 } 
-                if ($SupplementalPolicySigner) {
+                if ($SupplementalPolicySigner -and (-not $IsSupplemental)) {
                     Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Supplemental -ErrorAction Stop
                     $IDsAndComments = Set-RepairedIDsAfterNewSigner -Comment "WDAC Supplemental Signer Certificate" -FilePath $TempPolicyPath -IDsAndComments $IDsAndComments -ErrorAction Stop
                 }
