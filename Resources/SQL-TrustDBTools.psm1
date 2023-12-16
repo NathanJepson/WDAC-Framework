@@ -727,6 +727,17 @@ function Get-WDACApp {
         $Reader.GetValues() | Out-Null
         while($Reader.HasRows) {
             if($Reader.Read()) {
+
+                $WHQLFailedResult = $Reader["FailedWHQL"];
+
+                if ($WHQLFailedResult -is [System.DBNull]) {
+                    $WHQLFailedResult = $null
+                } elseif ($WHQLFailedResult -eq 1) {
+                    $WHQLFailedResult = $true
+                } else {
+                    $WHQLFailedResult = $false
+                }
+
                 $Result = [PSCustomObject]@{
                     SHA256FlatHash = $Reader["SHA256FlatHash"];
                     FileName = $Reader["FileName"];
@@ -746,7 +757,7 @@ function Get-WDACApp {
                     ProductName = $Reader["ProductName"];
                     PackageFamilyName = $Reader["PackageFamilyName"];
                     UserWriteable = [bool]($Reader["UserWriteable"]);
-                    FailedWHQL = [bool]($Reader["FailedWHQL"]);
+                    FailedWHQL = $WHQLFailedResult;
                     Trusted = [bool]($Reader["Trusted"]);
                     TrustedDriver = [bool]($Reader["TrustedDriver"]);
                     TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
