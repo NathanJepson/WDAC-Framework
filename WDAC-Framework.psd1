@@ -71,6 +71,7 @@
                         'Register-WDACEvents',
                         'New-WDACPolicy',
                         'Approve-WDACRules',
+                        'Approve-WDACRulesFilter',
                         'Import-WDACPolicy',
                         'Register-WDACWorkstation',
                         'Register-WDACGroup',

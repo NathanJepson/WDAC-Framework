@@ -779,9 +779,318 @@ function Read-WDACConferredTrust {
     }
 }
 
+filter Approve-WDACRulesFilter {
+    <#
+    .SYNOPSIS
+    Please refer to Approve-WDACRules cmdlet for a full synopsis.
+
+    .DESCRIPTION
+    This is basically the same functionallity as Approve-WDACRules, however, this is able to accept pipeline input from the Register-WDACEvents cmdlet.
+    I originally tried to allow pipeline input on Approve-WDACRules so that they weren't two separate cmdlets, but it was running into serious bugs, so I made this one.
+    
+    Author: Nathan Jepson
+    License: MIT License
+
+    .EXAMPLE
+    Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -SignerInformation -PEEvents | Register-WDACEvents -Level FilePublisher | Approve-WDACRules -VersioningType 11 -OverrideUserorKernelDefaults -Verbose
+    #>
+    [CmdletBinding()]
+    Param (
+        [Parameter(ValueFromPipeline = $true)]
+        [PSCustomObject[]]$Events,
+        [switch]$RequireComment,
+        [switch]$Purge,
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
+        [string]$Level,
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
+        [string[]]$Fallbacks,
+        [string]$GroupName,
+        [string[]]$PolicyName,
+        [string[]]$PolicyGUID,
+        [string[]]$PolicyID,
+        [Alias("NoDefault","Override")]
+        [switch]$OverrideUserorKernelDefaults,
+        [ValidateSet(0,1,2,3,4,5,6,7,8,9,10,11)]
+        $VersioningType,
+        [Alias("Ignore")]
+        [switch]$IgnoreErrors,
+        [Alias("UniversalVersioning","UniversalReset")]
+        [switch]$ModifyUniversalVersioning,
+        [Alias("EachPolicyVersioning","PolicyVersioning","ApplyEntirePolicy")]
+        [switch]$ApplyVersioningToEntirePolicy,
+        [Alias("MultiMode","MultiLevel","MultiLevelMode")]
+        [switch]$MultiRuleMode,
+        [switch]$ApplyRuleEachSigner
+    )
+
+    if ($Fallbacks -and -not $Level) {
+        throw "Cannot provide fallbacks without providing a level. (This would be the preferred or default level.)"
+    }
+
+    if ($ModifyUniversalVersioning -and -not $VersioningType) {
+        throw "When ModifyUniversalVersioning is set, a VersioningType must also be provided."
+    }
+
+    if ((($GroupName) -and ($PolicyName -or $PolicyGUID -or $PolicyID)) -or (($PolicyName) -and ($GroupName -or $PolicyGUID -or $PolicyID)) -or (($PolicyGUID) -and ($GroupName -or $PolicyName -or $PolicyID)) -or (($PolicyID) -and ($GroupName -or $PolicyGUID -or $PolicyName))) {
+        Write-Warning "When more than of these options (GroupName, PolicyName, PolicyGUID, or PolicyID) are selected, the user will be prompted to select which policy a rule should be applied to."
+    }
+
+    $AllLevels = $null
+    if ($Level -or $Fallbacks) {
+        if ($Fallbacks -and $Level) {
+            $Fallbacks = $Fallbacks | Where-Object {$_ -ne $Level}
+        }
+        $AllLevels = @()
+        if ($Level) {
+            $AllLevels += $Level
+        }
+        if ($Fallbacks -and $Fallbacks.Count -ge 1) {
+            foreach ($Fallback in $Fallbacks) {
+                $AllLevels += $Fallback
+            }
+        }
+    }
+    
+    try {
+        if ($GroupName) {
+            if (-not (Get-WDACPolicyAssignments -GroupName $GroupName -ErrorAction Stop)) {
+                throw "There are no policies assigned to this group name. Please assign policies to a group using the Register-WDACGroup cmdlet."
+            }
+        }
+        if ($PolicyName) {
+            foreach ($TempPolicyName in $PolicyName) {
+                if (-not (Find-WDACPolicyByName -PolicyName $TempPolicyName -ErrorAction Stop)) {
+                    throw "There are no policies by this policy name: $TempPolicyName in the database."
+                }
+            }
+        }
+        if ($PolicyGUID) {
+            foreach ($TempPolicyGUID in $PolicyGUID) {
+                if (-not (Find-WDACPolicy -PolicyGUID $TempPolicyGUID -ErrorAction Stop)) {
+                    throw "There are no policies in the database with this GUID: $TempPolicyGUID"
+                }
+            }
+        }
+        if ($PolicyID) {
+            foreach ($TempPolicyID in $PolicyID) {
+                if (-not (Find-WDACPolicyByID -PolicyID $TempPolicyID -ErrorAction Stop)) {
+                    throw "There are no policies with ID $TempPolicyID in the database. It's worth noting that PolicyID is NOT the same as PolicyGUID."
+                }
+            }
+        }
+    } catch {
+        throw $_
+    }
+
+    if ($ModifyUniversalVersioning) {
+        try {
+            Set-ValueLocalStorageJSON -Key "GlobalVersioningType" -Value $VersioningType -ErrorAction Stop
+        } catch {
+            Write-Warning "Unable to update cached VersioningType value in LocalStorage.json."
+        }
+    }
+
+    try {
+        $TempVersioningNum = (Get-LocalStorageJSON -ErrorAction Stop)."GlobalVersioningType"
+        if ($TempVersioningNum -and -not $VersioningType) {
+        #GlobalVersioningType is only used if the user hasn't specifically specified one when running the cmdlet
+            $VersioningType = $TempVersioningNum
+        }
+    } catch {
+        Write-Warning "Unable to retrieve GlobalVersioningType from LocalStorage.json."
+    }
+    
+    try {
+        $Connection = New-SQLiteConnection -ErrorAction Stop
+
+        foreach ($Event in $Events) {
+
+            $Transaction = $Connection.BeginTransaction()
+
+            try {
+                if ($Event.SHA256FileHash) {
+                #Case info is piped into the Approve-WDACRules cmdlet
+                    $AppHash = $Event.SHA256FileHash
+                    $FileName = $Event.FilePath
+                } else {
+                #Case info if retrieved from the database
+                    $AppHash = $Event.SHA256FlatHash
+                    $FileName = $Event.FileName
+                }
+                
+                if ($AppsToSkip[$AppHash] -or $AppsToBlock[$AppHash]) {
+                #User already designated that they want to skip this app for this session
+                    $Transaction.Rollback()
+                    continue;
+                }
+
+                if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
+                #Even if the app is piped into the cmdlet it still has to exist in the database.
+                    if (-not ($AppsToSkip[$AppHash])) {
+                        $AppsToSkip.Add($AppHash,$true)
+                        $Transaction.Rollback()
+                        Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                        continue;
+                    }
+                    $Transaction.Rollback()
+                    continue;
+                }
+
+                if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
+                #Case the user has already set an untrust action on this app
+                    if (-not ($AppsToSkip[$AppHash])) {
+                        $AppsToSkip.Add($AppHash,$true)
+                        $Transaction.Rollback()
+                        Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                        continue;
+                    }
+                    $Transaction.Rollback()
+                    continue;
+                }
+
+                if ( (Get-MSIorScriptSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) -or (Get-WDACAppSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue)) {
+                    if (-not ($AppsToSkip[$AppHash])) {
+                        $AppsToSkip.Add($AppHash,$true)
+                        $Transaction.Rollback()
+                        Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                        continue;
+                    }
+                    $Transaction.Rollback()
+                    continue;
+                }
+
+                Update-WDACFilePublisherByCriteria -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
+                #This updates version numbers of file publisher entries based on VersioningTypes in the database
+
+                $Transaction.Commit()
+                #This commit() statement is so that changes made by Update-WDACFilePublisherByCriteria can be applied regardless of whether a trust action is successfully made
+                $Transaction = $Connection.BeginTransaction()
+
+                if (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
+                    if (-not ($AppsToSkip[$AppHash])) {
+                        $AppsToSkip.Add($AppHash,$true)
+                        $Transaction.Rollback()
+                        Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                        Write-Verbose "App $FileName with hash $AppHash skipped due to already being blocked at a separate level."
+                        continue;
+                    }
+                    $Transaction.Rollback()
+                    Write-Verbose "App $FileName with hash $AppHash skipped due to already being blocked at a separate level."
+                    continue;
+                }
+
+                $SigningScenario = $Event.SigningScenario
+                if ($SigningScenario) {
+                    if ((Get-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                    #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
+                        
+                        if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
+                            $MiscLevels = @()
+                            $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
+                            $AppTrustAllLevels = Restore-ProvidedLevelsOrder -Levels $AppTrustAllLevels -ProvidedLevels $AllLevels
+                            #^This restores the original order the user provided the levels and fallbacks
+                            foreach ($AppTrustLevel in $AppTrustAllLevels) {
+                            #This checks for if there are any remaining untrusted levels for which to use MultiRuleMode
+                                if ($AllLevels -and ($AllLevels -contains $AppTrustLevel)) {
+                                    $MiscLevels += $AppTrustLevel
+                                } elseif (-not $AllLevels) {
+                                    $MiscLevels += $AppTrustLevel
+                                }
+                            }
+                            if ($MiscLevels.Count -ge 1) {
+                                Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
+                                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop;
+                                $Transaction.Commit()
+                                continue;
+                            }
+                        }
+                        if ((Get-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                        #The difference between this if statement and the one above is this one provides the AllLevels parameter
+                            Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
+                            $AppTrustAllLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
+                            if ((-not ($AppTrustAllLevels.Hash)) -and (-not $AppsToPurge[$AppHash])) {
+                                $AppsToPurge.Add($AppHash,$true)
+                            }
+                            if (-not ($AppsToSkip[$AppHash])) {
+                                $AppsToSkip.Add($AppHash,$true)
+                                $Transaction.Rollback()
+                                Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                                continue;
+                            }
+                            $Transaction.Rollback()
+                            continue;
+                        }
+                    }
+                }
+
+                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop
+
+            } catch {
+                Write-Verbose ($_ | Format-List * -Force | Out-String)
+                Write-Warning "Could not apply trust action to the database for this app: $($AppHash)"
+                if ($Transaction -and $Connection) {
+                    if ($Connection.AutoCommit -eq $false) {
+                        $Transaction.Rollback()
+                    }
+                }
+                continue
+            }
+
+            $Transaction.Commit()
+        }
+
+        if ($Purge) {
+            foreach ($Event in $Events) {
+                $Transaction = $Connection.BeginTransaction()
+
+                try {
+                    if ($Event.SHA256FileHash) {
+                        #Case info is piped into the Approve-WDACRules cmdlet
+                            $AppHash = $Event.SHA256FileHash
+                        } else {
+                        #Case info if retrieved from the database
+                            $AppHash = $Event.SHA256FlatHash
+                        }
+                    if ($AppsToPurge[$AppHash]) {
+                        Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
+                    }
+                } catch {
+                    Write-Verbose ($_ | Format-List * -Force | Out-String)
+                    Write-Warning "Could not purge this app from the database: $($AppHash)"
+                    if ($Transaction -and $Connection) {
+                        if ($Connection.AutoCommit -eq $false) {
+                            $Transaction.Rollback()
+                        }
+                    }
+                    continue
+                }
+
+                $Transaction.Commit()
+            }
+        }
+
+    } catch {
+        $theError = $_
+        if ($Transaction -and $Connection) {
+            if ($Connection.AutoCommit -eq $false) {
+                $Transaction.Rollback()
+            }
+        }
+        if ($Connection) {
+            $Connection.Close()
+        }
+
+        throw $theError
+    }
+
+    $Connection.Close()
+    Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
+}
+
 function Approve-WDACRules {
     <#
     .SYNOPSIS
+    NOTE: To use Approve-WDACRules to accept pipeline input, use Approve-WDACRulesFilter
     Iterate over events from pipeline--or from particular rows in the apps table if no pipeline input--and prompt user whether they trust the given apps at the provided level.
 
     .DESCRIPTION
@@ -887,9 +1196,6 @@ function Approve-WDACRules {
     Nothing.
 
     .EXAMPLE
-    Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -SignerInformation -PEEvents | Register-WDACEvents -Level FilePublisher | Approve-WDACRules -VersioningType 11 -OverrideUserorKernelDefaults -Verbose
-
-    .EXAMPLE
     Approve-WDACRules
 
     .EXAMPLE
@@ -933,6 +1239,8 @@ function Approve-WDACRules {
     )
 
     begin {
+        $Connection = $null
+        $Transaction = $null
         if ($Fallbacks -and -not $Level) {
             throw "Cannot provide fallbacks without providing a level. (This would be the preferred or default level.)"
         }
@@ -973,21 +1281,13 @@ function Approve-WDACRules {
     }
 
     process {
-        $HasPipelineInput = $false
-        if ($Events) {
-            $HasPipelineInput = $true
-        }
 
-        if (-not $HasPipelineInput) {
-            #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0
-            #If there is pipeline input, using Clear-AllWDACSkipped will clear Skipped property prematurely (since Register-WDACEvents is a filter function).
-            #...So only run this block of code if there is NO pipeline input
-            try {
-                Clear-AllWDACSkipped -ErrorAction Stop
-            } catch {
-                Write-Verbose ($_ | Format-List * -Force | Out-String)
-                throw "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
-            }
+        #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0
+        try {
+            Clear-AllWDACSkipped -ErrorAction Stop
+        } catch {
+            Write-Verbose ($_ | Format-List * -Force | Out-String)
+            throw "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
         }
         
         try {
@@ -1214,7 +1514,7 @@ function Approve-WDACRules {
                                 $AppHash = $Event.SHA256FlatHash
                             }
                         if ($AppsToPurge[$AppHash]) {
-                            Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
+                            Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
                         }
                     } catch {
                         Write-Verbose ($_ | Format-List * -Force | Out-String)
@@ -1243,17 +1543,12 @@ function Approve-WDACRules {
                 $Connection.Close()
             }
 
-            if (-not $HasPipelineInput) {
-    
-                try {
-                #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
-                #If there is pipeline input, using Clear-AllWDACSkipped will clear Skipped property prematurely (since Register-WDACEvents is a filter function).
-                #...So only run this block of code if there is NO pipeline input
-                    Clear-AllWDACSkipped -ErrorAction Stop
-                } catch {
-                    Write-Verbose ($_ | Format-List * -Force | Out-String)
-                    Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
-                }
+            try {
+            #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
+                Clear-AllWDACSkipped -ErrorAction Stop
+            } catch {
+                Write-Verbose ($_ | Format-List * -Force | Out-String)
+                Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
             }
             
             throw $theError
@@ -1262,25 +1557,27 @@ function Approve-WDACRules {
         $Connection.Close()
         Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
 
-        if (-not $HasPipelineInput) {
-
-            if ($ErrorCount -eq 0) {
-                Write-Host "Successfully updated trust for those potential rules in the database. Use Merge-TrustedWDACRules to merge them into policies."
-            }
-
-            try {
-            #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
-            #If there is pipeline input, using Clear-AllWDACSkipped will clear Skipped property prematurely (since Register-WDACEvents is a filter function).
-            #...So only run this block of code if there is NO pipeline input
-                Clear-AllWDACSkipped -ErrorAction Stop
-            } catch {
-                Write-Verbose ($_ | Format-List * -Force | Out-String)
-                Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
-            }
+        if ($ErrorCount -eq 0) {
+            Write-Host "Successfully updated trust for those potential rules in the database. Use Merge-TrustedWDACRules to merge them into policies."
         }
+
+        try {
+        #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
+            Clear-AllWDACSkipped -ErrorAction Stop
+        } catch {
+            Write-Verbose ($_ | Format-List * -Force | Out-String)
+            Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
+        }        
     }
 
     end {
-        
+        if ($Transaction -and $Connection) {
+            if ($Connection.AutoCommit -eq $false) {
+                $Transaction.Rollback()
+            }
+        }
+        if ($Connection) {
+            $Connection.Close()
+        }
     }
 }
