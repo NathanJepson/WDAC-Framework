@@ -718,6 +718,7 @@ function Read-WDACConferredTrust {
             }
             if ($ShouldAddPublishers) {
                 Add-NewPublishersFromAppSigners -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+                $CertInfoAndMisc = Expand-WDACAppV2 -SHA256FlatHash $SHA256FlatHash -Levels $Levels -GetCerts -Connection $Connection -ErrorAction Stop
             }
         }
 
