@@ -702,6 +702,50 @@ function Find-WDACApp {
     }
 }
 
+function Find-WDACAppByAppIndex {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$AppIndex,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from apps WHERE AppIndex = @AppIndex"
+        $Command.Parameters.AddWithValue("AppIndex",$AppIndex) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $_
+    }
+}
+
 function Get-WDACApp {
     [cmdletbinding()]
     Param ( 
@@ -1265,7 +1309,7 @@ function Add-WDACApp {
         #$Transaction = $Connection.BeginTransaction() #FIXME
         $Command = $Connection.CreateCommand()
         #$Transaction = $Connection.BeginTransaction()
-        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,(Select Max(AppIndex)+1 from apps))"
+        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,(Select Max(Max(apps.AppIndex),Max(signers.AppIndex))+1 from apps,signers))"
             $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
             $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
             $Command.Parameters.AddWithValue("TimeDetected",$TimeDetected) | Out-Null
@@ -1574,6 +1618,12 @@ function Add-WDACAppSigner {
     )
 
     $NoConnectionProvided = $false
+
+    if (-not (Find-WDACAppByAppIndex -AppIndex $AppIndex -Connection $Connection -ErrorAction Stop)) {
+    #We don't want to add orphaned signers to the database!
+        throw "Orphaned signer."
+    }
+
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
