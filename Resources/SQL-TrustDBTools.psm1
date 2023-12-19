@@ -1252,9 +1252,6 @@ function Add-WDACApp {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$BlockingPolicyID,
-        [ValidateNotNullOrEmpty()]
-        [Parameter(Mandatory=$true)]
-        [int]$AppIndex,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -1268,7 +1265,7 @@ function Add-WDACApp {
         #$Transaction = $Connection.BeginTransaction() #FIXME
         $Command = $Connection.CreateCommand()
         #$Transaction = $Connection.BeginTransaction()
-        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,@AppIndex)"
+        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,(Select Max(AppIndex)+1 from apps))"
             $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
             $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
             $Command.Parameters.AddWithValue("TimeDetected",$TimeDetected) | Out-Null
@@ -1291,7 +1288,6 @@ function Add-WDACApp {
             $Command.Parameters.AddWithValue("RequestedSigningLevel",$RequestedSigningLevel) | Out-Null
             $Command.Parameters.AddWithValue("ValidatedSigningLevel",$ValidatedSigningLevel) | Out-Null
             $Command.Parameters.AddWithValue("BlockingPolicyID",$BlockingPolicyID) | Out-Null
-            $Command.Parameters.AddWithValue("AppIndex",$AppIndex) | Out-Null
         $Command.ExecuteNonQuery()
         if ($NoConnectionProvided -and $Connection) {
             $Connection.close()
@@ -4311,24 +4307,24 @@ function Add-NewPublishersFromAppSigners {
     )
 
     try {
-        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -ErrorAction Stop
+        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
         if (-not $Signers) {
             return $null
         }
 
         foreach ($Signer in $Signers) {
             $LeafCertTBSHash = $Signer.CertificateTBSHash
-            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -ErrorAction Stop
+            $LeafCert = Get-WDACCertificate -TBSHash $LeafCertTBSHash -Connection $Connection -ErrorAction Stop
 
             if ($LeafCert.ParentCertTBSHash) {
-                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -ErrorAction Stop
-                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop
+                $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
+                $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop
                 
                 if (-not ($Publisher)) {
                     if ($Connection) {
                         if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop)) {
                             throw "Trouble adding a publisher to the database."
-                        } 
+                        }
                     }
                     elseif (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -ErrorAction Stop)) {
                         throw "Trouble adding a publisher to the database."

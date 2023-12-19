@@ -1340,18 +1340,15 @@ function Approve-WDACRules {
         }
 
         $ErrorCount = 0
-        if (-not $Events) {
-            try {
-                if ($MSIorScripts) {
-                    #TODO
-                } else {
-                    $Events = Get-WDACAppsToSetTrust -ErrorAction Stop
-                }
-            } catch {
-                throw $_
+        
+        try {
+            if ($MSIorScripts) {
+                #TODO
+            } else {
+                $Events = Get-WDACAppsToSetTrust -ErrorAction Stop
             }
-        } elseif ($MSIorScripts) {
-            Write-Warning "MSIorScripts parameter ignored since events are being piped into this cmdlet."
+        } catch {
+            throw $_
         }
      
         try {

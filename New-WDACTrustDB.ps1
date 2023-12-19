@@ -132,6 +132,20 @@ function New-WDACTrustDB {
         ValidatedSigningLevel Text,
         VerificationError Text,
         FOREIGN KEY(AppIndex) REFERENCES apps(AppIndex) ON DELETE CASCADE,
+        FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE CASCADE,
+        PRIMARY KEY(AppIndex,SignatureIndex)
+    );
+
+    CREATE TABLE signers_msi_or_script (
+        AppIndex INTEGER NOT NULL,
+        SignatureIndex INTEGER NOT NULL,
+        CertificateTBSHash TEXT NOT NULL,
+        SignatureType TEXT,
+        PageHash Integer DEFAULT 0 NOT NULL,
+        Flags Integer,
+        PolicyBits Integer,
+        ValidatedSigningLevel Text,
+        VerificationError Text,
         FOREIGN KEY(AppIndex) REFERENCES msi_or_script(AppIndex) ON DELETE CASCADE,
         FOREIGN KEY(CertificateTBSHash) REFERENCES certificates(TBSHash) ON DELETE CASCADE,
         PRIMARY KEY(AppIndex,SignatureIndex)

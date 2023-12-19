@@ -1,35 +1,3 @@
-function New-AppIndex {
-    [CmdletBinding()]
-    param (
-        [Parameter(Mandatory=$true)]
-        [ValidateNotNullOrEmpty()]
-        [System.Data.SQLite.SQLiteConnection]$Connection
-    )
-
-    try {
-        $MaxMSIAppIndex = Get-MAXAppIndexID -isMSIorScript -Connection $Connection -ErrorAction Stop
-        $MaxPEAppIndex = Get-MAXAppIndexID -Connection $Connection -ErrorAction Stop
-    } catch {
-        throw $_
-    }
-
-    if (-not $MaxMSIAppIndex -and -not $MaxPEAppIndex ) {
-        return 1;
-    }
-
-    if (-not $MaxMSIAppIndex -and $MaxPEAppIndex) {
-        return ($MaxPEAppIndex + 1)
-    } elseif ($MaxMSIAppIndex -and -not $MaxPEAppIndex) {
-        return ($MaxMSIAppIndex + 1)
-    }
-
-    if ($MaxMSIAppIndex -gt $MaxPEAppIndex) {
-        return ($MaxMSIAppIndex + 1)
-    } else {
-        return ($MaxPEAppIndex + 1)
-    }
-}
-
 function Register-Signer {
     [CmdletBinding()]
     param (
@@ -94,19 +62,15 @@ function Register-PEEvent {
         $DeviceName = hostname
     }
 
-    $AppIndex = $null
-
     try {
-        $AppIndex = New-AppIndex -Connection $Connection -ErrorAction Stop
-
         if (-not (Find-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop)) {
             
-            $Var1 = (Add-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -FileName $FileName -TimeDetected $WDACEvent.TimeCreated -FirstDetectedPath $FirstDetectedPath -FirstDetectedUser $WDACEvent.User -FirstDetectedProcessID $WDACEvent.ProcessID -FirstDetectedProcessName $WDACEvent.ProcessName -SHA256AuthenticodeHash $WDACEvent.SHA256AuthenticodeHash -OriginDevice $DeviceName -EventType $WDACEvent.EventType -SigningScenario $WDACEvent.SigningScenario -OriginalFileName $WDACEvent.OriginalFileName -FileVersion $WDACEvent.FileVersion -InternalName $WDACEvent.InternalName -FileDescription $WDACEvent.FileDescription -ProductName $WDACEvent.ProductName -PackageFamilyName $WDACEvent.PackageFamilyName -UserWriteable $WDACEvent.UserWriteable -FailedWHQL $WDACEvent.FailedWHQL -BlockingPolicyID $WDACEvent.PolicyGUID -AppIndex $AppIndex -RequestedSigningLevel $WDACEvent.RequestedSigningLevel -ValidatedSigningLevel $WDACEvent.ValidatedSigningLevel -Connection $Connection -ErrorAction Stop)
+            $Var1 = (Add-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -FileName $FileName -TimeDetected $WDACEvent.TimeCreated -FirstDetectedPath $FirstDetectedPath -FirstDetectedUser $WDACEvent.User -FirstDetectedProcessID $WDACEvent.ProcessID -FirstDetectedProcessName $WDACEvent.ProcessName -SHA256AuthenticodeHash $WDACEvent.SHA256AuthenticodeHash -OriginDevice $DeviceName -EventType $WDACEvent.EventType -SigningScenario $WDACEvent.SigningScenario -OriginalFileName $WDACEvent.OriginalFileName -FileVersion $WDACEvent.FileVersion -InternalName $WDACEvent.InternalName -FileDescription $WDACEvent.FileDescription -ProductName $WDACEvent.ProductName -PackageFamilyName $WDACEvent.PackageFamilyName -UserWriteable $WDACEvent.UserWriteable -FailedWHQL $WDACEvent.FailedWHQL -BlockingPolicyID $WDACEvent.PolicyGUID -RequestedSigningLevel $WDACEvent.RequestedSigningLevel -ValidatedSigningLevel $WDACEvent.ValidatedSigningLevel -Connection $Connection -ErrorAction Stop)
             if (-not $Var1) {
                 throw "Unsuccessful in adding this app to the database: $($WDACEvent.SHA256FileHash)"
             }
             foreach ($signer in $WDACEvent.SignerInfo) {
-                Register-Signer -SignerDetails $signer -AppIndex $AppIndex -Connection $Connection -ErrorAction Stop
+                Register-Signer -SignerDetails $signer -AppIndex ((Get-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop).AppIndex) -Connection $Connection -ErrorAction Stop
             }
         }
     } catch {
@@ -237,7 +201,7 @@ filter Register-WDACEvents {
         #Case 2: Else it is an executable, dll, driver, etc.
             try {
                 Register-PEEvent -WDACEvent $WDACEvent -Connection $Connection -ErrorAction Stop
-                if ($AllLevels -contains "Publisher" -or $AllLevels -contains "FilePublisher") {
+                if (($AllLevels -contains "Publisher") -or ($AllLevels -contains "FilePublisher")) {
                     Add-NewPublishersFromAppSigners -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop
                 }
             } catch {
