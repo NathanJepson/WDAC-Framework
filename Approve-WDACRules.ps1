@@ -706,6 +706,21 @@ function Read-WDACConferredTrust {
         $PcaCertTBSHashes = @{}
         $Publishers = @{}
 
+        if (@("Publisher","FilePublisher") -contains $LevelToTrustAt) {
+        #Add publishers to the database if they are not already present
+            $ShouldAddPublishers = $false
+            foreach ($Signer in $CertInfoAndMisc) {
+                $Publisher = $Signer | Select-Object Publisher
+                if (-not $Publisher) {
+                    $ShouldAddPublishers = $true
+                    break
+                }
+            }
+            if ($ShouldAddPublishers) {
+                Add-NewPublishersFromAppSigners -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+            }
+        }
+
         if (@("Publisher","FilePublisher","LeafCertificate","PcaCertificate") -contains $LevelToTrustAt -and ($CertInfoAndMisc.CertsAndPublishers)) {
             foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                 $LeafCertCNs.Add($Signer.SignatureIndex,$Signer.LeafCert.CommonName)
