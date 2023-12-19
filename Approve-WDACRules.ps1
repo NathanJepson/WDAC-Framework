@@ -709,7 +709,7 @@ function Read-WDACConferredTrust {
         if (@("Publisher","FilePublisher") -contains $LevelToTrustAt) {
         #Add publishers to the database if they are not already present
             $ShouldAddPublishers = $false
-            foreach ($Signer in $CertInfoAndMisc) {
+            foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                 $Publisher = $Signer | Select-Object Publisher
                 if (-not $Publisher) {
                     $ShouldAddPublishers = $true
