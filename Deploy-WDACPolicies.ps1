@@ -437,6 +437,27 @@ function Deploy-WDACPolicies {
             }
 
             if ( (($null -eq $ComputerMap) -or $ComputerMap.Count -le 0) -and (-not ($TestComputers -and $TestForce)) ) {
+                if ($ComputerMapDeferredDevices -and ($ComputerMapDeferredDevices.Count -gt 0)) {
+                    #Since these devices are behind on this deployment, then they must be deferred on this policy
+                    foreach ($DeferredMachine in $ComputerMapDeferredDevices.GetEnumerator()) {
+                        try {
+                            if ($TestComputers) {
+                                if ($TestForce) {
+                                    Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.Name -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
+                                } elseif ($TestComputers -contains $DeferredMachine.Name) {
+                                    Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.Name -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
+                                }
+                            } else {
+                                Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.Name -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
+                            }
+                        } catch {
+                            Write-Verbose ($_ | Format-List -Property * | Out-String)
+                        }
+                    }
+
+                    $Transaction.Commit()
+                }
+
                 throw "No non-deferred workstations currently assigned to policy $PolicyGUID"
             }
 

@@ -223,6 +223,7 @@ function Get-WDACHollowPolicy {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$PolicyGUID,
+        $TempPolicyPath,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -232,7 +233,9 @@ function Get-WDACHollowPolicy {
             $NoConnectionProvided = $true
         }
         [XML]$XMLFileContent = Get-PolicyXML -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-        $TempPolicyPath = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( ([string](New-Guid)) + ".xml")))
+        if (-not $TempPolicyPath) {
+            $TempPolicyPath = (Join-Path $PSModuleRoot -ChildPath (".WDACFrameworkData\" + ( ([string](New-Guid)) + ".xml")))
+        }
         
         if ($XMLFileContent.SiPolicy.CiSigners) {
             $XMLFileContent.SiPolicy.CiSigners.innerText = $null
@@ -254,14 +257,8 @@ function Get-WDACHollowPolicy {
         }
     
         foreach ($SigningScenario in $XMLFileContent.SiPolicy.SigningScenarios.SigningScenario.ID) {
-            if (($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.AllowedSigners) {
-                ($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.AllowedSigners.innerText = $null
-            }
-            if (($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.DeniedSigners) {
-                ($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.DeniedSigners.innerText = $null
-            }
-            if (($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.FileRulesRef) {
-                ($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.FileRulesRef.innerText = $null
+            if (($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners) {
+                ($XMLFileContent.SiPolicy.SigningScenarios.SigningScenario | Where-Object {$_.ID -eq $SigningScenario}).ProductSigners.innerText = $null
             }
         }
     
