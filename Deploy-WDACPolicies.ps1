@@ -590,6 +590,27 @@ function Deploy-WDACPolicies {
                 $ARM64_RefreshToolName = Split-Path $ARM64_Path -Leaf
             }
             $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
+
+            if ($TestComputers -and (-not $TestForce)) {
+                if ( -not ($CustomPSObjectComputerMap | Where-Object { ($_.DeviceName -eq $TestComputers) -and {$_.NewlyDeferred -eq $false} -and {$_.TestMachine -eq $true}} )) {
+                    
+                    if ($ComputerMapDeferredDevices -and ($ComputerMapDeferredDevices.Count -gt 0)) {
+                        #Since these devices are behind on this deployment, then they must be deferred on this policy
+                        foreach ($DeferredMachine in $ComputerMapDeferredDevices.GetEnumerator()) {
+                            try { 
+                                Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $DeferredMachine.Name -Comment ("Device is deferred on another WDAC policy and will be deferred on this one on deployment.") -Connection $Connection -ErrorAction Stop
+                            } catch {
+                                Write-Verbose ($_ | Format-List -Property * | Out-String)
+                            }
+                        }
+    
+                        $Transaction.Commit()
+                    }
+
+                    throw "No non-deferred workstations in `"TestComputers`" currently assigned to policy $PolicyGUID"
+                }
+            }
+
             $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
             if (Test-Path $UnsignedStagedPolicyPath) {
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
