@@ -1639,6 +1639,49 @@ function Add-FirstSignedPolicyDeployment {
     }
 }
 
+function Remove-FirstSignedPolicyDeployment {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [Parameter(Mandatory=$true)]
+        [string]$DeviceName,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+    
+    if (-not (Test-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $DeviceName -Connection $Connection -ErrorAction Stop)) {
+        return $true
+    }
+
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $Command = $Connection.CreateCommand()
+        $Command.CommandText = "PRAGMA foreign_keys=ON;"
+            #This PRAGMA is needed so that foreign key constraints will work upon deleting
+        $Command.Commandtext += "DELETE FROM first_signed_policy_deployments WHERE PolicyGUID = @PolicyGUID AND DeviceName = @DeviceName"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.Parameters.AddWithValue("DeviceName",$DeviceName) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
 function Remove-AllFirstSignedPolicyDeployments {
     [cmdletbinding()]
     Param (

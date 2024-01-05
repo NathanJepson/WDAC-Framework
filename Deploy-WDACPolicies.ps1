@@ -1545,6 +1545,9 @@ function Restore-WDACWorkstations {
             
             foreach ($SuccessMachine in $SuccessfulMachinesFinalRemove) {
                 Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $SuccessMachine -Connection $Connection -ErrorAction Stop
+                if (-not (Remove-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $SuccessMachine -Connection $Connection -ErrorAction Stop)) {
+                    Write-Warning "Cannot remove entry for $PolicyGUID and DeviceName $DeviceName in the first_signed_policy_deployments table. Please remove it manually before running other cmdlets."
+                }
             }
             
             $Transaction.Commit()
