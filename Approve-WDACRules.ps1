@@ -808,7 +808,7 @@ filter Approve-WDACRulesFilter {
     License: MIT License
 
     .EXAMPLE
-    Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -SignerInformation -PEEvents | Register-WDACEvents -Level FilePublisher | Approve-WDACRules -VersioningType 11 -OverrideUserorKernelDefaults -Verbose
+    Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -SignerInformation -PEEvents | Register-WDACEvents -Level FilePublisher | Approve-WDACRulesFilter -VersioningType 11 -OverrideUserorKernelDefaults -Verbose
     #>
     [CmdletBinding()]
     Param (
