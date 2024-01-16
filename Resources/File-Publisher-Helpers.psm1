@@ -106,7 +106,7 @@ function New-SqliteConnection {
     }
 
     try {
-        $sDatabaseConnectionString=[string]::Format("data source={0}",$Database)
+        $sDatabaseConnectionString=[string]::Format("data source={0};Foreign Key Constraints=On",$Database)
         $oSQLiteDBConnection = New-Object System.Data.SQLite.SQLiteConnection -ErrorAction Stop
         $oSQLiteDBConnection.ConnectionString = $sDatabaseConnectionString
         $oSQLiteDBConnection.open()

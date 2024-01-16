@@ -371,7 +371,7 @@ function New-WDACTrustDB {
 
     try {
         New-Item -Path $Destination -Name $DBName -ErrorAction Stop | Out-Null
-        $sDatabaseConnectionString=[string]::Format("data source={0}",$Database)
+        $sDatabaseConnectionString=[string]::Format("data source={0};Foreign Key Constraints=On",$Database)
         $oSQLiteDBConnection = New-Object System.Data.SQLite.SQLiteConnection
         $oSQLiteDBConnection.ConnectionString = $sDatabaseConnectionString
         $oSQLiteDBConnection.open()
@@ -387,5 +387,5 @@ function New-WDACTrustDB {
     } catch {
         Write-Verbose ($_ | Format-List -Property * | Out-String)
         throw $_
-    }   
+    }
 }
