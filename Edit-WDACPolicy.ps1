@@ -802,10 +802,13 @@ function Edit-WDACPolicy {
             #Case HVCI: Whether HVCI is enabled
             if ($HVCI) {
                 Set-HVCIOptions -Enabled -FilePath $TempPolicyPath
+                $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             } elseif ($RemoveHVCI) {
                 Set-HVCIOptions -None -FilePath $TempPolicyPath
+                $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             } elseif ($StrictHVCI) {
                 Set-HVCIOptions -Strict -FilePath $TempPolicyPath
+                $HVCIOption = Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             }
             #===========================================================================
 
