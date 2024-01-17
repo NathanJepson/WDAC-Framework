@@ -1529,7 +1529,7 @@ function Restore-WDACWorkstations {
                 } elseif ($DeferredPolicy.DeferredPolicyIndex) {
                     Write-Host "Deployed new policy to fix those workstations with deferred policy index: $($DeferredPolicy.DeferredPolicyIndex)"
                 }
-            } else {
+            } elseif (-not $SignedToUnsigned) {
                 Write-Host "No workstations were fixed which were assigned to deferred policy with policy index: $($DeferredPolicy.DeferredPolicyIndex)"
             }
         }
