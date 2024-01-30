@@ -814,6 +814,7 @@ filter Approve-WDACRulesFilter {
     Param (
         [Parameter(ValueFromPipeline = $true)]
         [PSCustomObject[]]$Events,
+        [string]$TrustFlag,
         [switch]$RequireComment,
         [switch]$Purge,
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
@@ -1126,6 +1127,12 @@ function Approve-WDACRules {
     .PARAMETER Events
     Pipeline input of WDAC events which are piped from Register-WDACEvents
 
+    .PARAMETER TrustFlag
+    (Not yet implemented)
+    The cmdlet will behave like you automatically trust everything, but will set another flag on the specified rule level which will tell the 
+    Merge-TrustedWDACRules cmdlet to only merge the rule once the trust flag has been met. 
+    The flag could be something like "VirusTotal" or "Signed by Digicert"
+
     .PARAMETER RequireComment
     When this is set, a comment must be provided when an app is trusted.
 
@@ -1225,6 +1232,7 @@ function Approve-WDACRules {
     Param (
         [Parameter(ValueFromPipeline = $true)]
         [PSCustomObject[]]$Events,
+        [string]$TrustFlag,
         [switch]$RequireComment,
         [switch]$Purge,
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
