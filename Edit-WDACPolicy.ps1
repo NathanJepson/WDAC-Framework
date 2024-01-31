@@ -126,6 +126,15 @@ function Edit-WDACPolicy {
     Author: Nathan Jepson
     License: MIT License
 
+    .PARAMETER NoOverwrite
+    Retain a backup of the current policy before applying changes.
+
+    .PARAMETER DoNotCacheRecommended
+    Cache of the Microsoft recommended policies will not be cached (will be pulled right from GitHub on the next run)
+
+    .PARAMETER Pillar
+    Setting the pillar attribute on a policy will make sure that the policy will be applied to every device in the database.
+
     .EXAMPLE
     Edit-WDACPolicy -PolicyGUID "fd04c607-e1d9-4416-954a-b6f3817c9d10" -StrictHVCI -AddPSCodeSigner -DriverBlockRules -DefaultWindowsMode -NoOverwrite -Verbose 
 
