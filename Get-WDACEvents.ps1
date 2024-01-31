@@ -57,6 +57,12 @@ function Get-WDACEvents {
     .PARAMETER IgnoreDenyEvents
     Parameter for Get-WDACCodeIntegrityEvent. See WDACAuditing.psm1 for usage.
 
+    .PARAMETER PolicyGUID
+    Specify that you only want events associated with a specific WDAC Policy (by GUID)
+
+    .PARAMETER PolicyName
+    Specify that you only want events associated with a specific WDAC Policy (by name)
+
     .EXAMPLE
     Get-WDACEvents -MaxEvents 4 -SignerInformation -Verbose
 
@@ -121,10 +127,32 @@ function Get-WDACEvents {
         [switch]$IgnoreNativeImagesDLLs,
         [Parameter(ParameterSetName = 'Both')]
         [Parameter(ParameterSetName = 'PEEvents')]
-        [switch]$IgnoreDenyEvents
+        [switch]$IgnoreDenyEvents,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [string]$PolicyGUID,
+        [Parameter(ParameterSetName = 'Both')]
+        [Parameter(ParameterSetName = 'PEEvents')]
+        [string]$PolicyName
     )
 
     begin {
+        if ($PolicyGUID -and $PolicyName) {
+            throw "Cannot provide both a policy GUID and a policy name."
+        }
+
+        if ($PolicyName) {
+            if (-not (Find-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop)) {
+                throw "There are no policies by this policy name: $PolicyName in the database."
+            }
+            $PolicyGUID = (Get-WDACPolicyByName -PolicyName $PolicyName -ErrorAction Stop).PolicyGUID
+        }
+        if ($PolicyGUID) {
+            if (-not (Find-WDACPolicy -PolicyGUID $PolicyGUID -ErrorAction Stop)) {
+                throw "There are no policies in the database with this GUID: $PolicyGUID"
+            }
+        }
+
         if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
             $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
             Write-Verbose "The current file is in the SignedModules folder."
@@ -160,13 +188,14 @@ function Get-WDACEvents {
             $CheckWhqlStatus,
             $IgnoreNativeImagesDLLs,
             $IgnoreDenyEvents,
-            $ImportModule
+            $ImportModule,
+            $PolicyGUID
         )
             try {
                 if ($ImportModule) {
                     Import-Module -Name "WDACAuditing"
                 }
-                Get-WDACCodeIntegrityEvent -MaxEvents:$MaxEvents -User:$User -Kernel:$Kernel -Audit:$Audit -Enforce:$Enforce -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -SignerInformation:$SignerInformation -CheckWhqlStatus:$CheckWhqlStatus -IgnoreNativeImagesDLLs:$IgnoreNativeImagesDLLs -IgnoreDenyEvents:$IgnoreDenyEvents -ErrorAction Stop 
+                Get-WDACCodeIntegrityEvent -MaxEvents $MaxEvents -PolicyGUID $PolicyGUID -User:$User -Kernel:$Kernel -Audit:$Audit -Enforce:$Enforce -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -SignerInformation:$SignerInformation -CheckWhqlStatus:$CheckWhqlStatus -IgnoreNativeImagesDLLs:$IgnoreNativeImagesDLLs -IgnoreDenyEvents:$IgnoreDenyEvents -ErrorAction Stop 
             } catch {
                 Write-Verbose $_
                 return $null
@@ -185,7 +214,7 @@ function Get-WDACEvents {
                 if ($ImportModule) {
                     Import-Module -Name "WDACAuditing"
                 } 
-                Get-WDACApplockerScriptMsiEvent -MaxEvents:$MaxEvents -SignerInformation:$SignerInformation -ShowAllowedEvents:$ShowAllowedEvents -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -ErrorAction Stop 
+                Get-WDACApplockerScriptMsiEvent -MaxEvents $MaxEvents -SignerInformation:$SignerInformation -ShowAllowedEvents:$ShowAllowedEvents -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -ErrorAction Stop 
             } catch {
                 Write-Verbose $_
                 return $null
@@ -226,7 +255,7 @@ function Get-WDACEvents {
         if (-not $RemoteMachine) {
             Write-Verbose "Extracting events from local machine."
             if ($PE_And_MSI -or $PEEvents) {
-                $PEEventResults = Invoke-Command -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents,$ImportModule
+                $PEEventResults = Invoke-Command -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents,$ImportModule,$PolicyGUID
             }
             if ($PE_And_MSI -or $MSIorScripts) {
                 $MSIorScriptEventResults = Invoke-Command -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh,$ImportModule

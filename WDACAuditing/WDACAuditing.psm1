@@ -468,7 +468,17 @@ Return all kernel mode enforcement events.
         [Parameter(ParameterSetName = 'NoSignerCheck')]
         [Parameter(ParameterSetName = 'SignerCheck')]
         [Int64]
-        $MaxEvents
+        $MaxEvents,
+
+        [Parameter(ParameterSetName = 'NoSignerCheck')]
+        [Parameter(ParameterSetName = 'SignerCheck')]
+        [String]
+        $PolicyGUID,
+
+        [Parameter(ParameterSetName = 'NoSignerCheck')]
+        [Parameter(ParameterSetName = 'SignerCheck')]
+        [String[]]
+        $MatchString
     )
 
     # If neither -User nor -Kernel are supplied, do not filter based on signing scenario
@@ -503,7 +513,17 @@ Return all kernel mode enforcement events.
         $PolicyRefreshFilter = Get-WDACPolicyRefreshEventFilter -Verbose:$False
     }
 
-    $Filter = "*[System[$($ModeFilter)$($PolicyRefreshFilter)]$ScenarioFilter]"
+    $PolicyFilter = ''
+    if ($PolicyGUID) {
+        $PolicyFilter = " and EventData[Data[@Name='PolicyGUID'] = '$PolicyGUID']"
+    }
+
+    # $StringMatchFilter = ''
+    # if ($MatchString) {
+    #     $StringMatchFilter = "and ($( $MatchString.ForEach())"
+    # }
+
+    $Filter = "*[System[$($ModeFilter)$($PolicyRefreshFilter)]$($ScenarioFilter)$($PolicyFilter)]"
 
     Write-Verbose "XPath Filter: $Filter"
 
