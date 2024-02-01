@@ -65,7 +65,7 @@ function Import-WDACRule {
 
     .DESCRIPTION
     Specify WDAC rule(s) by ID which exist in a reference policy, then merge them into a destination policy (version number
-    of the destination policy will increment)
+    of the destination policy will increment unless you specify "DontIncrementVersion")
 
     Author: Nathan Jepson
     License: MIT License
