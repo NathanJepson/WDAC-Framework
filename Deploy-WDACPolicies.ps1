@@ -661,10 +661,10 @@ function Deploy-WDACPolicies {
 
                 Write-Warning "Some devices needed to be deferred, and no devices received this policy. There are a few reasons for this, but is often caused by a new device receiving a signed policy which has not yet been initally restarted."
                 for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
-                    if ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
-                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Comment "Machine had been deferred prior to deployment action (possibly because it has not yet been restarted for inistial deployment of signed policy)." -Connection $Connection -ErrorAction Stop
-                    } elseif ($CustomPSObjectComputerMap[$i].TestMachine -eq $true) {
+                    if (($CustomPSObjectComputerMap[$i].TestMachine -eq $false) -and ($Test)) {
                         Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Comment "Device was not one of the test machines." -Connection $Connection -ErrorAction Stop
+                    } elseif ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Comment "Machine had been deferred prior to deployment action (possibly because it has not yet been restarted for inistial deployment of signed policy)." -Connection $Connection -ErrorAction Stop
                     }
                 }
                 if (Test-Path $UnsignedStagedPolicyPath) {
