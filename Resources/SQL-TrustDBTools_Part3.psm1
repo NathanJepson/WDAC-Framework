@@ -1057,6 +1057,58 @@ function Test-AnyDeferredWDACPolicyAssignments {
     }
 }
 
+function Test-WDACPolicyDeferred {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [Alias("DeferredDevicePolicyGUID")]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "Select * from deferred_policies WHERE DeferredDevicePolicyGUID = @DeferredDevicePolicyGUID"
+        $Command.Parameters.AddWithValue("DeferredDevicePolicyGUID",$PolicyGUID) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Test-AnyPoliciesDeferredOnDevice {
     [cmdletbinding()]
     Param (
@@ -1724,6 +1776,43 @@ function Remove-AllFirstSignedPolicyDeployments {
     }
 }
 
+function Remove-FirstSignedPolicyDeploymentsConditional {
+#If a policy is deployed unsigned, and some devices are no longer deferred on that policy, then remove the first_signed_policy_deployments for those
+#devices on that policy
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.CommandText = "PRAGMA foreign_keys=ON;"
+            #This PRAGMA is needed so that foreign key constraints will work upon deleting
+        $Command.CommandText += "DELETE from first_signed_policy_deployments WHERE DeviceName in (Select fs.DeviceName from policies as po INNER JOIN first_signed_policy_deployments as fs on fs.PolicyGUID = po.PolicyGUID WHERE po.LastDeployedPolicyVersion = po.LastUnsignedVersion AND po.PolicyGUID = @PolicyGUID AND fs.DeviceName NOT IN (SELECT dpa.DeviceName from deferred_policies_assignments as dpa INNER JOIN deferred_policies as dp on dp.DeferredPolicyIndex = dpa.DeferredPolicyIndex WHERE dp.DeferredDevicePolicyGUID = @PolicyGUID));"
+        $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
 function Test-WDACDeviceDeferred {
     [cmdletbinding()]
     Param ( 
@@ -1825,4 +1914,3 @@ function Set-WDACDeviceDeferredStatus {
         throw $theError
     }
 }
-

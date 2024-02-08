@@ -655,6 +655,23 @@ function Deploy-WDACPolicies {
                 $Machines = ($CustomPSObjectComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
             }
 
+            if ($Machines.Count -le 0) {
+                #This handles the case where a test machine didn't have a FirstSignedPolicy deployment, and was deferred because of it, and there
+                #are not machines left to deploy a policy to
+
+                Write-Warning "Some devices needed to be deferred, and no devices received this policy. There are a few reasons for this, but is often caused by a new device receiving a signed policy which has not yet been initally restarted."
+                for ($i=0; $i -lt $CustomPSObjectComputerMap.Count; $i++) {
+                    if ($CustomPSObjectComputerMap[$i].NewlyDeferred -eq $true) {
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Comment "Machine had been deferred prior to deployment action (possibly because it has not yet been restarted for inistial deployment of signed policy)." -Connection $Connection -ErrorAction Stop
+                    } elseif ($CustomPSObjectComputerMap[$i].TestMachine -eq $true) {
+                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Comment "Device was not one of the test machines." -Connection $Connection -ErrorAction Stop
+                    }
+                }
+                $Transaction.Commit()
+                $Connection.Close()
+                return
+            }
+
             $SuccessfulMachines = @()
             #This list is only used when SignedToUnsigned is set to true
 
@@ -1116,6 +1133,7 @@ function Restore-WDACWorkstations {
     $ClearUEFIBootLocalDevice = $false
     $SuccessfulMachinesFinalRemove = @()
     $ComputerMap2 = @{}
+    $AtLeastOneDeviceFixedUnsigned = $false
 
     $Connection = New-SQLiteConnection -ErrorAction Stop
 
@@ -1517,6 +1535,8 @@ function Restore-WDACWorkstations {
                             Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
                             [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
                             $GeneralSuccess = $true
+                            [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
+                            $AtLeastOneDeviceFixedUnsigned = $true
                         }
                     }
                 }
@@ -1529,7 +1549,7 @@ function Restore-WDACWorkstations {
                 } elseif ($DeferredPolicy.DeferredPolicyIndex) {
                     Write-Host "Deployed new policy to fix those workstations with deferred policy index: $($DeferredPolicy.DeferredPolicyIndex)"
                 }
-            } elseif (-not $SignedToUnsigned) {
+            } elseif ((-not $SignedToUnsigned) -and (-not $RestartLocalDevice)) {
                 Write-Host "No workstations were fixed which were assigned to deferred policy with policy index: $($DeferredPolicy.DeferredPolicyIndex)"
             }
         }
@@ -1545,6 +1565,8 @@ function Restore-WDACWorkstations {
             
             foreach ($SuccessMachine in $SuccessfulMachinesFinalRemove) {
                 Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $SuccessMachine -Connection $Connection -ErrorAction Stop
+                $AtLeastOneDeviceFixedUnsigned = $true
+
                 try {
                     if (-not (Remove-FirstSignedPolicyDeployment -PolicyGUID $PolicyGUID -DeviceName $SuccessMachine -Connection $Connection -ErrorAction Stop)) {
                         Write-Warning "Cannot remove entry for $PolicyGUID and DeviceName $DeviceName in the first_signed_policy_deployments table. Please remove it manually before running other cmdlets."
@@ -1593,6 +1615,39 @@ function Restore-WDACWorkstations {
             if ($FailToRemoveEFIPolicy.Count -ge 1) {
                 $RemoveEFIFailureWithComma = $FailToRemoveEFIPolicy -join ","
                 Write-Warning "Failed to remove old WDAC policy $PolicyGUID from the EFI partition for these devices: $RemoveEFIFailureWithComma `n Run the cmdlet Remove-EFIWDACPolicy with the -Refresh flag for those devices when you get the chance."
+            }
+        }
+
+        try {
+            if (-not (Test-WDACPolicyDeferred -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+            #If the policy is no longer deferred for any devices
+                $Transaction = $Connection.BeginTransaction()
+
+                if ((Get-WDACPolicyVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ne (Get-WDACPolicyLastDeployedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                #...then if the last deployed version is not the same as the current version, set the deployed version as the current version.
+                    if (-not (Set-WDACPolicyLastDeployedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to set LastDeployedPolicyVersion to match the current version of the policy."
+                    }
+                    $Transaction.Commit()
+                } else {
+                    $Transaction.Rollback()
+                }
+            }
+        } catch {
+            $Transaction.Rollback()
+            Write-Verbose ($_ | Format-List -Property * | Out-String)
+            Write-Warning "Unable to set most recent policy version as deployed after removing all deferred policy instances. It is currently recommended that the LastDeployedPolicyVersion of this policy be set to equal the PolicyVersion."
+        }
+
+        if ($AtLeastOneDeviceFixedUnsigned) {
+            try {
+                if (-not (Remove-FirstSignedPolicyDeploymentsConditional -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                #Removes first_signed_policy_deployment entry for devices which are successfully fixed on this unsigned policy
+                    throw "Unable to execute SQL query to remove certain rows from first_signed_policy_deployments table."
+                }
+            } catch {
+                Write-Verbose ($_ | Format-List -Property * | Out-String)
+                Write-Warning "Unable to remove first_signed_policy_deployments for fixed devices when deploying unsigned policy. It is recommended to remove entries for these fixed devices from the database."
             }
         }
 
