@@ -667,6 +667,9 @@ function Deploy-WDACPolicies {
                         Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName ($CustomPSObjectComputerMap[$i].DeviceName) -Comment "Device was not one of the test machines." -Connection $Connection -ErrorAction Stop
                     }
                 }
+                if (Test-Path $UnsignedStagedPolicyPath) {
+                    Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction SilentlyContinue
+                }
                 $Transaction.Commit()
                 $Connection.Close()
                 return
