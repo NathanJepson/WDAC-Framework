@@ -145,15 +145,14 @@ function Remove-WDACRule {
         Copy-Item $FullPolicyPath -Destination $BackupOldPolicy -Force -ErrorAction Stop
         $CurrentPolicyVersion = Get-WDACPolicyVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
-        $IDsAndComments = PowerShell {
+        $RemoveRuleTask = {
         #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
-        [CmdletBinding()]
-        Param(
-            $FullPolicyPath,
-            $TempPolicyPath,
-            $IDsAndComments,
-            $RuleID
-        )
+            $InputArray = @($input)
+            $FullPolicyPath = $InputArray[0]
+            $TempPolicyPath = $InputArray[1]
+            $IDsAndComments = $InputArray[2]
+            $RuleID = $InputArray[3]
+        
             function CommentPreserving {
                 [CmdletBinding()]
                 param (
@@ -213,7 +212,9 @@ function Remove-WDACRule {
            
             return $IDsAndComments
 
-        } -args $FullPolicyPath,$TempPolicyPath,$IDsAndComments,$RuleID
+        }
+
+        $IDsAndComments = $FullPolicyPath,$TempPolicyPath,$IDsAndComments,$RuleID | PowerShell $RemoveRuleTask
         
         if ($null -eq $IDsAndComments) {
             throw "Unable to remove rule, problems with merging other rules."

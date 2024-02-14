@@ -33,34 +33,40 @@ function IncrementAllowID {
         $RuleMap
     )
 
-    if ((-not $RuleMap) -or (CountMapToPattern -RuleMap $RuleMap -Pattern "ID_ALLOW_[A-Z][_A-F0-9]*") -le 0) {
-        return "ID_ALLOW_A_A0"
-    }
-
-    $Max = -1
-    foreach ($Entry in $RuleMap.GetEnumerator()) {
-        #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
-        if ($Entry.Name -match "ID_ALLOW_[A-Z][_A-F0-9]+$") {
-            $Split = ($Entry.Name) -split "_"
-            $Hex = "0x$($Split[-1])"
-            $nextInt = [int]$Hex
-            if ($nextInt -gt $Max) {
-                $Max = $nextInt
+    try {
+        if ((-not $RuleMap) -or (CountMapToPattern -RuleMap $RuleMap -Pattern "ID_ALLOW_[A-Z][_A-F0-9]*") -le 0) {
+            return "ID_ALLOW_A_A0"
+        }
+    
+        $Max = -1
+        foreach ($Entry in $RuleMap.GetEnumerator()) {
+            #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
+            if ($Entry.Name -match "ID_ALLOW_[A-Z][_A-F0-9]+$") {
+                $Split = ($Entry.Name) -split "_"
+                $Hex = "0x$($Split[-1])"
+                $nextInt = [int]$Hex
+                if ($nextInt -gt $Max) {
+                    $Max = $nextInt
+                }
             }
         }
-    }
-
-    $Max += 1
-    #Convert Integer to Hex
-    $EndPart = $Max.ToString("X") 
-    $result = ("ID_ALLOW_A_" + $EndPart)
-    while ($RuleMap[$result]) {
+    
         $Max += 1
+        #Convert Integer to Hex
         $EndPart = $Max.ToString("X") 
         $result = ("ID_ALLOW_A_" + $EndPart)
-    }
+        while ($RuleMap[$result]) {
+            $Max += 1
+            $EndPart = $Max.ToString("X") 
+            $result = ("ID_ALLOW_A_" + $EndPart)
+        }
+    
+        return $result
 
-    return $result
+    } catch {
+        Write-Warning "Error in IncrementAllowID function."
+        throw $_
+    }
 }
 
 function IncrementDenyID {
@@ -69,34 +75,39 @@ function IncrementDenyID {
         $RuleMap
     )
 
-    if ((-not $RuleMap) -or (CountMapToPattern -RuleMap $RuleMap -Pattern "ID_DENY_[A-Z][_A-F0-9]*") -le 0) {
-        return "ID_DENY_D_A0"
-    }
-
-    $Max = -1
-    foreach ($Entry in $RuleMap.GetEnumerator()) {
-        #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
-        if ($Entry.Name -match "ID_DENY_[A-Z][_A-F0-9]+$") {
-            $Split = ($Entry.Name) -split "_"
-            $Hex = "0x$($Split[-1])"
-            $nextInt = [int]$Hex
-            if ($nextInt -gt $Max) {
-                $Max = $nextInt
+    try {
+        if ((-not $RuleMap) -or (CountMapToPattern -RuleMap $RuleMap -Pattern "ID_DENY_[A-Z][_A-F0-9]*") -le 0) {
+            return "ID_DENY_D_A0"
+        }
+    
+        $Max = -1
+        foreach ($Entry in $RuleMap.GetEnumerator()) {
+            #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
+            if ($Entry.Name -match "ID_DENY_[A-Z][_A-F0-9]+$") {
+                $Split = ($Entry.Name) -split "_"
+                $Hex = "0x$($Split[-1])"
+                $nextInt = [int]$Hex
+                if ($nextInt -gt $Max) {
+                    $Max = $nextInt
+                }
             }
         }
-    }
-
-    $Max += 1
-    #Convert Integer to Hex
-    $EndPart = $Max.ToString("X") 
-    $result = ("ID_DENY_D_" + $EndPart)
-    while ($RuleMap[$result]) {
+    
         $Max += 1
+        #Convert Integer to Hex
         $EndPart = $Max.ToString("X") 
         $result = ("ID_DENY_D_" + $EndPart)
+        while ($RuleMap[$result]) {
+            $Max += 1
+            $EndPart = $Max.ToString("X") 
+            $result = ("ID_DENY_D_" + $EndPart)
+        }
+    
+        return $result
+    } catch {
+        Write-Warning "Error in IncrementDenyID function."
+        throw $_
     }
-
-    return $result
 }
 
 function IncrementSignerID {
@@ -105,34 +116,40 @@ function IncrementSignerID {
         $RuleMap
     )
 
-    if ((-not $RuleMap) -or (CountMapToPattern -RuleMap $RuleMap -Pattern "ID_SIGNER_[A-Z][_A-F0-9]*") -le 0) {
-        return "ID_SIGNER_S_A0"
-    }
-
-    $Max = -1
-    foreach ($Entry in $RuleMap.GetEnumerator()) {
-        #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
-        if ($Entry.Name -match "ID_SIGNER_[A-Z][_A-F0-9]+$") {
-            $Split = ($Entry.Name) -split "_"
-            $Hex = "0x$($Split[-1])"
-            $nextInt = [int]$Hex
-            if ($nextInt -gt $Max) {
-                $Max = $nextInt
+    try {
+        if ((-not $RuleMap) -or (CountMapToPattern -RuleMap $RuleMap -Pattern "ID_SIGNER_[A-Z][_A-F0-9]*") -le 0) {
+            return "ID_SIGNER_S_A0"
+        }
+    
+        $Max = -1
+        foreach ($Entry in $RuleMap.GetEnumerator()) {
+            #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
+            if ($Entry.Name -match "ID_SIGNER_[A-Z][_A-F0-9]+$") {
+                $Split = ($Entry.Name) -split "_"
+                $Hex = "0x$($Split[-1])"
+                $nextInt = [int]$Hex
+                if ($nextInt -gt $Max) {
+                    $Max = $nextInt
+                }
             }
         }
-    }
-
-    $Max += 1
-    #Convert Integer to Hex
-    $EndPart = $Max.ToString("X") 
-    $result = ("ID_SIGNER_S_" + $EndPart)
-    while ($RuleMap[$result]) {
+    
         $Max += 1
+        #Convert Integer to Hex
         $EndPart = $Max.ToString("X") 
         $result = ("ID_SIGNER_S_" + $EndPart)
+        while ($RuleMap[$result]) {
+            $Max += 1
+            $EndPart = $Max.ToString("X") 
+            $result = ("ID_SIGNER_S_" + $EndPart)
+        }
+    
+        return $result
+    } catch {
+        Write-Warning "Error in IncrementSignerID function."
+        throw $_
     }
-
-    return $result
+    
 }
 
 function IncrementFileAttribID {
@@ -141,34 +158,39 @@ function IncrementFileAttribID {
         $RuleMap
     )
 
-    if ((-not $RuleMap) -or (CountMapToPattern -RuleMap $RuleMap -Pattern "ID_FILEATTRIB_[A-Z][_A-F0-9]*") -le 0) {
-        return "ID_FILEATTRIB_F_A0"
-    }
-
-    $Max = -1
-    foreach ($Entry in $RuleMap.GetEnumerator()) {
-        #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
-        if ($Entry.Name -match "ID_FILEATTRIB_[A-Z][_A-F0-9]+$") {
-            $Split = ($Entry.Name) -split "_"
-            $Hex = "0x$($Split[-1])"
-            $nextInt = [int]$Hex
-            if ($nextInt -gt $Max) {
-                $Max = $nextInt
+    try {
+        if ((-not $RuleMap) -or (CountMapToPattern -RuleMap $RuleMap -Pattern "ID_FILEATTRIB_[A-Z][_A-F0-9]*") -le 0) {
+            return "ID_FILEATTRIB_F_A0"
+        }
+    
+        $Max = -1
+        foreach ($Entry in $RuleMap.GetEnumerator()) {
+            #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
+            if ($Entry.Name -match "ID_FILEATTRIB_[A-Z][_A-F0-9]+$") {
+                $Split = ($Entry.Name) -split "_"
+                $Hex = "0x$($Split[-1])"
+                $nextInt = [int]$Hex
+                if ($nextInt -gt $Max) {
+                    $Max = $nextInt
+                }
             }
         }
-    }
-
-    $Max += 1
-    #Convert Integer to Hex
-    $EndPart = $Max.ToString("X") 
-    $result = ("ID_FILEATTRIB_F_" + $EndPart)
-    while ($RuleMap[$result]) {
+    
         $Max += 1
+        #Convert Integer to Hex
         $EndPart = $Max.ToString("X") 
         $result = ("ID_FILEATTRIB_F_" + $EndPart)
+        while ($RuleMap[$result]) {
+            $Max += 1
+            $EndPart = $Max.ToString("X") 
+            $result = ("ID_FILEATTRIB_F_" + $EndPart)
+        }
+    
+        return $result
+    } catch {
+        Write-Warning "Error in IncrementFileAttribID function."
+        throw $_
     }
-
-    return $result
 }
 
 function New-MicrosoftSecureBootHashRule {

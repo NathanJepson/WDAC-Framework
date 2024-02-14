@@ -151,16 +151,14 @@ function Import-WDACRule {
         Copy-Item $FullPolicyPath -Destination $BackupOldPolicy -Force -ErrorAction Stop
         $CurrentPolicyVersion = Get-WDACPolicyVersion -PolicyGUID $DestinationPolicyGUID -Connection $Connection -ErrorAction Stop
 
-        $IDsAndComments = PowerShell {
+        $ImportRuleTask = {
         #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
-        [CmdletBinding()]
-        Param(
-            $FullPolicyPath,
-            $TempPolicyPath,
-            $IDsAndComments,
-            $RuleID,
-            $ReferenceFile
-        )
+            $InputArray = @($input)
+            $FullPolicyPath = $InputArray[0]
+            $TempPolicyPath = $InputArray[1]
+            $IDsAndComments = $InputArray[2]
+            $RuleID = $InputArray[3]
+            $ReferenceFile = $InputArray[4]
 
             $result = @{}
             $referenceRuleMap = @{}
@@ -245,8 +243,9 @@ function Import-WDACRule {
             }
            
             return $result
+        }
 
-        } -args $FullPolicyPath,$TempPolicyPath,$IDsAndComments,$RuleID,$ReferenceFile
+        $IDsAndComments = $FullPolicyPath,$TempPolicyPath,$IDsAndComments,$RuleID,$ReferenceFile | PowerShell $ImportRuleTask
         
         if ($null -eq $IDsAndComments) {
             throw "Unable to remove rule, problems with merging other rules."
