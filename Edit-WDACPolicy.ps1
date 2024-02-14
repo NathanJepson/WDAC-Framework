@@ -15,7 +15,7 @@ function CommentPreserving {
     for ($i=0; $i -lt $FileContent.Count; $i++) {
         if ( (($FileContent[$i] -match $Pattern1) -or ($FileContent[$i] -match $Pattern2) -or ($FileContent[$i] -match $Pattern3) -or ($FileContent[$i] -match $Pattern4)) -and ($i -gt 0)) {
             $TempID = $Matches[0]
-            if ($IDsAndComments[$TempID] -eq $true -and ($FileContent[$i -1] -match $CommentPattern)) {
+            if ($IDsAndComments[$TempID] -eq $true -and ($FileContent[$i -1] -match $CommentPattern)) { 
                 $IDsAndComments[$TempID] = $Matches[0]
             }
         }
@@ -85,6 +85,28 @@ function Add-WDACRuleComments {
     }
 }
 
+function New-CommentMap {
+    [CmdletBinding()]
+    param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $FilePath
+    )
+
+    $IDsAndComments = @{}
+    
+    $CurrentPolicyRules = Get-CIPolicy -FilePath $FilePath -ErrorAction Stop
+    foreach ($currentRule in $CurrentPolicyRules) {
+        if (-not ($IDsAndComments[$currentRule.Id])) {
+        #The only reason this check is necessary, is rules with a certain ID are duplicated based on if they are used for UserMode or Kernel mode
+        #...Which then causes an error if you try to add that ID a second time
+            $IDsAndComments.Add($currentRule.Id,$true)
+        }
+    }
+
+    return $IDsAndComments
+}
+
 function Update-NewIDs {
     [CmdletBinding()]
     param (
@@ -116,6 +138,24 @@ function Update-NewIDs {
         #...Which then causes an error if you try to add that ID a second time
             $IDsAndComments.Add($currentRule.Id,$true)
         }
+    }
+
+    return $IDsAndComments
+}
+
+function Update-CommentsMapWithUnderscores {
+    [CmdletBinding()]
+    param (
+        $IDsAndComments
+    )
+
+    $AllKeys = $IDsAndComments
+
+    foreach ($Item in $AllKeys.GetEnumerator()) {
+        $CurrentID = $Item.Key
+
+        $IDsAndComments = $IDsAndComments + @{"$($CurrentID)_0" = $Item.Value}
+        $IDsAndComments.Remove($CurrentID)
     }
 
     return $IDsAndComments
@@ -374,15 +414,7 @@ function Edit-WDACPolicy {
         if ($IsSupplemental -and $SupplementalPolicySigner) {
             throw "Cannot add a supplemental policy signer to a supplemental policy; it must be added to the base policy."
         }
-        $IDsAndComments = @{}
-        $CurrentPolicyRules = Get-CIPolicy -FilePath (Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ErrorAction Stop
-        foreach ($currentRule in $CurrentPolicyRules) {
-            if (-not ($IDsAndComments[$currentRule.Id])) {
-            #The only reason this check is necessary, is rules with a certain ID are duplicated based on if they are used for UserMode or Kernel mode
-            #...Which then causes an error if you try to add that ID a second time
-                $IDsAndComments.Add($currentRule.Id,$true)
-            }
-        }
+        $IDsAndComments = New-CommentMap -FilePath (Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ErrorAction Stop        
         $FullCurrentPolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $FullCurrentPolicyPath -ErrorAction Stop
         
@@ -392,41 +424,18 @@ function Edit-WDACPolicy {
             if ($DriverBlockRules) {
             #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
                 $DriverBlockRulesTask = {
-                    
+
                     $InputArray = @($input)
                     $TempPolicyPath = $InputArray[0]
                     $PSModuleRoot = $InputArray[1]
                     $DoNotCacheRecommended = $InputArray[2]
                     $IsVerbose = $InputArray[3]
-                    $IDsAndComments = $InputArray[4]
 
                     try {
                         Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1") -ErrorAction Stop;
-                        Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-SecureBoot-UserConfig-RuleManip.psm1") -ErrorAction Stop;
                         $driverrules = Get-DriverBlockRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
-                        $Pattern1 = 'ID_ALLOW_[A-Z][_A-Z0-9]*'
-                        $Pattern2 = 'ID_DENY_[A-Z][_A-Z0-9]*'
-                        $Pattern3 = 'ID_SIGNER_[A-Z][_A-Z0-9]*'
-                        $Pattern4 = 'ID_FILEATTRIB_[A-Z][_A-Z0-9]*'
-                        for ($i=0; $i -lt $driverrules.Count; $i++) {
-                            if ($IDsAndComments[$($driverrules[$i].Id)]) {
-                                if ($driverrules[$i].Id -match $Pattern1) {
-                                    $NewID = IncrementAllowID -RuleMap $IDsAndComments
-                                } elseif ($driverrules[$i].Id -match $Pattern2) {
-                                    $NewID = IncrementDenyID -RuleMap $IDsAndComments
-                                }
-                                elseif ($driverrules[$i].Id -match $Pattern3) {
-                                    $NewID = IncrementSignerID -RuleMap $IDsAndComments
-                                }
-                                elseif ($driverrules[$i].Id -match $Pattern4) {
-                                    $NewID = IncrementFileAttribID -RuleMap $IDsAndComments
-                                }
-                                $driverrules[$i].Id = $NewID
-                                $IDsAndComments = $IDsAndComments + @{$NewID=$true}
-                            }
-                        }
+                       
                         Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $driverrules -ErrorAction Stop | Out-Null;
-                        Remove-UnderscoreDigits -FilePath $TempPolicyPath
                     } catch {
                         Write-Error $_
                         return $false
@@ -435,56 +444,33 @@ function Edit-WDACPolicy {
                     return $true
                 }
 
-                $DriverBlockRulesTaskResult = $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference,$IDsAndComments | PowerShell $DriverBlockRulesTask 
+                $DriverBlockRulesTaskResult = $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference | PowerShell $DriverBlockRulesTask 
 
                 if (-not $DriverBlockRulesTaskResult) {
                     throw "Unable to merge with driver block rules. Error occurred."
                 }
 
-                if ($IDsAndComments) {
-                #The function below doesn't accept the IDsAndComments input if any entries are null
-                    $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-                }
+                $AppendedZeroes = Update-CommentsMapWithUnderscores -IDsAndComments $IDsAndComments -ErrorAction Stop
+                Add-WDACRuleComments -IDsAndComments $AppendedZeroes -FilePath $TempPolicyPath -ErrorAction Stop
+                $IDsAndComments = New-CommentMap -FilePath $TempPolicyPath -ErrorAction Stop
+                $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $TempPolicyPath -ErrorAction Stop
             }
 
             if ($OtherBlockRules) {
             #This needs to be wrapped in a PowerShell 5.1 block because some functionallity of ConfigCI isn't supported in PowerShell Core :(
                 $UserModeBlockRulesTask = {
-                    
+
                     $InputArray = @($input)
                     $TempPolicyPath = $InputArray[0]
                     $PSModuleRoot = $InputArray[1]
                     $DoNotCacheRecommended = $InputArray[2]
                     $IsVerbose = $InputArray[3]
-                    $IDsAndComments = $InputArray[4]
                     
                     try {
                         Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1") -ErrorAction Stop;
-                        Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-SecureBoot-UserConfig-RuleManip.psm1") -ErrorAction Stop;
                         $usermoderules = Get-UserModeBlockRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
-                        $Pattern1 = 'ID_ALLOW_[A-Z][_A-Z0-9]*'
-                        $Pattern2 = 'ID_DENY_[A-Z][_A-Z0-9]*'
-                        $Pattern3 = 'ID_SIGNER_[A-Z][_A-Z0-9]*'
-                        $Pattern4 = 'ID_FILEATTRIB_[A-Z][_A-Z0-9]*'
-                        for ($i=0; $i -lt $usermoderules.Count; $i++) {
-                            if ($IDsAndComments[$($usermoderules[$i].Id)]) {
-                                if ($usermoderules[$i].Id -match $Pattern1) {
-                                    $NewID = IncrementAllowID -RuleMap $IDsAndComments
-                                } elseif ($usermoderules[$i].Id -match $Pattern2) {
-                                    $NewID = IncrementDenyID -RuleMap $IDsAndComments
-                                }
-                                elseif ($usermoderules[$i].Id -match $Pattern3) {
-                                    $NewID = IncrementSignerID -RuleMap $IDsAndComments
-                                }
-                                elseif ($usermoderules[$i].Id -match $Pattern4) {
-                                    $NewID = IncrementFileAttribID -RuleMap $IDsAndComments
-                                }
-                                $usermoderules[$i].Id = $NewID
-                                $IDsAndComments = $IDsAndComments + @{$NewID=$true}
-                            }
-                        }
+                        
                         Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $usermoderules -ErrorAction Stop | Out-Null;
-                        Remove-UnderscoreDigits -FilePath $TempPolicyPath
                     } catch {
                         Write-Error $_
                         return $false
@@ -493,15 +479,16 @@ function Edit-WDACPolicy {
                     return $true
                 }
 
-                $UserModeBlockRulesTaskResult = $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference,$IDsAndComments | Powershell $UserModeBlockRulesTask
+                $UserModeBlockRulesTaskResult = $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference | Powershell $UserModeBlockRulesTask
 
                 if (-not $UserModeBlockRulesTaskResult) {
                     throw "Unable to merge with user mode block rules. Error occurred."
                 }
 
-                if ($IDsAndComments) {
-                    $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-                }
+                $AppendedZeroes = Update-CommentsMapWithUnderscores -IDsAndComments $IDsAndComments -ErrorAction Stop
+                Add-WDACRuleComments -IDsAndComments $AppendedZeroes -FilePath $TempPolicyPath -ErrorAction Stop
+                $IDsAndComments = New-CommentMap -FilePath $TempPolicyPath -ErrorAction Stop
+                $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $TempPolicyPath -ErrorAction Stop
             }
 
             if ($DefaultWindowsMode) {
@@ -514,36 +501,12 @@ function Edit-WDACPolicy {
                     $PSModuleRoot = $InputArray[1]
                     $DoNotCacheRecommended = $InputArray[2]
                     $IsVerbose = $InputArray[3]
-                    $IDsAndComments = $InputArray[4]
 
                     try {
-
                         Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1") -ErrorAction Stop;
-                        Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-SecureBoot-UserConfig-RuleManip.psm1") -ErrorAction Stop;
                         $rules = Get-WindowsModeRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
-                        $Pattern1 = 'ID_ALLOW_[A-Z][_A-Z0-9]*'
-                        $Pattern2 = 'ID_DENY_[A-Z][_A-Z0-9]*'
-                        $Pattern3 = 'ID_SIGNER_[A-Z][_A-Z0-9]*'
-                        $Pattern4 = 'ID_FILEATTRIB_[A-Z][_A-Z0-9]*'
-                        for ($i=0; $i -lt $rules.Count; $i++) {
-                            if ($IDsAndComments[$($rules[$i].Id)]) {
-                                if ($rules[$i].Id -match $Pattern1) {
-                                    $NewID = IncrementAllowID -RuleMap $IDsAndComments
-                                } elseif ($rules[$i].Id -match $Pattern2) {
-                                    $NewID = IncrementDenyID -RuleMap $IDsAndComments
-                                }
-                                elseif ($rules[$i].Id -match $Pattern3) {
-                                    $NewID = IncrementSignerID -RuleMap $IDsAndComments
-                                }
-                                elseif ($rules[$i].Id -match $Pattern4) {
-                                    $NewID = IncrementFileAttribID -RuleMap $IDsAndComments
-                                }
-                                $rules[$i].Id = $NewID
-                                $IDsAndComments = $IDsAndComments + @{$NewID=$true}
-                            }
-                        }
+                        
                         Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $rules -ErrorAction Stop | Out-Null;
-                        Remove-UnderscoreDigits -FilePath $TempPolicyPath
                     } catch {
                         Write-Error ($_ | Format-List * -Force | Out-String)
                         return $false
@@ -552,15 +515,16 @@ function Edit-WDACPolicy {
                     return $true
                 }
 
-                $WindowModeResult = $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference,$IDsAndComments | PowerShell $WindowsModeScriptBlock
+                $WindowModeResult = $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference | PowerShell $WindowsModeScriptBlock
                 
                 if (-not ($WindowModeResult)) {
                     throw "Unable to merge with Default Windows Mode rules. Error occurred."
                 }
-                
-                if ($IDsAndComments) {
-                    $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyPath $TempPolicyPath -Connection $Connection -ErrorAction Stop
-                }
+
+                $AppendedZeroes = Update-CommentsMapWithUnderscores -IDsAndComments $IDsAndComments -ErrorAction Stop
+                Add-WDACRuleComments -IDsAndComments $AppendedZeroes -FilePath $TempPolicyPath -ErrorAction Stop
+                $IDsAndComments = New-CommentMap -FilePath $TempPolicyPath -ErrorAction Stop
+                $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $TempPolicyPath -ErrorAction Stop
             }
 
             if ($AllowMicrosoftMode) {
@@ -573,38 +537,12 @@ function Edit-WDACPolicy {
                     $PSModuleRoot = $InputArray[1]
                     $DoNotCacheRecommended = $InputArray[2]
                     $IsVerbose = $InputArray[3]
-                    $IDsAndComments = $InputArray[4]
                     
                     try {
                         Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-Recommended-Rules.psm1") -ErrorAction Stop;
-                        Import-Module (Join-Path -Path $PSModuleRoot -ChildPath ".\Resources\Microsoft-SecureBoot-UserConfig-RuleManip.psm1") -ErrorAction Stop;
                         $rules = Get-AllowMicrosoftModeRules -DoNotCacheRecommended $DoNotCacheRecommended -ErrorAction Stop -Verbose:$IsVerbose;
 
-                        $Pattern1 = 'ID_ALLOW_[A-Z][_A-Z0-9]*'
-                        $Pattern2 = 'ID_DENY_[A-Z][_A-Z0-9]*'
-                        $Pattern3 = 'ID_SIGNER_[A-Z][_A-Z0-9]*'
-                        $Pattern4 = 'ID_FILEATTRIB_[A-Z][_A-Z0-9]*'
-                        for ($i=0; $i -lt $rules.Count; $i++) {
-                            if ($IDsAndComments[$($rules[$i].Id)]) {
-                            
-                                if ($rules[$i].Id -match $Pattern1) {
-                                    $NewID = IncrementAllowID -RuleMap $IDsAndComments -ErrorAction Stop
-                                } elseif ($rules[$i].Id -match $Pattern2) {
-                                    $NewID = IncrementDenyID -RuleMap $IDsAndComments -ErrorAction Stop
-                                }
-                                elseif ($rules[$i].Id -match $Pattern3) {
-                                    $NewID = IncrementSignerID -RuleMap $IDsAndComments -ErrorAction Stop
-                                }
-                                elseif ($rules[$i].Id -match $Pattern4) {
-                                    $NewID = IncrementFileAttribID -RuleMap $IDsAndComments -ErrorAction Stop
-                                }
-                                $rules[$i].Id = $NewID
-                                $IDsAndComments = $IDsAndComments + @{$NewID=$true}
-                            }
-                        }
-                        
                         Merge-CIPolicy -OutputFilePath $TempPolicyPath -PolicyPaths $TempPolicyPath -Rules $rules -ErrorAction Stop | Out-Null;
-                        Remove-UnderscoreDigits -FilePath $TempPolicyPath
                     } catch {
                         Write-Error ($_ | Format-List * -Force | Out-String)
                         return $false
@@ -613,15 +551,16 @@ function Edit-WDACPolicy {
                     return $true
                 }
 
-                $AddMicrosoftModeResult = $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference,$IDsAndComments | PowerShell $AddMicrosoftModeScriptBlock
+                $AddMicrosoftModeResult = $TempPolicyPath,$PSModuleRoot,$DoNotCacheRecommended.ToBool(),$VerbosePreference | PowerShell $AddMicrosoftModeScriptBlock
 
                 if (-not $AddMicrosoftModeResult) {
                     throw "Unable to merge with Microsoft Mode rules. Error occurred."
                 }
 
-                if ($IDsAndComments) {
-                    $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyPath $TempPolicyPath -Connection $Connection -ErrorAction Stop
-                }
+                $AppendedZeroes = Update-CommentsMapWithUnderscores -IDsAndComments $IDsAndComments -ErrorAction Stop
+                Add-WDACRuleComments -IDsAndComments $AppendedZeroes -FilePath $TempPolicyPath -ErrorAction Stop
+                $IDsAndComments = New-CommentMap -FilePath $TempPolicyPath
+                $IDsAndComments = CommentPreserving -IDsAndComments $IDsAndComments -FilePath $TempPolicyPath -ErrorAction Stop
             }
 
             function Set-RepairedIDsAfterNewSigner {
@@ -679,7 +618,6 @@ function Edit-WDACPolicy {
                 $IDsAndComments = Update-NewIDs -IDsAndComments $IDsAndComments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
             }
             #=============================================================================================================
-
 
         #Apply Policy Options ======================================================
         #This is slightly different from "New-WDACPolicy" in that if a flag isn't set, a rule is not specified, it is not removed or added 
