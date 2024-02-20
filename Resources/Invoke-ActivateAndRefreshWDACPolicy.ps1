@@ -228,15 +228,15 @@ function Invoke-ActivateAndRefreshWDACPolicy {
 
                         } else {
                             try {
-                                if ($null -ne $RefreshToolPath) {
-                                    Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
-                                    $RefreshCompletedSuccessfully = $true
-                                    $ResultMessage = "Refresh completed successfully."
-                                } elseif ($Windows11) {
+                                if ($Windows11) {
                                     #CiTool --update-policy $PolicyDest
                                     #I'm not sure if this is redundant or not since we are copying to the CiPolicies\Active folder. Leaving commented for now.
 
-                                    CiTool --refresh
+                                    CiTool --refresh | Out-Null
+                                    $RefreshCompletedSuccessfully = $true
+                                    $ResultMessage = "Refresh completed successfully."
+                                } elseif ($null -ne $RefreshToolPath) {
+                                    Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
                                     $RefreshCompletedSuccessfully = $true
                                     $ResultMessage = "Refresh completed successfully."
                                 } else {
