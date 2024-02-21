@@ -104,6 +104,9 @@ function Set-SignedPowerShellModules {
     if (-not (Test-Path (Join-Path $SignedModules -ChildPath "WDACCommitTools"))) {
         New-Item -ItemType Directory -Name "WDACCommitTools" -Path $SignedModules -ErrorAction SilentlyContinue | Out-Null
     }
+    if (-not (Test-Path (Join-Path $SignedModules -ChildPath "UsefulCmdlets"))) {
+        New-Item -ItemType Directory -Name "UsefulCmdlets" -Path $SignedModules -ErrorAction SilentlyContinue | Out-Null
+    }
 
     #Case 1: Only the name of one module is provided
     if ($FileName) {
@@ -133,6 +136,7 @@ function Set-SignedPowerShellModules {
         $ResourceFiles = Get-ChildItem -Path ($PSModuleRoot + "\Resources\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
         $WDACAuditingFiles = Get-ChildItem -Path ($PSModuleRoot + "\WDACAuditing\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
         $WDACCommitToolsFiles = Get-ChildItem -Path ($PSModuleRoot + "\WDACCommitTools\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
+        $UsefulCmdletsFiles = Get-ChildItem -Path ($PSModuleRoot + "\UsefulCmdlets\*") -Include "*.ps1","*.psm1" -ErrorAction Stop
     } catch {
         throw $_
     }
@@ -151,6 +155,8 @@ function Set-SignedPowerShellModules {
                         $Copied = Copy-Item $Module -Destination "$SignedModules\WDACAuditing" -PassThru -Force -ErrorAction Stop 
                     } elseif ($WDACCommitToolsFiles -contains $Module) {
                         $Copied = Copy-Item $Module -Destination "$SignedModules\WDACCommitTools" -PassThru -Force -ErrorAction Stop 
+                    } elseif ($UsefulCmdletsFiles -contains $Module) {
+                        $Copied = Copy-Item $Module -Destination "$SignedModules\UsefulCmdlets" -PassThru -Force -ErrorAction Stop 
                     }
                     else {
                         $Copied = Copy-Item $Module -Destination $SignedModules -PassThru -Force -ErrorAction Stop 

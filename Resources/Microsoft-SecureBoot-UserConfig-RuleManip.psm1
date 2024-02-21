@@ -288,7 +288,7 @@ function New-MicrosoftSecureBootHashRule {
 }
 
 function Remove-UnderscoreDigits {
-    #This function removes the underscore digits at the end since we've already accounted for duplicates
+    #This function removes the underscore digits at the end ONLY IF we've already accounted for duplicates -- should ONLY be used when duplicates are accounted for
         [CmdletBinding()]
         param (
             [Parameter(Mandatory=$true)]
