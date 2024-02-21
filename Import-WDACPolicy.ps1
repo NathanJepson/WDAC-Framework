@@ -33,6 +33,26 @@ function Remove-CurlyBracesPolicyID {
 }   
 
 function Import-WDACPolicy {
+    <#
+    .SYNOPSIS
+    Import-WDACPolicy will import a designated XML WDAC Policy into your database, as well as into your working policies directory (with the correctly
+    formatted name as understand by WDAC-Framework)
+
+    .DESCRIPTION
+    When putting the designated policy in the database, attributes such as policy name, and policy version, will be pulled from the content
+    of the .XML file. When -Pillar is designated, the pillar attribute for the policy is set in the database (indicating that EVERY workstation
+    in the database will be assigned this policy)
+
+    .EXAMPLE
+    Import-WDACPolicy -FilePath "C:\Users\user1\Documents\Policies\WDACPolicy1.xml"
+
+    .EXAMPLE
+    Import-WDACPolicy -FilePath "C:\Users\user1\Documents\Policies\WDACPolicy1.xml" -Pillar
+
+    Author: Nathan Jepson
+    License: MIT License
+    
+    #>
     [CmdletBinding()]
     Param (
         [ValidatePattern('\.xml$')]
