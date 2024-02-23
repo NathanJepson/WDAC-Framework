@@ -112,7 +112,7 @@ function New-WDACTrustDB {
         Deferred Integer DEFAULT 0 NOT NULL,
         Skipped Integer DEFAULT 0 NOT NULL,
         Blocked Integer DEFAULT 0 NOT NULL,
-        BlockingPolicyID Text NOT NULL COLLATE NOCASE,
+        BlockingPolicyID Text COLLATE NOCASE,
         AllowedPolicyID Text COLLATE NOCASE,
         DeferredPolicyIndex Integer,
         Comment Text,
