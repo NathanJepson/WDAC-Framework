@@ -473,8 +473,8 @@ function Find-MSIorScript {
             $NoConnectionProvided = $true
         }
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "Select * from msi_or_script WHERE SHA256FlatHash = @FlatHash"
-        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.Commandtext = "Select * from msi_or_script WHERE SHA256FlatHash = @SHA256FlatHash"
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
         $Command.CommandType = [System.Data.CommandType]::Text
         $Reader = $Command.ExecuteReader()
         $Reader.GetValues() | Out-Null
@@ -496,6 +496,230 @@ function Find-MSIorScript {
             $Reader.Close()
         }
         throw $_
+    }
+}
+
+function Find-MSIorScriptByAppIndex {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$AppIndex,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from msi_or_script WHERE Appindex = @AppIndex"
+        $Command.Parameters.AddWithValue("AppIndex",$AppIndex) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                $result = $true
+            }
+        }
+        $Reader.Close()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $_
+    }
+}
+
+function Add-MSIorScript {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TimeDetected,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$FirstDetectedPath,
+        $FirstDetectedUser,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$FirstDetectedProcessID,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256AuthenticodeHash,
+        [bool]$UserWriteable=$false,
+        $Signed,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$OriginDevice,
+        $EventType,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+    
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "INSERT INTO msi_or_script (SHA256FlatHash,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,SHA256AuthenticodeHash,UserWriteable,Signed,OriginDevice,EventType,AppIndex) VALUES (@SHA256FlatHash,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@SHA256AuthenticodeHash,@UserWriteable,@Signed,@OriginDevice,@EventType,(SELECT Max(maxindex) FROM (Select max(coalesce(max(msi.AppIndex),0),coalesce(max(smsi.AppIndex),0))+1 as maxindex FROM msi_or_script AS msi LEFT JOIN signers_msi_or_script AS smsi Using(AppIndex) UNION ALL SELECT max(coalesce(max(msi.AppIndex),0),coalesce(max(smsi.AppIndex),0))+1 as maxindex FROM signers_msi_or_script AS smsi LEFT JOIN msi_or_script AS msi Using(AppIndex) WHERE msi.AppIndex IS NULL)))"
+            $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+            $Command.Parameters.AddWithValue("TimeDetected",$TimeDetected) | Out-Null
+            $Command.Parameters.AddWithValue("FirstDetectedPath",$FirstDetectedPath) | Out-Null
+            $Command.Parameters.AddWithValue("FirstDetectedUser",$FirstDetectedUser) | Out-Null
+            $Command.Parameters.AddWithValue("FirstDetectedProcessID",$FirstDetectedProcessID) | Out-Null
+            $Command.Parameters.AddWithValue("SHA256AuthenticodeHash",$SHA256AuthenticodeHash) | Out-Null
+            $Command.Parameters.AddWithValue("UserWriteable",$UserWriteable) | Out-Null
+            $Command.Parameters.AddWithValue("Signed",$Signed) | Out-Null
+            $Command.Parameters.AddWithValue("OriginDevice",$OriginDevice) | Out-Null
+            $Command.Parameters.AddWithValue("EventType",$EventType) | Out-Null
+            
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Add-MsiOrScriptSigner {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$AppIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [int]$SignatureIndex,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$CertificateTBSHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+
+    if (-not (Find-MSIorScriptByAppIndex -AppIndex $AppIndex -Connection $Connection -ErrorAction Stop)) {
+    #We don't want to add orphaned signers to the database!
+        throw "Orphaned signer."
+    }
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "INSERT INTO signers_msi_or_script (AppIndex,SignatureIndex,CertificateTBSHash) values (@AppIndex,@SignatureIndex,@CertificateTBSHash)"
+            $Command.Parameters.AddWithValue("AppIndex",$AppIndex) | Out-Null
+            $Command.Parameters.AddWithValue("SignatureIndex",$SignatureIndex) | Out-Null
+            $Command.Parameters.AddWithValue("CertificateTBSHash",$CertificateTBSHash) | Out-Null
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $_
+    }
+}
+
+function Get-MsiorScript {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from msi_or_script WHERE SHA256FlatHash = @SHA256FlatHash"
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+
+                $Result = [PSCustomObject]@{
+                    SHA256FlatHash = $Reader["SHA256FlatHash"];
+                    TimeDetected = $Reader["TimeDetected"];
+                    FirstDetectedPath = $Reader["FirstDetectedPath"];
+                    FirstDetectedUser = $Reader["FirstDetectedUser"];
+                    FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
+                    SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                    UserWriteable = [bool]($Reader["UserWriteable"]);
+                    Signed  = $Reader["Signed"];
+                    OriginDevice  = $Reader["OriginDevice"];
+                    EventType = $Reader["EventType"];
+                    Untrusted = [bool]($Reader["Untrusted"]);
+                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
+                    TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
+                    Staged = [bool]($Reader["Staged"]);
+                    Revoked = [bool]($Reader["Revoked"]);
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Skipped = [bool]($Reader["Skipped"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                    AllowedPolicyID = $Reader["AllowedPolicyID"];
+                    DeferredPolicyIndex = ($Reader["DeferredPolicyIndex"]);
+                    Comment = $Reader["Comment"];
+                    AppIndex = ($Reader["AppIndex"])
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return (Format-SQLResult $result)
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
     }
 }
 
@@ -802,12 +1026,13 @@ function Get-WDACApp {
                     PackageFamilyName = $Reader["PackageFamilyName"];
                     UserWriteable = [bool]($Reader["UserWriteable"]);
                     FailedWHQL = $WHQLFailedResult;
-                    Trusted = [bool]($Reader["Trusted"]);
+                    Untrusted = [bool]($Reader["Untrusted"]);
                     TrustedDriver = [bool]($Reader["TrustedDriver"]);
                     TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
                     Staged = [bool]($Reader["Staged"]);
                     Revoked = [bool]($Reader["Revoked"]);
                     Deferred = [bool]($Reader["Deferred"]);
+                    Skipped = [bool]($Reader["Skipped"]);
                     Blocked = [bool]($Reader["Blocked"]);
                     BlockingPolicyID = $Reader["BlockingPolicyID"];
                     AllowedPolicyID = $Reader["AllowedPolicyID"];
@@ -1305,11 +1530,9 @@ function Add-WDACApp {
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $NoConnectionProvided = $true
         }
-        #$Connection.
-        #$Transaction = $Connection.BeginTransaction() #FIXME
+        
         $Command = $Connection.CreateCommand()
-        #$Transaction = $Connection.BeginTransaction()
-        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,(Select Max(Max(apps.AppIndex),Max(signers.AppIndex))+1 from apps,signers))"
+        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,(SELECT Max(maxindex) FROM (Select max(coalesce(max(apps.AppIndex),0),coalesce(max(signers.AppIndex),0))+1 as maxindex FROM apps LEFT JOIN signers Using(AppIndex) UNION ALL SELECT max(coalesce(max(apps.AppIndex),0),coalesce(max(signers.AppIndex),0))+1 as maxindex FROM signers LEFT JOIN apps Using(AppIndex) WHERE apps.AppIndex IS NULL)))"
             $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
             $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
             $Command.Parameters.AddWithValue("TimeDetected",$TimeDetected) | Out-Null
@@ -1381,6 +1604,45 @@ function Remove-WDACApp {
             $Connection.close()
         }
         throw $theError
+    }
+}
+
+function Test-MSIorScript {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        
+        if (Find-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop) {
+            $result = $true
+        } elseif (-not (Find-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop)) {
+            throw "File designated by $SHA256FlatHash is not present in apps table or msi_or_scripts table."
+        }
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $_
     }
 }
 

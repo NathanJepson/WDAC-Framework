@@ -7,16 +7,22 @@ function Register-Signer {
         [Parameter(Mandatory)]
         [ValidateNotNullOrEmpty()]
         [int]$AppIndex,
+        [switch]$MSI,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
-    $TempDate = Get-Date ("12/31/1610 5:00:00 PM")
-    if ( (Get-Date ($SignerDetails.NotValidBefore)) -lt $TempDate -or (Get-Date ($SignerDetails.NotValidAfter)) -lt $TempDate) {
-    #Microsoft arbitrarily sets some signers to be dated around the year 1600. Let's skip these
-        return;
-    } elseif (-not ($SignerDetails.PublisherTBSHash) -or -not ($SignerDetails.IssuerTBSHash)) {
+    if (-not $MSI) {
+        $TempDate = Get-Date ("12/31/1610 5:00:00 PM")
+
+        if ( (Get-Date ($SignerDetails.NotValidBefore)) -lt $TempDate -or (Get-Date ($SignerDetails.NotValidAfter)) -lt $TempDate) {
+            #Microsoft arbitrarily sets some signers to be dated around the year 1600. Let's skip these
+            return;
+        } 
+    }
+    
+    if (-not ($SignerDetails.PublisherTBSHash)) {
         return;
     }
 
@@ -31,10 +37,20 @@ function Register-Signer {
                 throw "Failed to add Publisher certificate."
             }
         }
-        if (-not(Add-WDACAppSigner -AppIndex $AppIndex -SignatureIndex $SignerDetails.SignatureIndex -CertificateTBSHash $SignerDetails.PublisherTBSHash -SignatureType $SignerDetails.SignatureType -PageHash $SignerDetails.PageHash -Flags $SignerDetails.Flags -PolicyBits $SignerDetails.PolicyBits -ValidatedSigningLevel $SignerDetails.ValidatedSigningLevel -VerificationError $SignerDetails.VerificationError -Connection $Connection -ErrorAction Stop)) {
-        #An assumption made here is that a signer entry will not exist if the app entry didn't exist (this function is only called when the app doesn't exist in the db)
-            throw "Failed to add App Signer Information."
+
+        if ($MSI) {
+            if (-not(Add-MsiOrScriptSigner -AppIndex $AppIndex -SignatureIndex $SignerDetails.SignatureIndex -CertificateTBSHash $SignerDetails.PublisherTBSHash -Connection $Connection -ErrorAction Stop)) {
+                #An assumption made here is that a signer entry will not exist if the app entry didn't exist (this function is only called when the app doesn't exist in the db)
+                throw "Failed to add msi or script signer information for app index $AppIndex"
+            }
+        } else {
+            if (-not(Add-WDACAppSigner -AppIndex $AppIndex -SignatureIndex $SignerDetails.SignatureIndex -CertificateTBSHash $SignerDetails.PublisherTBSHash -SignatureType $SignerDetails.SignatureType -PageHash $SignerDetails.PageHash -Flags $SignerDetails.Flags -PolicyBits $SignerDetails.PolicyBits -ValidatedSigningLevel $SignerDetails.ValidatedSigningLevel -VerificationError $SignerDetails.VerificationError -Connection $Connection -ErrorAction Stop)) {
+                #An assumption made here is that a signer entry will not exist if the app entry didn't exist (this function is only called when the app doesn't exist in the db)
+                throw "Failed to add App signer information for app index $AppIndex"
+            }
         }
+
+        
     } catch {
         throw $_
     }
@@ -88,7 +104,28 @@ function Register-MSIorScriptEvent {
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
-    #TODO - Implement Function
+
+    if ($WDACEvent.PSComputerName) {
+        $DeviceName = $WDACEvent.PSComputerName
+    } else {
+    #Assume that the events were pulled from this local device if no PSComputerName attribute is present
+        $DeviceName = hostname
+    }
+
+    try {
+        if (-not (Find-MSIorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop)) {
+            
+            $Var1 = (Add-MSIorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -TimeDetected $WDACEvent.TimeCreated -FirstDetectedPath $WDACEvent.FilePath -FirstDetectedUser $WDACEvent.User -FirstDetectedProcessID $WDACEvent.ProcessID -SHA256AuthenticodeHash $WDACEvent.SHA256AuthenticodeHash -UserWriteable $WDACEvent.UserWriteable -Signed $WDACEvent.Signed -OriginDevice $DeviceName -EventType $WDACEvent.EventType -Connection $Connection -ErrorAction Stop)
+            if (-not $Var1) {
+                throw "Unsuccessful in adding this app to the database: $($WDACEvent.SHA256FileHash)"
+            }
+            foreach ($signer in $WDACEvent.SignerInfo) {
+                Register-Signer -SignerDetails $signer -AppIndex ((Get-MsiorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop).AppIndex) -MSI -Connection $Connection -ErrorAction Stop
+            }
+        }
+    } catch {
+        throw $_
+    }
 }
 
 
@@ -185,14 +222,14 @@ filter Register-WDACEvents {
         if ($WDACEvent.Psobject.Properties.value.count -le ($MSI_OR_SCRIPT_PSOBJECT_LENGTH + 1)) {
         #Case 1: It is an MSI or Script
 
-            continue; #TODO - Implement Function
             try {
                 Register-MSIorScriptEvent -WDACEvent $WDACEvent -Connection $Connection -ErrorAction Stop
-                if ($AllLevels -contains "Publisher" -or $AllLevels -contains "FilePublisher") {
+                if (($AllLevels -contains "Publisher") -or ($AllLevels -contains "FilePublisher")) {
                     #TODO - Implement add new publishers
                 }
             } catch {
                 Write-Verbose $_
+                Write-Verbose "Failed to add this event (or its signers): $WDACEvent"
                 $Transaction.Rollback()
                 continue
             }
