@@ -225,7 +225,7 @@ filter Register-WDACEvents {
             try {
                 Register-MSIorScriptEvent -WDACEvent $WDACEvent -Connection $Connection -ErrorAction Stop
                 if (($AllLevels -contains "Publisher") -or ($AllLevels -contains "FilePublisher")) {
-                    #TODO - Implement add new publishers
+                    Add-NewPublishersFromAppSigners -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop
                 }
             } catch {
                 Write-Verbose $_

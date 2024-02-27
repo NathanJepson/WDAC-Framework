@@ -605,6 +605,59 @@ function Add-MSIorScript {
     }
 }
 
+function Get-MsiorScriptSignersByFlatHash {
+    [cmdletbinding()]
+    param(
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "SELECT * From signers_msi_or_script WHERE AppIndex = (SELECT AppIndex from msi_or_script WHERE SHA256FlatHash = @SHA256FlatHash);"
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    AppIndex = [int]($Reader["AppIndex"]);
+                    SignatureIndex = [int]($Reader["SignatureIndex"]);
+                    CertificateTBSHash = $Reader["CertificateTBSHash"]
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return (Format-SQLResult $result)
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
 function Add-MsiOrScriptSigner {
     [cmdletbinding()]
     Param ( 
@@ -1277,7 +1330,7 @@ function Get-WDACAppsToSetTrust {
                     PackageFamilyName = $Reader["PackageFamilyName"];
                     UserWriteable = [bool]($Reader["UserWriteable"]);
                     FailedWHQL = [bool]($Reader["FailedWHQL"]);
-                    Trusted = [bool]($Reader["Trusted"]);
+                    Untrusted = [bool]($Reader["Untrusted"]);
                     TrustedDriver = [bool]($Reader["TrustedDriver"]);
                     TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
                     Staged = [bool]($Reader["Staged"]);
@@ -1291,6 +1344,77 @@ function Get-WDACAppsToSetTrust {
                     AppIndex = ($Reader["AppIndex"]);
                     RequestedSigningLevel = $Reader["RequestedSigningLevel"];
                     ValidatedSigningLevel = $Reader["ValidatedSigningLevel"]
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return (Format-SQLResult $result)
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Get-MsiorScriptsToSetTrust {
+    [cmdletbinding()]
+    param(
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select * from msi_or_script WHERE Untrusted = 0 AND TrustedDriver = 0 AND TrustedUserMode = 0 AND Staged = 0 AND Revoked = 0 AND Deferred = 0 AND Blocked = 0"
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if (-not $result) {
+                $result = @()
+            }
+            if($Reader.Read()) {
+                $Result += [PSCustomObject]@{
+                    SHA256FlatHash = $Reader["SHA256FlatHash"];
+                    TimeDetected = $Reader["TimeDetected"];
+                    FirstDetectedPath = $Reader["FirstDetectedPath"];
+                    FirstDetectedUser = $Reader["FirstDetectedUser"];
+                    FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
+                    SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                    UserWriteable = [bool]($Reader["UserWriteable"]);
+                    Signed  = $Reader["Signed"];
+                    OriginDevice  = $Reader["OriginDevice"];
+                    EventType = $Reader["EventType"];
+                    Untrusted = [bool]($Reader["Untrusted"]);
+                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
+                    TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
+                    Staged = [bool]($Reader["Staged"]);
+                    Revoked = [bool]($Reader["Revoked"]);
+                    Deferred = [bool]($Reader["Deferred"]);
+                    Skipped = [bool]($Reader["Skipped"]);
+                    Blocked = [bool]($Reader["Blocked"]);
+                    BlockingPolicyID = $Reader["BlockingPolicyID"];
+                    AllowedPolicyID = $Reader["AllowedPolicyID"];
+                    DeferredPolicyIndex = ($Reader["DeferredPolicyIndex"]);
+                    Comment = $Reader["Comment"];
+                    AppIndex = ($Reader["AppIndex"])
                 }
             }
         }
@@ -4665,7 +4789,11 @@ function Add-NewPublishersFromAppSigners {
     )
 
     try {
-        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        if (Test-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop) {
+            $Signers = Get-MsiorScriptSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        } else {
+            $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        }
         if (-not $Signers) {
             return $null
         }
