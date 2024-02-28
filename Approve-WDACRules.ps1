@@ -479,10 +479,33 @@ function Read-WDACConferredTrust {
     )
 
     try {
-        $AppInfo = Get-WDACApp -Sha256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        $IsMSI = $false
+        if (Test-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop) {
+            $IsMSI = $true
+            $AppInfo = Get-MsiorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        } else {
+            $AppInfo = Get-WDACApp -Sha256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        }
         $CertInfoAndMisc = Expand-WDACAppV2 -SHA256FlatHash $SHA256FlatHash -Levels $Levels -GetCerts -Connection $Connection -ErrorAction Stop
         $AppTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver:($AppInfo.SigningScenario -eq "Driver") -UserMode:($AppInfo.SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop
-        $FileName = ($AppInfo.FirstDetectedPath + $AppInfo.FileName)
+        if ($IsMSI) {
+            $FileName = $AppInfo.FirstDetectedPath
+        } else {
+            $FileName = ($AppInfo.FirstDetectedPath + $AppInfo.FileName)
+        }
+
+        if ($IsMSI) {
+        #As far as I'm aware, FilePublisher and FileName rules do not effect MSIs or Scripts since they don't have OriginalFileName, PackageName, etc., but I could be wrong
+            $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
+            $Levels = $Levels | Where-Object {$_ -ne "FileName"}
+
+            if ((-not $Levels) -or $Levels.Count -le 0) {
+                Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash ) at the specified levels. Skipping."
+                $AppsToSkip.Add($SHA256FlatHash,$true)
+                Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                return;
+            }
+        }
 
         if ( (-not $CertInfoAndMisc.CertsAndPublishers) -and $Levels) {
         #If this app has no signers
@@ -499,7 +522,7 @@ function Read-WDACConferredTrust {
             }
         }
 
-        if (-not ($AppInfo.FileVersion) -and $Levels) {
+        if ((-not ($AppInfo.FileVersion)) -and $Levels) {
             $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
 
             if ((-not $Levels) -or $Levels.Count -le 0) {
@@ -663,21 +686,27 @@ function Read-WDACConferredTrust {
         #Currently, when blocked is selected, it is blocked on UserMode and Kernel mode by default. This may change in the future.
         #...The signing scenario therefore doesn't need to be selected if the app is blocked.
             $SigningLevelToTrustRuleAt = $null
-            $SigningScenario = $AppInfo.SigningScenario
-            if ($LevelToTrustAt -eq "FilePath") {
-            #FilePath rules can only be applied to user-mode binaries
+
+            if ($IsMSI) {
+            #As far as I'm aware, rules for MSIs and Script files only live in usermode land
                 $SigningLevelToTrustRuleAt = "UserMode"
-            } elseif ($OverrideUserorKernelDefaults) {
-                $UserModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -UserMode -Connection $Connection -ErrorAction Stop
-                $KernelModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver -Connection $Connection -ErrorAction Stop
-                $SigningLevelToTrustRuleAt = Get-ChosenSigningScenario -Prompt "What Signing level do you trust this application at?" -UserModeAppTrustLevels $UserModeTrustLevels -KernelModeAppTrustLevels $KernelModeTrustLevels
             } else {
-                if ($SigningScenario -eq "UserMode") {
+                $SigningScenario = $AppInfo.SigningScenario
+                if ($LevelToTrustAt -eq "FilePath") {
+                #FilePath rules can only be applied to user-mode binaries
                     $SigningLevelToTrustRuleAt = "UserMode"
-                } elseif ($SigningScenario -eq "Driver") {
-                    $SigningLevelToTrustRuleAt = "Driver"
+                } elseif ($OverrideUserorKernelDefaults) {
+                    $UserModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -UserMode -Connection $Connection -ErrorAction Stop
+                    $KernelModeTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver -Connection $Connection -ErrorAction Stop
+                    $SigningLevelToTrustRuleAt = Get-ChosenSigningScenario -Prompt "What Signing level do you trust this application at?" -UserModeAppTrustLevels $UserModeTrustLevels -KernelModeAppTrustLevels $KernelModeTrustLevels
                 } else {
-                    $SigningLevelToTrustRuleAt = "UserMode"
+                    if ($SigningScenario -eq "UserMode") {
+                        $SigningLevelToTrustRuleAt = "UserMode"
+                    } elseif ($SigningScenario -eq "Driver") {
+                        $SigningLevelToTrustRuleAt = "Driver"
+                    } else {
+                        $SigningLevelToTrustRuleAt = "UserMode"
+                    }
                 }
             }
         }
@@ -697,10 +726,12 @@ function Read-WDACConferredTrust {
             $SpecificFileNameLevel = $SpecificFileNameLevels[$SHA256FlatHash]
         }
 
-        if ((-not $SpecificFileNameLevels[$SHA256FlatHash]) -and $SpecificFileNameLevel -eq "OriginalFileName" -and (-not $AppInfo.OriginalFileName) -and ($LevelToTrustAt -eq "FilePublisher" -or $LevelToTrustAt -eq "FileName")) {
-            $SpecificFileNameLevel = Get-SpecificFileNameLevelPrompt -Levels $ResultingSpecificFileNameLevelList
+        if (-not $IsMSI) {
+            if ((-not $SpecificFileNameLevels[$SHA256FlatHash]) -and $SpecificFileNameLevel -eq "OriginalFileName" -and (-not $AppInfo.OriginalFileName) -and ($LevelToTrustAt -eq "FilePublisher" -or $LevelToTrustAt -eq "FileName")) {
+                $SpecificFileNameLevel = Get-SpecificFileNameLevelPrompt -Levels $ResultingSpecificFileNameLevelList
+            }
         }
-
+        
         $LeafCertCNs = @{}
         $LeafCertTBSHashes = @{}
         $PcaCertTBSHashes = @{}
@@ -798,7 +829,7 @@ function Read-WDACConferredTrust {
 filter Approve-WDACRulesFilter {
     <#
     .SYNOPSIS
-    Please refer to Approve-WDACRules cmdlet for a full synopsis.
+    Please refer to Approve-WDACRules cmdlet for a full synopsis. (This cmdlet takes pipeline input, while the regular one doesn't)
 
     .DESCRIPTION
     This is basically the same functionallity as Approve-WDACRules, however, this is able to accept pipeline input from the Register-WDACEvents cmdlet.
@@ -809,10 +840,13 @@ filter Approve-WDACRulesFilter {
 
     .EXAMPLE
     Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -SignerInformation -PEEvents | Register-WDACEvents -Level FilePublisher | Approve-WDACRulesFilter -VersioningType 11 -OverrideUserorKernelDefaults -Verbose
+    
+    .PARAMETER Events
+    Pipeline input of WDAC events which are piped from Register-WDACEvents
     #>
     [CmdletBinding()]
     Param (
-        [Parameter(ValueFromPipeline = $true)]
+        [Parameter(ValueFromPipeline = $true, Mandatory=$true)]
         [PSCustomObject[]]$Events,
         [string]$TrustFlag,
         [switch]$RequireComment,
@@ -925,15 +959,10 @@ filter Approve-WDACRulesFilter {
             $Transaction = $Connection.BeginTransaction()
 
             try {
-                if ($Event.SHA256FileHash) {
-                #Case info is piped into the Approve-WDACRules cmdlet
-                    $AppHash = $Event.SHA256FileHash
-                    $FileName = $Event.FilePath
-                } else {
-                #Case info if retrieved from the database
-                    $AppHash = $Event.SHA256FlatHash
-                    $FileName = $Event.FileName
-                }
+                $AppHash = $Event.SHA256FileHash
+                $FileName = $Event.FilePath
+
+                $IsMSI = Test-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
                 
                 if ($AppsToSkip[$AppHash] -or $AppsToBlock[$AppHash]) {
                 #User already designated that they want to skip this app for this session
@@ -941,19 +970,21 @@ filter Approve-WDACRulesFilter {
                     continue;
                 }
 
-                if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
-                #Even if the app is piped into the cmdlet it still has to exist in the database.
-                    if (-not ($AppsToSkip[$AppHash])) {
-                        $AppsToSkip.Add($AppHash,$true)
+                if (-not $IsMSI) {
+                    if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
+                    #Even if the app is piped into the cmdlet it still has to exist in the database.
+                        if (-not ($AppsToSkip[$AppHash])) {
+                            $AppsToSkip.Add($AppHash,$true)
+                            $Transaction.Rollback()
+                            Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                            continue;
+                        }
                         $Transaction.Rollback()
-                        Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
                         continue;
                     }
-                    $Transaction.Rollback()
-                    continue;
                 }
 
-                if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
+                if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) -or (Get-MSIorScriptUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                 #Case the user has already set an untrust action on this app
                     if (-not ($AppsToSkip[$AppHash])) {
                         $AppsToSkip.Add($AppHash,$true)
@@ -976,8 +1007,10 @@ filter Approve-WDACRulesFilter {
                     continue;
                 }
 
-                Update-WDACFilePublisherByCriteria -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
-                #This updates version numbers of file publisher entries based on VersioningTypes in the database
+                if (-not $IsMSI) {
+                    Update-WDACFilePublisherByCriteria -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
+                    #This updates version numbers of file publisher entries based on VersioningTypes in the database
+                }
 
                 $Transaction.Commit()
                 #This commit() statement is so that changes made by Update-WDACFilePublisherByCriteria can be applied regardless of whether a trust action is successfully made
@@ -998,7 +1031,7 @@ filter Approve-WDACRulesFilter {
 
                 $SigningScenario = $Event.SigningScenario
                 if ($SigningScenario) {
-                    if ((Get-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                    if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
                     #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
                         
                         if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
@@ -1021,7 +1054,7 @@ filter Approve-WDACRulesFilter {
                                 continue;
                             }
                         }
-                        if ((Get-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
                         #The difference between this if statement and the one above is this one provides the AllLevels parameter
                             Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
                             $AppTrustAllLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
@@ -1061,15 +1094,14 @@ filter Approve-WDACRulesFilter {
                 $Transaction = $Connection.BeginTransaction()
 
                 try {
-                    if ($Event.SHA256FileHash) {
-                        #Case info is piped into the Approve-WDACRules cmdlet
-                            $AppHash = $Event.SHA256FileHash
-                        } else {
-                        #Case info if retrieved from the database
-                            $AppHash = $Event.SHA256FlatHash
-                        }
+                    $AppHash = $Event.SHA256FileHash
+                        
                     if ($AppsToPurge[$AppHash]) {
-                        Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
+                        if (Test-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
+                            Remove-MSIorScript -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
+                        } else {
+                            Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
+                        }
                     }
                 } catch {
                     Write-Verbose ($_ | Format-List * -Force | Out-String)
@@ -1123,9 +1155,6 @@ function Approve-WDACRules {
 
     Author: Nathan Jepson
     License: MIT License
-
-    .PARAMETER Events
-    Pipeline input of WDAC events which are piped from Register-WDACEvents
 
     .PARAMETER TrustFlag
     (Not yet implemented)
@@ -1230,8 +1259,6 @@ function Approve-WDACRules {
 
     [CmdletBinding()]
     Param (
-        [Parameter(ValueFromPipeline = $true)]
-        [PSCustomObject[]]$Events,
         [string]$TrustFlag,
         [switch]$RequireComment,
         [switch]$Purge,
@@ -1367,7 +1394,7 @@ function Approve-WDACRules {
         
         try {
             if ($MSIorScripts) {
-                #TODO
+                $Events = Get-MsiorScriptsToSetTrust -ErrorAction Stop
             } else {
                 $Events = Get-WDACAppsToSetTrust -ErrorAction Stop
             }
@@ -1387,13 +1414,10 @@ function Approve-WDACRules {
                 }
 
                 try {
-                    if ($Event.SHA256FileHash) {
-                    #Case info is piped into the Approve-WDACRules cmdlet
-                        $AppHash = $Event.SHA256FileHash
-                        $FileName = $Event.FilePath
+                    $AppHash = $Event.SHA256FlatHash
+                    if ($MSIorScripts) {
+                        $FileName = $Event.FirstDetectedPath
                     } else {
-                    #Case info if retrieved from the database
-                        $AppHash = $Event.SHA256FlatHash
                         $FileName = $Event.FileName
                     }
                     
@@ -1403,19 +1427,33 @@ function Approve-WDACRules {
                         continue;
                     }
 
-                    if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
-                    #Even if the app is piped into the cmdlet it still has to exist in the database.
-                        if (-not ($AppsToSkip[$AppHash])) {
-                            $AppsToSkip.Add($AppHash,$true)
+                    if ($MSIorScripts) {
+                        if (-not (Find-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
+                        #Even if the app is piped into the cmdlet it still has to exist in the database.
+                            if (-not ($AppsToSkip[$AppHash])) {
+                                $AppsToSkip.Add($AppHash,$true)
+                                $Transaction.Rollback()
+                                Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                                continue;
+                            }
                             $Transaction.Rollback()
-                            Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
                             continue;
                         }
-                        $Transaction.Rollback()
-                        continue;
+                    } else {
+                        if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
+                        #Even if the app is piped into the cmdlet it still has to exist in the database.
+                            if (-not ($AppsToSkip[$AppHash])) {
+                                $AppsToSkip.Add($AppHash,$true)
+                                $Transaction.Rollback()
+                                Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
+                                continue;
+                            }
+                            $Transaction.Rollback()
+                            continue;
+                        }
                     }
 
-                    if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
+                    if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) -or (Get-MSIorScriptUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                     #Case the user has already set an untrust action on this app
                         if (-not ($AppsToSkip[$AppHash])) {
                             $AppsToSkip.Add($AppHash,$true)
@@ -1438,8 +1476,12 @@ function Approve-WDACRules {
                         continue;
                     }
 
-                    Update-WDACFilePublisherByCriteria -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
-                    #This updates version numbers of file publisher entries based on VersioningTypes in the database
+                    #As far as I'm aware, MSIs or scripts don't have original file name attributes (least of all in the event formats we're dealing with), so
+                    #...no need to check if file publisher info needs updating if it's an MSI or script
+                    if (-not $MSIorScripts) {
+                        Update-WDACFilePublisherByCriteria -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
+                        #This updates version numbers of file publisher entries based on VersioningTypes in the database
+                    }
 
                     $Transaction.Commit()
                     #This commit() statement is so that changes made by Update-WDACFilePublisherByCriteria can be applied regardless of whether a trust action is successfully made
@@ -1460,7 +1502,7 @@ function Approve-WDACRules {
 
                     $SigningScenario = $Event.SigningScenario
                     if ($SigningScenario) {
-                        if ((Get-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
                         #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
                             
                             if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
@@ -1483,7 +1525,7 @@ function Approve-WDACRules {
                                     continue;
                                 }
                             }
-                            if ((Get-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                            if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
                             #The difference between this if statement and the one above is this one provides the AllLevels parameter
                                 Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
                                 $AppTrustAllLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
@@ -1527,15 +1569,14 @@ function Approve-WDACRules {
                     }
 
                     try {
-                        if ($Event.SHA256FileHash) {
-                            #Case info is piped into the Approve-WDACRules cmdlet
-                                $AppHash = $Event.SHA256FileHash
-                            } else {
-                            #Case info if retrieved from the database
-                                $AppHash = $Event.SHA256FlatHash
-                            }
+                        $AppHash = $Event.SHA256FlatHash
+                            
                         if ($AppsToPurge[$AppHash]) {
-                            Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
+                            if (Test-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
+                                Remove-MSIorScript -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
+                            } else {
+                                Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
+                            }
                         }
                     } catch {
                         Write-Verbose ($_ | Format-List * -Force | Out-String)

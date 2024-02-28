@@ -184,6 +184,7 @@ filter Register-WDACEvents {
     )
 
     $AllLevels = $null
+    $Result = @()
     if ($Level -or $Fallbacks) {
         if ($Fallbacks -and $Level) {
             $Fallbacks = $Fallbacks | Where-Object {$_ -ne $Level}
@@ -250,10 +251,11 @@ filter Register-WDACEvents {
         }
 
         $Transaction.Commit()
+        $Result = $Result + $WDACEvent
     }
 
     $Connection.Close()
-    if (-not $NoOut) {
-        return $WDACEvents
+    if ( (-not $NoOut) -and ($null -ne $Result)) {
+        return $Result
     }
 }

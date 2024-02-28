@@ -605,6 +605,41 @@ function Add-MSIorScript {
     }
 }
 
+function Remove-MSIorScript {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.CommandText = "PRAGMA foreign_keys=ON;"
+            #This PRAGMA is needed so that foreign key constraints will work upon deleting
+        $Command.Commandtext += "DELETE FROM msi_or_script WHERE SHA256FlatHash = @SHA256FlatHash"
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Command.ExecuteNonQuery()
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        throw $theError
+    }
+}
+
 function Get-MsiorScriptSignersByFlatHash {
     [cmdletbinding()]
     param(
@@ -4627,7 +4662,13 @@ function Expand-WDACApp {
 
     $Result = @()
     try {
-        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        $MSI = Test-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+
+        if ($MSI) {
+            $Signers = Get-MsiorScriptSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        } else {
+            $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        }
         if (-not $Signers) {
             return $null
         }
@@ -4639,7 +4680,7 @@ function Expand-WDACApp {
             if ($LeafCert.ParentCertTBSHash) {
                 $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
                 $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop
-                if (-not $Publisher -and $AddPublisher) {
+                if ((-not $Publisher) -and $AddPublisher) {
                 #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
                     if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop)) {
                         throw "Trouble adding a publisher to the database."
@@ -4647,7 +4688,11 @@ function Expand-WDACApp {
                 }
             }
 
-            $Result += @{SignatureIndex = $Signer.SignatureIndex; SignerInfo = ( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError); LeafCert = $LeafCert; PcaCert = $PcaCert}
+            if ($MSI) {
+                $Result += @{SignatureIndex = $Signer.SignatureIndex; SignerInfo = ( $Signer | Select-Object AppIndex,CertificateTBSHash); LeafCert = $LeafCert; PcaCert = $PcaCert}
+            } else {
+                $Result += @{SignatureIndex = $Signer.SignatureIndex; SignerInfo = ( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError); LeafCert = $LeafCert; PcaCert = $PcaCert}
+            }
         }
 
         $ResultObj = $Result | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
@@ -4688,16 +4733,22 @@ function Expand-WDACAppV2 {
         $Levels += "PcaCertificate"
     }
 
-    $App = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
-    if (-not $App) {
-        return $null
-    }
-
     $Result = @{}
     $CertsAndPublishers = @()
     try {
-        $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
-        if (-not $Signers) {
+
+        $MSI = Test-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+
+        if ($MSI) {
+            $App = Get-MsiorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+            $Signers = Get-MsiorScriptSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        } else {
+            $App = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+            $Signers = Get-WDACAppSignersByFlatHash -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        }
+        if (-not $App) {
+            return $null
+        } elseif (-not $Signers) {
             return $null
         }
 
@@ -4708,7 +4759,7 @@ function Expand-WDACAppV2 {
             if ($LeafCert.ParentCertTBSHash) {
                 $PcaCert = Get-WDACCertificate -TBSHash $LeafCert.ParentCertTBSHash -Connection $Connection -ErrorAction Stop
                 $Publisher = Get-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop
-                if (-not $Publisher -and $AddPublisher) {
+                if ((-not $Publisher) -and $AddPublisher) {
                 #If publisher isn't in the database, then add it--but only if those are specified levels the user wants
                     if (-not (Add-WDACPublisher -LeafCertCN $LeafCert.CommonName -PcaCertTBSHash $PcaCert.TBSHash -Connection $Connection -ErrorAction Stop)) {
                         throw "Trouble adding a publisher to the database."
@@ -4721,7 +4772,11 @@ function Expand-WDACAppV2 {
             $TempDict = @{}
             #@{SignatureIndex = $Signer.SignatureIndex; SignerInfo = ( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError); LeafCert = $LeafCert; PcaCert = $PcaCert; Publisher = $Publisher; }
             $TempDict.Add("SignatureIndex",$Signer.SignatureIndex)
-            $TempDict.Add("SignerInfo",( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError))
+            if ($MSI) {
+                $TempDict.Add("SignerInfo",($Signer | Select-Object AppIndex,CertificateTBSHash))
+            } else {
+                $TempDict.Add("SignerInfo",( $Signer | Select-Object SignatureType,PageHash,Flags,PolicyBits,ValidatedSigningLevel,VerificationError))
+            }
             switch ($Levels) {
                 "LeafCertificate" {
                     $TempDict.Add("LeafCert",$LeafCert)
@@ -4731,20 +4786,25 @@ function Expand-WDACAppV2 {
                 }
                 "Publisher" {
                     $TempDict.Add("Publisher",$Publisher)
-                } 
+                }
                 "FilePublisher" {
-                    $FilePublishersList = @{}
-                    if ($Publisher) {
-                        foreach ($FileNameLevel in $SpecificFileNameLevels) {
-                            if ($App.$($FileNameLevel)) {
-                                $FilePublishers = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -Connection $Connection -ErrorAction Stop
-                                if ($FilePublishers) {
-                                    $FilePublishersList.Add($FileNameLevel,$FilePublishers)
+                    if ($MSI) {
+                    #MSIs and Scripts aren't dealt with by FilePublisher rules
+                        $TempDict.Add("FilePublishers",$null)
+                    } else {
+                        $FilePublishersList = @{}
+                        if ($Publisher) {
+                            foreach ($FileNameLevel in $SpecificFileNameLevels) {
+                                if ($App.$($FileNameLevel)) {
+                                    $FilePublishers = Get-WDACFilePublishers -PublisherIndex $Publisher.PublisherIndex -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -Connection $Connection -ErrorAction Stop
+                                    if ($FilePublishers) {
+                                        $FilePublishersList.Add($FileNameLevel,$FilePublishers)
+                                    }
                                 }
                             }
-                        }
-                        if ($FilePublishersList.Count -ge 1) {
-                            $TempDict.Add("FilePublishers",$FilePublishersList)
+                            if ($FilePublishersList.Count -ge 1) {
+                                $TempDict.Add("FilePublishers",$FilePublishersList)
+                            }
                         }
                     }
                 }
@@ -4754,12 +4814,16 @@ function Expand-WDACAppV2 {
         }
 
         if ($Levels -contains "FileName") {
-            foreach ($FileNameLevel in $SpecificFileNameLevels) {
-                if ($App.$($FileNameLevel)) {
-                    $FileName = Get-WDACFileName -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -Connection $Connection -ErrorAction Stop
-                    if ($FileName) {
-                        $Result.Add("FileName",$FileName)
-                        break
+            if ($MSI) {
+                $Result.Add("FileName",$null)
+            } else {
+                foreach ($FileNameLevel in $SpecificFileNameLevels) {
+                    if ($App.$($FileNameLevel)) {
+                        $FileName = Get-WDACFileName -FileName $App.$($FileNameLevel) -SpecificFileNameLevel $FileNameLevel -Connection $Connection -ErrorAction Stop
+                        if ($FileName) {
+                            $Result.Add("FileName",$FileName)
+                            break
+                        }
                     }
                 }
             }
@@ -4993,7 +5057,7 @@ function Clear-AllWDACUntrusted {
     }
 }
 
-function Get-AppTrusted {
+function Test-AppTrusted {
 #Determines if an app (WDAC event) would be able to run based on the "TrustedDriver" or "TrustedUserMode" attributes of various rule levels
     [CmdletBinding(DefaultParameterSetName = 'AppEntryPresent')]
     Param (
@@ -5030,13 +5094,18 @@ function Get-AppTrusted {
                 $CertInfo = $CertInfoNoAppPresent
             }
         } else {
-            $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+            if (Test-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop) {
+                $AppInstance = Get-MsiorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+                $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FilePublisher"}
+                $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FileName"}
+            } else {
+                $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+            }
             if (-not $AppInstance) {
                 throw "No instance of this app $SHA256FlatHash in the database."
             }
         }
 
-        #TODO -> MSI_OR_SCRIPT APP INSTANCE
         if (-not $CertInfo -and -not $WDACEvent) {
             $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
         }
@@ -5276,6 +5345,8 @@ function Get-AppTrustedNoAppEntry {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $MSI_OR_SCRIPT_PSOBJECT_LENGTH = 14
+
     if (-not $AllPossibleLevels) {
         $AllPossibleLevels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
     } else {
@@ -5289,6 +5360,11 @@ function Get-AppTrustedNoAppEntry {
     $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "Hash"}
     #Since Hash rules are handled by app event entries, this would be redundant, so let's just remove it
 
+    $MSI = $false
+    if ($WDACEvent.Psobject.Properties.value.count -le ($MSI_OR_SCRIPT_PSOBJECT_LENGTH + 1)) {
+        $MSI = $true
+    }
+
     try {
 
         if (-not $Driver -and -not $UserMode) {
@@ -5297,11 +5373,11 @@ function Get-AppTrustedNoAppEntry {
             } elseif ($WDACEvent.SigningScenario -eq "Driver") {
                 $Driver = $true
             } else {
+            #This case should apply by default to all MSIs and Scripts
                 $UserMode = $true
                 $Driver = $false
             }
         }
-
 
         $CertInfo = [PSCustomObject]@{
             LeafCert = @();
@@ -5310,9 +5386,12 @@ function Get-AppTrustedNoAppEntry {
     
         foreach ($Signer in $WDACEvent.SignerInfo) {
 
-            if (($Signer.PublisherTBSHash -and -not $Signer.IssuerTBSHash) -or (-not $Signer.PublisherTBSHash -and ($Signer.IssuerTBSHash))) {
-            #If there's not a matching publisher and issuer pair, then continue the loop
-                continue;
+            if (-not $MSI) {
+            #Script or MSI events don't have publisher TBS hashes
+                if (($Signer.PublisherTBSHash -and -not $Signer.IssuerTBSHash) -or (-not $Signer.PublisherTBSHash -and ($Signer.IssuerTBSHash))) {
+                    #If there's not a matching publisher and issuer pair, then continue the loop
+                    continue;
+                }
             }
 
             if ($Signer.PublisherTBSHash) {
@@ -5320,7 +5399,16 @@ function Get-AppTrustedNoAppEntry {
                 if ($TempPublisherCert) {
                     $CertInfo.LeafCert += $TempPublisherCert
                 }
-                if ($Signer.IssuerTBSHash) {
+
+                if ($MSI) {
+                    if ($TempPublisherCert.ParentCertTBSHash) {
+                        $TempIssuerCert = Get-WDACCertificate -TBSHash $Signer.IssuerTBSHash -Connection $Connection -ErrorAction Stop
+                        if ($TempIssuerCert) {
+                            $CertInfo.PcaCert += $TempIssuerCert
+                        }
+                    }
+                } elseif ($Signer.IssuerTBSHash) {
+                #Case, PE or exe, dll, etc.
                     $TempIssuerCert = Get-WDACCertificate -TBSHash $Signer.IssuerTBSHash -Connection $Connection -ErrorAction Stop
                     if ($TempIssuerCert) {
                         $CertInfo.PcaCert += $TempIssuerCert
@@ -5329,7 +5417,7 @@ function Get-AppTrustedNoAppEntry {
             }
         }
 
-        return (Get-AppTrusted -AllPossibleLevels $AllPossibleLevels -Driver:$Driver -UserMode:$UserMode -WDACEvent $WDACEvent -CertInfoNoAppPresent $CertInfo -Connection $Connection -ErrorAction Stop)
+        return (Test-AppTrusted -AllPossibleLevels $AllPossibleLevels -Driver:$Driver -UserMode:$UserMode -WDACEvent $WDACEvent -CertInfoNoAppPresent $CertInfo -Connection $Connection -ErrorAction Stop)
     } catch {
         throw $_
     }
@@ -5362,9 +5450,15 @@ function Get-AppTrustedAllLevels {
     $Result = [PSCustomObject]@{}
     $ResultHashTable = @{}
 
+    $MSI = Test-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+
     foreach ($Level in $AllPossibleLevels) {
         $ResultHashTable.Add($Level,$false)
-        if (Get-AppTrusted -SHA256FlatHash $SHA256FlatHash -AllPossibleLevels $Level -Driver:$Driver -UserMode:$UserMode -Connection $Connection -ErrorAction Stop) {
+        if ($MSI -and (($Level -eq "FilePublisher") -or ($Level -eq "FileName"))) {
+        #MSIs and Scripts don't use FIlePublisher or FileName rules to my knowledge
+            continue;
+        } 
+        if (Test-AppTrusted -SHA256FlatHash $SHA256FlatHash -AllPossibleLevels $Level -Driver:$Driver -UserMode:$UserMode -Connection $Connection -ErrorAction Stop) {
             $ResultHashTable[$Level] = $true
         }
     }
@@ -5389,7 +5483,6 @@ function Update-WDACTrust {
         [bool]$Driver,
         [bool]$Block,
         [bool]$Untrusted,
-        [bool]$MSIorScripts,
         $SpecificFileNameLevel,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
@@ -5407,8 +5500,32 @@ function Update-WDACTrust {
         switch ($Level) {
     
             "Hash" {
-                if ($MSIorScripts) {
-                    #TODO
+                if (Test-MSIorScript -SHA256FlatHash $PrimaryKey1 -Connection $Connection -ErrorAction Stop) {
+                    if ($UserMode) {
+                        $Command = $Connection.CreateCommand()
+                        $Command.Commandtext = "UPDATE msi_or_script SET TrustedUserMode = 1 WHERE Sha256FlatHash = @Sha256FlatHash"
+                        $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                        $Command.ExecuteNonQuery()
+                    }
+                    if ($Driver) {
+                    #This if statement should never execute
+                        $Command = $Connection.CreateCommand()
+                        $Command.Commandtext = "UPDATE msi_or_script SET TrustedDriver = 1 WHERE Sha256FlatHash = @Sha256FlatHash"
+                        $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                        $Command.ExecuteNonQuery()
+                    }
+                    if ($Block) {
+                        $Command = $Connection.CreateCommand()
+                        $Command.Commandtext = "UPDATE msi_or_script SET Blocked = 1 WHERE Sha256FlatHash = @Sha256FlatHash"
+                        $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                        $Command.ExecuteNonQuery()
+                    } 
+                    if ($Untrusted) {
+                        $Command = $Connection.CreateCommand()
+                        $Command.Commandtext = "UPDATE msi_or_script SET Untrusted = 1 WHERE Sha256FlatHash = @Sha256FlatHash"
+                        $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                        $Command.ExecuteNonQuery()
+                    }
                 } else {
                     if ($UserMode) {
                         $Command = $Connection.CreateCommand()
@@ -5624,7 +5741,6 @@ function Update-WDACTrustPoliciesAndComment {
         [ValidateNotNullOrEmpty()]
         [string]$PolicyGUID,
         $Comment,
-        [bool]$MSIorScripts,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -5636,20 +5752,26 @@ function Update-WDACTrustPoliciesAndComment {
 
         switch ($Level) {
             "Hash" {
-                if ($MSIorScripts) {
-                    #TODO
+                $Command = $Connection.CreateCommand()
+
+                if (Test-MSIorScript -SHA256FlatHash $PrimaryKey1 -Connection $Connection -ErrorAction Stop) {
+                    if ($Block) {
+                        $Command.Commandtext = "UPDATE msi_or_script SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE Sha256FlatHash = @Sha256FlatHash"
+                    } else {
+                        $Command.Commandtext = "UPDATE msi_or_script SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE Sha256FlatHash = @Sha256FlatHash"
+                    }
                 } else {
-                    $Command = $Connection.CreateCommand()
                     if ($Block) {
                         $Command.Commandtext = "UPDATE apps SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE Sha256FlatHash = @Sha256FlatHash"
                     } else {
                         $Command.Commandtext = "UPDATE apps SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE Sha256FlatHash = @Sha256FlatHash"
                     }
-                    $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
-                    $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
-                    $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
-                    $Command.ExecuteNonQuery()
                 }
+
+                $Command.Parameters.AddWithValue("Sha256FlatHash",$PrimaryKey1) | Out-Null
+                $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
+                $Command.Parameters.AddWithValue("Comment",$Comment) | Out-Null
+                $Command.ExecuteNonQuery()
             }
     
             "Publisher" {
@@ -5764,7 +5886,14 @@ function Test-AppBlocked {
     $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
 
     try {
-        $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        
+        if (Test-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop) {
+            $AppInstance = Get-MsiorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FilePublisher"}
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FileName"}
+        } else {
+            $AppInstance = Get-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
+        }
         $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
 
         function Get-BlockedInstanceFilePublishers {
