@@ -846,7 +846,7 @@ filter Approve-WDACRulesFilter {
     #>
     [CmdletBinding()]
     Param (
-        [Parameter(ValueFromPipeline = $true, Mandatory=$true)]
+        [Parameter(ValueFromPipeline = $true)]
         [PSCustomObject[]]$Events,
         [string]$TrustFlag,
         [switch]$RequireComment,
@@ -950,7 +950,7 @@ filter Approve-WDACRulesFilter {
     } catch {
         Write-Warning "Unable to retrieve GlobalVersioningType from LocalStorage.json."
     }
-    
+
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
 

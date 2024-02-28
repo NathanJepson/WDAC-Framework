@@ -142,8 +142,14 @@ filter Register-WDACEvents {
     Author: Nathan Jepson
     License: MIT License
 
-    .PARAMETER WDACEvents
-    Events received to pipeline input (from WDACAuditing)
+    .INPUTS
+    [PSCustomObject] Result of Get-WDACEvents
+
+    .OUTPUTS
+    Pipes out a replica of the inputs if you still need them.
+
+    .PARAMETER WDACEvent
+    Events as PSCustomObjects piped from Get-WDACEvents
 
     .PARAMETER NoOut
     When this is set, no output is returned.
@@ -153,12 +159,6 @@ filter Register-WDACEvents {
 
     .PARAMETER Fallbacks
     Backup preferred levels (see 'Level' parameter). If an app is trusted at the level of a fallback, the WDACEvent is not added to the apps table.
-
-    .INPUTS
-    [PSCustomObject] Result of Get-WDACEvents
-
-    .OUTPUTS
-    Pipes out a replica of the inputs if you still need them.
 
     .EXAMPLE
     Get-WDACEvents | Register-WDACEvents
@@ -172,19 +172,24 @@ filter Register-WDACEvents {
 
     [CmdletBinding()]
     Param (
-        [Parameter(Mandatory, ValueFromPipeline)]
-        $WDACEvents,
+        [Parameter(ValueFromPipeline = $true)]
+        $WDACEvent,
+        [Parameter(ValueFromPipeline = $false)]
         [switch]$NoOut,
+        [Parameter(ValueFromPipeline = $false)]
         [ValidateNotNullOrEmpty()]
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         [string]$Level,
+        [Parameter(ValueFromPipeline = $false)]
         [ValidateNotNullOrEmpty()]
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         [string[]]$Fallbacks
     )
 
     $AllLevels = $null
-    $Result = @()
+    $SkipRegister = $false
+    $MSI_OR_SCRIPT_PSOBJECT_LENGTH = 14
+
     if ($Level -or $Fallbacks) {
         if ($Fallbacks -and $Level) {
             $Fallbacks = $Fallbacks | Where-Object {$_ -ne $Level}
@@ -193,48 +198,44 @@ filter Register-WDACEvents {
         if ($Level) {
             $AllLevels += $Level
         }
-        if ($Fallbacks -and $Fallbacks.Count -ge 1) {
+        if (($Fallbacks) -and ($Fallbacks.Count -ge 1)) {
             foreach ($Fallback in $Fallbacks) {
                 $AllLevels += $Fallback
             }
         }
     }
 
-    $MSI_OR_SCRIPT_PSOBJECT_LENGTH = 14
     $Connection = New-SQLiteConnection -ErrorAction Stop
-    if (-not $WDACEvents) {
+    if (-not $WDACEvent) {
+        $Connection.Close()
         Write-Verbose "Null provided as one of the pipeline inputs to Register-WDACEvents."
         return
     }
 
-    foreach ($WDACEvent in $WDACEvents) {
-        
-        $Transaction = $Connection.BeginTransaction()
-   
-        if ( ($Level -or $Fallbacks) -and $AllLevels.Count -ge 1) {
-        #If it is already trusted at a specified level, no need to add WDACEvent to the database
-            if (Get-AppTrustedNoAppEntry -WDACEvent $WDACEvent -AllPossibleLevels $AllLevels -Connection $Connection -ErrorAction Stop) {
-                Write-Verbose "App $($WDACEvent.FilePath) with SHA-256 Flat Hash $($WDACEvent.SHA256FileHash) skipped registration due to meeting a higher level of trust."
-                $Transaction.Rollback()
-                continue;
-            }
+    $Transaction = $Connection.BeginTransaction()
+
+    if ( ($Level -or $Fallbacks) -and $AllLevels.Count -ge 1) {
+    #If it is already trusted at a specified level, no need to add WDACEvent to the database
+        if (Get-AppTrustedNoAppEntry -WDACEvent $WDACEvent -AllPossibleLevels $AllLevels -Connection $Connection -ErrorAction Stop) {
+            Write-Verbose "App $($WDACEvent.FilePath) with SHA-256 Flat Hash $($WDACEvent.SHA256FileHash) skipped registration due to meeting a higher level of trust."
+            $Transaction.Rollback()
+            $SkipRegister = $true
         }
+    }
 
+    if (-not $SkipRegister) {
         if ($WDACEvent.Psobject.Properties.value.count -le ($MSI_OR_SCRIPT_PSOBJECT_LENGTH + 1)) {
-        #Case 1: It is an MSI or Script
-
+            #Case 1: It is an MSI or Script
             try {
                 Register-MSIorScriptEvent -WDACEvent $WDACEvent -Connection $Connection -ErrorAction Stop
                 if (($AllLevels -contains "Publisher") -or ($AllLevels -contains "FilePublisher")) {
                     Add-NewPublishersFromAppSigners -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop
                 }
             } catch {
-                Write-Verbose $_
+                Write-Verbose $WDACEvent
                 Write-Verbose "Failed to add this event (or its signers): $WDACEvent"
                 $Transaction.Rollback()
-                continue
             }
-            
         } else {
         #Case 2: Else it is an executable, dll, driver, etc.
             try {
@@ -243,19 +244,19 @@ filter Register-WDACEvents {
                     Add-NewPublishersFromAppSigners -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop
                 }
             } catch {
-                Write-Verbose $_
+                Write-Verbose $WDACEvent
                 Write-Verbose "Failed to add this event (or its signers): $WDACEvent"
                 $Transaction.Rollback()
-                continue
+                
             }
         }
 
         $Transaction.Commit()
-        $Result = $Result + $WDACEvent
     }
 
     $Connection.Close()
-    if ( (-not $NoOut) -and ($null -ne $Result)) {
-        return $Result
+    
+    if (-not ($SkipRegister -or $NoOut)) {
+        $WDACEvent
     }
 }
