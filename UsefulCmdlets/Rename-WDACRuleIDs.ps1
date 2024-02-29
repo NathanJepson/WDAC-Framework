@@ -11,12 +11,17 @@ function Update-WDACRulesIDs {
 
     Author: Nathan Jepson
     License: MIT License
+
+    .PARAMETER RetainBackup
+    Keep a backup of the old policy.
     #>
 
     [CmdletBinding()]
     Param (
         [string]$PolicyGUID,
-        [string]$PolicyName
+        [string]$PolicyName,
+        [Alias("Backup")]
+        [switch]$RetainBackup
     )
 
     if (-not ($PolicyGUID -or $PolicyName)) {
@@ -72,6 +77,9 @@ function Update-WDACRulesIDs {
             $ruleIDs += @{$rule.ID = $true}
         }
     
+        $FileContent = Get-Content -Path $OldPolicyPath -ErrorAction Stop
+        $NewContent = $FileContent
+
         foreach ($ruleMapEntry in $ruleIDs.GetEnumerator()) {
             $ruleID = $ruleMapEntry.Name
     
@@ -87,19 +95,16 @@ function Update-WDACRulesIDs {
                             $swap_underscore = $decremented + "_0"
                         }
                         $GoodToDecrement = $true
-    
-                        $FileContent = Get-Content -Path $OldPolicyPath -ErrorAction Stop
 
-                        for ($i=0; $i -lt $FileContent.Count; $i++) {
-                            if ( ($FileContent[$i].Contains("`"$swap_underscore`"")) -or ($FileContent[$i].Contains("`"$decremented`""))) {
+                        for ($i=0; $i -lt $NewContent.Count; $i++) {
+                            if ( ($NewContent[$i].Contains("`"$swap_underscore`"")) -or ($NewContent[$i].Contains("`"$decremented`""))) {
                                 $GoodToDecrement = $false
                                 break
                             }
                         }
 
                         if ($GoodToDecrement) {
-                            $NewContent = $FileContent.Replace("`"$ruleID`"","`"$decremented`"")
-                            $NewContent | Set-Content -Path $OldPolicyPath -Force -ErrorAction Stop
+                            $NewContent = $NewContent.Replace("`"$ruleID`"","`"$decremented`"")
                             $GeneralSuccess = $true
                         }
                     }
@@ -108,10 +113,11 @@ function Update-WDACRulesIDs {
         }
 
         if ($GeneralSuccess) {
+            $NewContent | Set-Content -Path $OldPolicyPath -Force -ErrorAction Stop
             Write-Host "Completed one pass for shortening rule IDs." -ForegroundColor Green
         }
 
-        if (Test-Path $BackupPolicyLocation) {
+        if ((Test-Path $BackupPolicyLocation) -and (-not $RetainBackup)) {
             Remove-Item $BackupPolicyLocation -Force -ErrorAction SilentlyContinue
         }
     } catch {
@@ -121,7 +127,11 @@ function Update-WDACRulesIDs {
             if (Test-Path $BackupPolicyLocation) {
                 try {
                     Copy-Item $BackupPolicyLocation -Destination $OldPolicyPath -Force -ErrorAction Stop
-                    Remove-Item $BackupPolicyLocation -Force -ErrorAction SilentlyContinue
+                    if (-not $RetainBackup) {
+                        Remove-Item $BackupPolicyLocation -Force -ErrorAction SilentlyContinue
+                    } else {
+                        Write-Host "Backup is located at $BackupPolicyLocation"
+                    }
                 } catch {
                     Write-Error "Failed to restore policy $PolicyGUID but it can be recovered at $BackupPolicyLocation"
                 }
