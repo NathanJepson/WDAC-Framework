@@ -583,14 +583,16 @@ function Edit-WDACPolicy {
                         $NewSignerIDs += $tempRule.Id
                     }
                 }
+
+                $FileContent = Get-Content $FilePath -ErrorAction Stop
                 foreach ($NewSignerID in $NewSignerIDs) {
                     $NewID = IncrementSignerID -RuleMap $IDsAndComments -ErrorAction Stop
                     $IDsAndComments += @{$NewID = $Comment}
-                    $FileContent = Get-Content $FilePath -ErrorAction Stop
+                    
                     #We add an extra _1 to the ID here because it will be removed by Remove-UnderscoreDigits
                     $FileContent = $FileContent.Replace($NewSignerID,($NewID + "_1"))
-                    $FileContent | Set-Content $FilePath -Force -ErrorAction Stop
                 }
+                $FileContent | Set-Content $FilePath -Force -ErrorAction Stop
 
                 Remove-UnderscoreDigits -FilePath $FilePath -ErrorAction Stop
                 return $IDsAndComments
