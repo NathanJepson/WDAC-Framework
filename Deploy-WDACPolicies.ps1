@@ -853,7 +853,7 @@ function Deploy-WDACPolicies {
                     } elseif ($PolicyInfo.IsSigned -eq $true) {
                         $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
                     } else {
-                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,RefreshCompletedSuccessfully | Format-List -Property *
                     }
                 }
 
