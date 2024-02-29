@@ -121,6 +121,7 @@ function Update-WDACRulesIDs {
             if (Test-Path $BackupPolicyLocation) {
                 try {
                     Copy-Item $BackupPolicyLocation -Destination $OldPolicyPath -Force -ErrorAction Stop
+                    Remove-Item $BackupPolicyLocation -Force -ErrorAction SilentlyContinue
                 } catch {
                     Write-Error "Failed to restore policy $PolicyGUID but it can be recovered at $BackupPolicyLocation"
                 }
