@@ -349,11 +349,11 @@ function Deploy-WDACPolicies {
 
                 #Either Restart Device or Use Refresh Tool
                 if ($PolicyInfo.BaseOrSupplemental -eq $true) {
-                    if ($RefreshToolPath) {
-                        Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
-                        Write-Host "Refresh completed successfully."
-                    } elseif ($Windows11) {
+                    if ($Windows11) {
                         CiTool --refresh
+                        Write-Host "Refresh completed successfully."
+                    } elseif ($RefreshToolPath) {
+                        Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
                         Write-Host "Refresh completed successfully."
                     }
                 } elseif (Get-YesOrNoPrompt -Prompt "If this is the first time this signed base policy has been deployed locally, select `"Y`" to restart your device, otherwise select `"N`" to use the refresh tool.") {
