@@ -1135,7 +1135,7 @@ function Restore-WDACWorkstations {
     $RestartLocalDevice = $false
     $ClearUEFIBootLocalDevice = $false
     $SuccessfulMachinesFinalRemove = @()
-    $ComputerMap2 = @{}
+    $ComputerMap2 = @()
     $AtLeastOneDeviceFixedUnsigned = $false
 
     $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -1213,7 +1213,7 @@ function Restore-WDACWorkstations {
             $results = $null
             $restartNeededResults = $null
             $restartNotNeededResults = $null
-            $NewComputerMap = @{}
+            $NewComputerMap = @()
             $Transaction = $Connection.BeginTransaction()
             if ($DeferredPolicy.PolicyVersion) {
                 Write-Verbose "Handling devices with old policy version $($DeferredPolicy.PolicyVersion)"
