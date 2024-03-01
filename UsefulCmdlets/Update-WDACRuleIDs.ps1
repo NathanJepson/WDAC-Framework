@@ -1,4 +1,4 @@
-function Update-WDACRulesIDs {
+function Update-WDACRuleIDs {
     <#
     .SYNOPSIS
     For rule IDs that have extraneous _0 and _1 concatenated on the end, shorten them if possible
