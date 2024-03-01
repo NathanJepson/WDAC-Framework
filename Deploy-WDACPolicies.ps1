@@ -1631,6 +1631,17 @@ function Restore-WDACWorkstations {
                     if (-not (Set-WDACPolicyLastDeployedVersion -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
                         throw "Unable to set LastDeployedPolicyVersion to match the current version of the policy."
                     }
+
+                    try {
+                        if (-not (Test-WDACPolicySigned -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                            if (-not (Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                                Write-Warning "Unable to remove all entries first_signed_policy_deployments or unsetting DeployedSigned flag for Policy $PolicyGUID `n It is recommended to clear these entries out before next running this script."
+                            }
+                        }
+                    } catch {
+                        Write-Warning "Unable to remove all entries first_signed_policy_deployments or unsetting DeployedSigned flag for Policy $PolicyGUID `n It is recommended to clear these entries out before next running this script."
+                    }
+                    
                     $Transaction.Commit()
                 } else {
                     $Transaction.Rollback()
@@ -1648,6 +1659,7 @@ function Restore-WDACWorkstations {
                 #Removes first_signed_policy_deployment entry for devices which are successfully fixed on this unsigned policy
                     throw "Unable to execute SQL query to remove certain rows from first_signed_policy_deployments table."
                 }
+
             } catch {
                 Write-Verbose ($_ | Format-List -Property * | Out-String)
                 Write-Warning "Unable to remove first_signed_policy_deployments for fixed devices when deploying unsigned policy. It is recommended to remove entries for these fixed devices from the database."
