@@ -231,6 +231,16 @@ function Remove-WDACRule {
             Set-XMLPolicyVersion -PolicyGUID $PolicyGUID -Version $CurrentPolicyVersion -Connection $Connection -ErrorAction Stop
         }
 
+        if (Test-WDACPolicySigned -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {
+            if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Signed -Connection $Connection -ErrorAction Stop)) {
+                throw "Could not set LastSignedVersion attribute on Policy $PolicyGUID"
+            }
+        } else {
+            if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Unsigned -Connection $Connection -ErrorAction Stop)) {
+                throw "Could not set LastUnsignedVersion attribute on Policy $PolicyGUID"
+            }
+        }
+
         try {
             if ($HVCIOption) {
                 if ( (Get-HVCIPolicySetting -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) -ne $HVCIOption) {

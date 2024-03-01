@@ -503,6 +503,15 @@ function Merge-TrustedWDACRules {
                 $OldPolicyPath = (Get-FullPolicyPath -PolicyGUID $Policy -ErrorAction Stop)
                 if ($PolicyVersion) {
                     New-WDACPolicyVersionIncrementOne -PolicyGUID $Policy -CurrentVersion $PolicyVersion -Connection $Connection -ErrorAction Stop
+                    if (Test-WDACPolicySigned -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop) {
+                        if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $Policy -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop).PolicyVersion) -Signed -Connection $Connection -ErrorAction Stop)) {
+                            throw "Could not set LastSignedVersion attribute on Policy $Policy"
+                        }
+                    } else {
+                        if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $Policy -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop).PolicyVersion) -Unsigned -Connection $Connection -ErrorAction Stop)) {
+                            throw "Could not set LastUnsignedVersion attribute on Policy $Policy"
+                        }
+                    }
                     $Transaction.Commit()
                     Write-Host "Successfully committed changes to Policy $Policy" -ForegroundColor Green
                     Write-Verbose "There were $RulesAdded rules that were added to this policy."

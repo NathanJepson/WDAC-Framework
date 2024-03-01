@@ -271,7 +271,16 @@ function Import-WDACRule {
         } catch {
             Write-Warning $_
         }
-        
+
+        if (Test-WDACPolicySigned -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {
+            if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Signed -Connection $Connection -ErrorAction Stop)) {
+                throw "Could not set LastSignedVersion attribute on Policy $PolicyGUID"
+            }
+        } else {
+            if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Unsigned -Connection $Connection -ErrorAction Stop)) {
+                throw "Could not set LastUnsignedVersion attribute on Policy $PolicyGUID"
+            }
+        }
 
         $Transaction.Commit()
         $Connection.Close()
