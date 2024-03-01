@@ -275,7 +275,7 @@ function Import-WDACRule {
 
         $Transaction.Commit()
         $Connection.Close()
-        Write-Host "Successfully merged rule(s)."
+        Write-Host "Successfully merged rule(s)." -ForegroundColor Green
 
         if (Test-Path $TempPolicyPath) {
             Remove-Item -Path $TempPolicyPath -Force -ErrorAction SilentlyContinue
