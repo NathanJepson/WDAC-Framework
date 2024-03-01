@@ -1655,11 +1655,8 @@ function Restore-WDACWorkstations {
 
         if ($AtLeastOneDeviceFixedUnsigned) {
             try {
-                if (-not (Remove-FirstSignedPolicyDeploymentsConditional -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                Remove-FirstSignedPolicyDeploymentsConditional -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop | Out-Null
                 #Removes first_signed_policy_deployment entry for devices which are successfully fixed on this unsigned policy
-                    throw "Unable to execute SQL query to remove certain rows from first_signed_policy_deployments table."
-                }
-
             } catch {
                 Write-Verbose ($_ | Format-List -Property * | Out-String)
                 Write-Warning "Unable to remove first_signed_policy_deployments for fixed devices when deploying unsigned policy. It is recommended to remove entries for these fixed devices from the database."
