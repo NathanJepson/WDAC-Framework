@@ -238,6 +238,12 @@ Get-WDACApplockerScriptMsiEvent -SignerInformation
         [Switch]
         $SinceLastPolicyRefresh,
 
+        [Switch]
+        $Audit,
+
+        [Switch]
+        $Enforce,
+
         [Int64]
         $MaxEvents
     )
@@ -254,9 +260,21 @@ Get-WDACApplockerScriptMsiEvent -SignerInformation
     }
 
     if ($ShowAllowedEvents) {
-        $Filter = "*[System[(EventID = 8028 or EventID = 8029 or EventID = 8037)$($PolicyRefreshFilter)]]"
+        if ($Audit -and (-not $Enforce)) {
+            $Filter = "*[System[(EventID = 8028 or EventID = 8037)$($PolicyRefreshFilter)]]"
+        } elseif ($Enforce -and (-not $Audit)) {
+            $Filter = "*[System[(EventID = 8029 or EventID = 8037)$($PolicyRefreshFilter)]]"
+        } else {
+            $Filter = "*[System[(EventID = 8028 or EventID = 8029 or EventID = 8037)$($PolicyRefreshFilter)]]"
+        }
     } else {
-        $Filter = "*[System[(EventID = 8028 or EventID = 8029)$($PolicyRefreshFilter)]]"
+        if ($Audit -and (-not $Enforce)) {
+            $Filter = "*[System[(EventID = 8028)$($PolicyRefreshFilter)]]"
+        } elseif ($Enforce -and (-not $Audit)) {
+            $Filter = "*[System[(EventID = 8029)$($PolicyRefreshFilter)]]"
+        } else {
+            $Filter = "*[System[(EventID = 8028 or EventID = 8029)$($PolicyRefreshFilter)]]"
+        }
     }
 
     Write-Verbose "XPath Filter: $Filter"

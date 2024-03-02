@@ -212,13 +212,15 @@ function Get-WDACEvents {
             $SignerInformation,
             $ShowAllowedEvents,
             $SinceLastPolicyRefresh,
-            $ImportModule
+            $ImportModule,
+            $Audit,
+            $Enforce
         )
             try {
                 if ($ImportModule) {
                     Import-Module -Name "WDACAuditing"
                 } 
-                Get-WDACApplockerScriptMsiEvent -MaxEvents $MaxEvents -SignerInformation:$SignerInformation -ShowAllowedEvents:$ShowAllowedEvents -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -ErrorAction Stop 
+                Get-WDACApplockerScriptMsiEvent -MaxEvents $MaxEvents -SignerInformation:$SignerInformation -ShowAllowedEvents:$ShowAllowedEvents -SinceLastPolicyRefresh:$SinceLastPolicyRefresh -Audit:$Audit -Enforce:$Enforce -ErrorAction Stop 
             } catch {
                 Write-Verbose $_
                 return $null
@@ -262,17 +264,17 @@ function Get-WDACEvents {
                 $PEEventResults = Invoke-Command -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents,$ImportModule,$PolicyGUID
             }
             if ($PE_And_MSI -or $MSIorScripts) {
-                $MSIorScriptEventResults = Invoke-Command -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh,$ImportModule
+                $MSIorScriptEventResults = Invoke-Command -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh,$ImportModule,$Audit,$Enforce
             }
         } else {
             Write-Verbose "Extracting events from remote machines(s)."
             $sess = New-PSSession -ComputerName $RemoteMachine -ErrorAction SilentlyContinue
             if ($sess) {
                 if ($PE_And_MSI -or $PEEvents) {
-                    $PEEventResults = Invoke-Command -Session $sess -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents,$ImportModule
+                    $PEEventResults = Invoke-Command -Session $sess -ScriptBlock $PEScriptBlock -ArgumentList $MaxEvents,$User,$Kernel,$Audit,$Enforce,$SinceLastPolicyRefresh,$SignerInformation,$CheckWhqlStatus,$IgnoreNativeImagesDLLs,$IgnoreDenyEvents,$ImportModule,$PolicyGUID
                 }
                 if ($PE_And_MSI -or $MSIorScripts) {
-                    $MSIorScriptEventResults = Invoke-Command -Session $sess -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh,$ImportModule
+                    $MSIorScriptEventResults = Invoke-Command -Session $sess -ScriptBlock $MSIorScript_ScriptBlock -ArgumentList $MaxEvents,$SignerInformation,$ShowAllowedEvents,$SinceLastPolicyRefresh,$ImportModule,$Audit,$Enforce
                 }
             }
         }
