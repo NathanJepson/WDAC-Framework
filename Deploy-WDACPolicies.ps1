@@ -592,7 +592,7 @@ function Deploy-WDACPolicies {
             $CustomPSObjectComputerMap = $NewComputerMap | ForEach-Object { New-Object -TypeName PSCustomObject | Add-Member -NotePropertyMembers $_ -PassThru }
 
             if ($TestComputers -and (-not $TestForce)) {
-                if ( -not ($CustomPSObjectComputerMap | Where-Object { ($_.DeviceName -eq $TestComputers) -and {$_.NewlyDeferred -eq $false} -and {$_.TestMachine -eq $true}} )) {
+                if ( -not ($CustomPSObjectComputerMap | Where-Object { ($_.NewlyDeferred -eq $false) -and ($_.TestMachine -eq $true)} )) {
                     
                     if ($ComputerMapDeferredDevices -and ($ComputerMapDeferredDevices.Count -gt 0)) {
                         #Since these devices are behind on this deployment, then they must be deferred on this policy
