@@ -272,13 +272,13 @@ function Import-WDACRule {
             Write-Warning $_
         }
 
-        if (Test-WDACPolicySigned -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop) {
-            if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Signed -Connection $Connection -ErrorAction Stop)) {
-                throw "Could not set LastSignedVersion attribute on Policy $PolicyGUID"
+        if (Test-WDACPolicySigned -PolicyGUID $DestinationPolicyGUID -Connection $Connection -ErrorAction Stop) {
+            if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $DestinationPolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $DestinationPolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Signed -Connection $Connection -ErrorAction Stop)) {
+                throw "Could not set LastSignedVersion attribute on Policy $DestinationPolicyGUID"
             }
         } else {
-            if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $PolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Unsigned -Connection $Connection -ErrorAction Stop)) {
-                throw "Could not set LastUnsignedVersion attribute on Policy $PolicyGUID"
+            if (-not (Set-LastSignedUnsignedWDACPolicyVersion -PolicyGUID $DestinationPolicyGUID -PolicyVersion ((Get-PolicyVersionNumber -PolicyGUID $DestinationPolicyGUID -Connection $Connection -ErrorAction Stop).PolicyVersion) -Unsigned -Connection $Connection -ErrorAction Stop)) {
+                throw "Could not set LastUnsignedVersion attribute on Policy $DestinationPolicyGUID"
             }
         }
 
