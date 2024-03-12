@@ -286,7 +286,14 @@ function Get-WDACEvents {
         }
 
         if ($PE_And_MSI) {
-            return $PEEventResults, $MSIorScriptEventResults
+            $result = @()
+            foreach ($WDACFileInfo in $PEEventResults) {
+                $result += $WDACFileInfo
+            }
+            foreach ($WDACFileInfo in $MSIorScriptEventResults) {
+                $result += $WDACFileInfo
+            }
+            return $result
         } elseif ($PEEvents) {
             return $PEEventResults
         } elseif ($MSIorScripts) {

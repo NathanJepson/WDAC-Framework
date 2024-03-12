@@ -216,7 +216,14 @@ function Get-WDACFiles {
         } elseif ($MSIorScript) {
             return $MSIorScriptFilesResults
         } else {
-            return $PEFilesResults,$MSIorScriptFilesResults
+            $result = @()
+            foreach ($WDACFileInfo in $PEFilesResults) {
+                $result += $WDACFileInfo
+            }
+            foreach ($WDACFileInfo in $MSIorScriptFilesResults) {
+                $result += $WDACFileInfo
+            }
+            return $result
         }
     }
 }
