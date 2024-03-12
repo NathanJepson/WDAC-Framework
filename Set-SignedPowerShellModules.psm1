@@ -1,3 +1,16 @@
+if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+    Write-Verbose "The current file is in the SignedModules folder."
+} else {
+    $PSModuleRoot = $PSScriptRoot
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
+}
+
 function Set-SignedPowerShellModules {
     <#
     .SYNOPSIS
@@ -141,7 +154,7 @@ function Set-SignedPowerShellModules {
         throw $_
     }
 
-    $FileSources = @($ModulesFiles,$ResourceFiles,$WDACAuditingFiles)
+    $FileSources = @($ModulesFiles,$ResourceFiles,$WDACAuditingFiles,$UsefulCmdletsFiles)
     foreach ($FileSource in $FileSources) {
         foreach ($Module in $FileSource) {
             try {
@@ -177,3 +190,5 @@ function Set-SignedPowerShellModules {
     Write-Host "File signing process has completed. Please reload / reimport the WDAC-Framework module."
 
 }
+
+Export-ModuleMember -Function Set-SignedPowerShellModules

@@ -65,3 +65,5 @@ function Set-ValueLocalStorageJSON {
         throw "Unable to set JSON value $Value within key $Key"
     }
 }
+
+Export-ModuleMember -Function Get-LocalStorageJSON,Set-LocalStorageJSON,Reset-TestStorage,Set-ValueLocalStorageJSON
