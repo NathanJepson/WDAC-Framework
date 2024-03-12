@@ -203,7 +203,11 @@ function New-MicrosoftSecureBootHashRule {
     )
 
     $result = @()
-    $Name = ([string](($RuleInfo.FirstDetectedPath)+"\"+($RuleInfo.FileName)))
+    if (-not $MSIorScript) {
+        $Name = ([string](($RuleInfo.FirstDetectedPath)+"\"+($RuleInfo.FileName)))
+    } else {
+        $Name = $RuleInfo.FirstDetectedPath
+    }
 
     #Replace the Letter-name drive, otherwise an error occurs when creating the DriverFile object shell: Exception calling ".ctor" with "1" argument(s): "Operation is not supported on this platform. (0x80131539)"
     if ((Split-Path $Name -Qualifier) -match "^[A-Z]\:") {
@@ -211,10 +215,10 @@ function New-MicrosoftSecureBootHashRule {
         $Name = "%OSDRIVE%" + $Name
     }
 
-    #The authenticode hash is used for hash rules involving PEs
+    #The authenticode hash is used for hash rules involving PEs.
+    #When blocking MSIs and Scripts, the SIP hash is also used (further down)
     if ($MSIorScript) {
         $Hash = $RuleInfo.SHA256FlatHash
-        #$SIPHash = $null #TODO: SIP Hashes are used for MSI or Script Block Rules
     } else {
         $Hash = $RuleInfo.SHA256AuthenticodeHash
     }
@@ -228,7 +232,7 @@ function New-MicrosoftSecureBootHashRule {
         $ID_User = IncrementDenyID -RuleMap $RuleMap
         $RuleMap = $RuleMap + @{$ID_User=$true}
         $ID_Kernel = IncrementDenyID -RuleMap $RuleMap
-        if ($null -ne $RuleInfo.Comment -and "" -ne $RuleInfo.Comment) {
+        if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
             $RuleMap[$ID_User] = $RuleInfo.Comment
             $RuleMap = $RuleMap + @{$ID_Kernel=$RuleInfo.Comment}
         } elseif (-not ($MSIorScript)) {
@@ -247,8 +251,27 @@ function New-MicrosoftSecureBootHashRule {
         # $blockResultUserMode.Name = $Name
         # $blockResultKernel.Name = $Name
         $result += $blockResultUserMode
-        $result += $blockResultKernel
+        if (-not $MSIorScript) {
+            $result += $blockResultKernel
+        }
+        
+        if ($RuleInfo.SHA256SipHash -and $MSIorScript) {
+        #Note, SIP hashes are often used when blocking MSIs or Scripts
+            $SIPHash = $RuleInfo.SHA256SipHash
+            $blockResultSIP = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Authenticode SIP Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+            $ID_User_SIP = IncrementDenyID -RuleMap $RuleMap
+            $RuleMap = $RuleMap + @{$ID_User_SIP=$true}
+            if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
+                $RuleMap[$ID_User_SIP] = $RuleInfo.Comment
+            } else {
+                $FlatHashComment = "SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)"
+                $RuleMap[$ID_User_SIP] = $FlatHashComment
+            }
 
+            $blockResultSIP.Id = $ID_User_SIP
+            $blockResultSIP.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$SIPHash);
+            $result += $blockResultSIP
+        }
     } else {
         if ($RuleInfo.TrustedDriver -eq $true) {
             $kernelResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
