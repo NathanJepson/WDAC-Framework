@@ -48,6 +48,9 @@ function Get-WDACFiles {
     .PARAMETER NoScript
     When specified, this cmdlet doesn't return MSIs or Scripts.
 
+    .PARAMETER MSIorScript
+    Specify when you only want to select MSI or script file events (the opposite of the NoScript parameter.)
+
     .PARAMETER NoShadowCopy
     "Indicates that the Volume Snapshot Service (VSS) does not make a shadow copy of the disk while the scan runs. This parameter could cause an incomplete scan for a system that is running.
     If a scan fails due to VSS errors caused by low disk space on the target drive, this cmdlet prompts you to specify this parameter."
@@ -81,6 +84,7 @@ function Get-WDACFiles {
     param (
         [switch]$Audit,
         [switch]$NoScript,
+        [switch]$MSIorScript,
         [switch]$NoShadowCopy,
         [string[]]$OmitPaths,
         [string]$PathToCatroot,
@@ -92,6 +96,11 @@ function Get-WDACFiles {
     )
 
     begin {
+
+        if ($NoScript -and $MSIorScript) {
+            throw "Cannot provide both MSIorScript parameter and NoScript parameters (contradictory)"
+        }
+
         if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
             $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
             Write-Verbose "The current file is in the SignedModules folder."
@@ -204,6 +213,8 @@ function Get-WDACFiles {
 
         if ($NoScript) {
             return $PEFilesResults
+        } elseif ($MSIorScript) {
+            return $MSIorScriptFilesResults
         } else {
             return $PEFilesResults,$MSIorScriptFilesResults
         }
