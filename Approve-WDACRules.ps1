@@ -491,7 +491,7 @@ function Read-WDACConferredTrust {
         if ($IsMSI) {
             $FileName = $AppInfo.FirstDetectedPath
         } else {
-            $FileName = ($AppInfo.FirstDetectedPath + $AppInfo.FileName)
+            $FileName = ($AppInfo.FirstDetectedPath + "\" + $AppInfo.FileName)
         }
 
         if ($IsMSI) {
