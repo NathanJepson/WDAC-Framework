@@ -1,4 +1,5 @@
 function Copy-WDACFileScanner {
+    [CmdletBinding()]
     param(
         [string[]]$RemoteMachine,
         [string]$PSModuleRoot,
@@ -37,7 +38,7 @@ function Copy-WDACFileScanner {
     $iterator = 0; #Used to denote when a notice of file copying should be written.
     $jobs = @()
     $Result | ForEach-Object {
-        if (-not $_.IsModulePresent -and $_.SysDrive) {
+        if ((-not $_.IsModulePresent) -and $_.SysDrive) {
         #Case: Module WDACAuditing.psm1 is not yet installed on the remote machine
             if ($iterator -eq 0) {
                 Write-Verbose "Copying module WDACFileScanner to machines which don't have it...."

@@ -173,6 +173,7 @@ function Get-SystemDriversModified {
         $PEs = @()
     
         foreach ($Driver in $DriversMSI) {
+            $Signers = $null
             if ($Driver.Signers.Count -ge 1) {
                 $Signers = @()
                 $SignerIndex = 0
@@ -238,7 +239,7 @@ function Get-SystemDriversModified {
         }
     
         foreach ($Driver in $DriversPE) {
-
+            $Signers = $null
             try {
                 $FlatHash = (Get-FileHash $Driver.FilePath -ErrorAction Stop).Hash
             } catch {
@@ -305,7 +306,7 @@ function Get-SystemDriversModified {
                 PageHash = $Driver.PageHash
                 PageHash256 = $Driver.PageHash256
                 # RequestedSigningLevel = $null
-                UnresolvedProcessName = "PowerShell.exe"
+                # UnresolvedProcessName = $ProcessName
                 ProcessName = $ProcessName
                 # ValidatedSigningLevel = $null
                 # PolicyName = $null

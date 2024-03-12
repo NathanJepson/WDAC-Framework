@@ -110,11 +110,6 @@ function Get-WDACFiles {
             $ModulePath = ".\Resources\WDACFileScanner.psm1"
         }
 
-        $ImportModule = $false
-        if ($RemoteMachine) {
-            $ImportModule = $true
-        }
-
         $PEFilesResults = @()
         $MSIorScriptFilesResults = @()
 
@@ -134,7 +129,7 @@ function Get-WDACFiles {
             try {
                 Import-Module -Name "WDACFileScanner"
                 
-                Get-SystemDriversModified -Audit:$Audit -NoScript:$NoScript -NoShadowCopy:$NoShadowCopy -OmitPaths $OmitPaths -PathToCatroot $PathToCatroot -ScanPath $ScanPath -ScriptFileNames:$ScriptFileNames -UserPEs:$UserPEs -ErrorAction Stop
+                Get-SystemDriversModified -Audit:$Audit -NoScript:$NoScript -NoShadowCopy:$NoShadowCopy -OmitPaths $OmitPaths -PathToCatroot $PathToCatroot -ScanPath $ScanPath -ScriptFileNames:$ScriptFileNames -UserPEs:$UserPEs -Verbose:$IsVerbose -ErrorAction Stop
             } catch {
                 if ($IsVerbose) {
                     Write-Warning ($_ | Format-List -Property * | Out-String)
@@ -157,7 +152,7 @@ function Get-WDACFiles {
 
         if ((-not $SkipModuleCheck) -and $RemoteMachine) {
             try {
-                Copy-WDACFileScanner -RemoteMachine $RemoteMachine -PSModuleRoot $PSModuleRoot -ModulePath $ModulePath -ErrorAction Stop
+                Copy-WDACFileScanner -RemoteMachine $RemoteMachine -PSModuleRoot $PSModuleRoot -ModulePath $ModulePath -Verbose:$VerbosePreference -ErrorAction Stop
             } catch [System.Management.Automation.Remoting.PSRemotingTransportException] {
                 Write-Error "PowerShell remoting is not available for those devices."
                 return
@@ -180,18 +175,19 @@ function Get-WDACFiles {
                     $ScriptFileNames,
                     $UserPEs,
                     $ModulePath,
-                    $PSModuleRoot
+                    $PSModuleRoot,
+                    $IsVerbose
                 )
 
                 try {
                     Import-Module (Join-Path $PSModuleRoot -ChildPath $ModulePath)
                     
-                    Get-SystemDriversModified -Audit:$Audit -NoScript:$NoScript -NoShadowCopy:$NoShadowCopy -OmitPaths $OmitPaths -PathToCatroot $PathToCatroot -ScanPath $ScanPath -ScriptFileNames:$ScriptFileNames -UserPEs:$UserPEs -ErrorAction Stop
+                    Get-SystemDriversModified -Audit:$Audit -NoScript:$NoScript -NoShadowCopy:$NoShadowCopy -OmitPaths $OmitPaths -PathToCatroot $PathToCatroot -ScanPath $ScanPath -ScriptFileNames:$ScriptFileNames -UserPEs:$UserPEs -Verbose:$IsVerbose -ErrorAction Stop
                 } catch {
                     Write-Error ($_ | Format-List -Property * | Out-String)
                     return $null
                 }
-            } -args $Audit.ToBool(),$NoScript.ToBool(),$NoShadowCopy.ToBool(),$OmitPaths,$PathToCatroot,$ScanPath,$ScriptFileNames.ToBool(),$UserPEs.ToBool(),$ModulePath,$PSModuleRoot
+            } -args $Audit.ToBool(),$NoScript.ToBool(),$NoShadowCopy.ToBool(),$OmitPaths,$PathToCatroot,$ScanPath,$ScriptFileNames.ToBool(),$UserPEs.ToBool(),$ModulePath,$PSModuleRoot,$VerbosePreference
 
         } else {
             Write-Verbose "Extracting file information for WDAC from remote machines(s)."
