@@ -179,16 +179,29 @@ function Get-SystemDriversModified {
                 $Signers = @()
                 $SignerIndex = 0
                 foreach ($Signer in $Driver.Signers) {
-                    $PublisherTBSHash = $Signer.Signer.Certificates[-1] | Get-TBSHash
-                    $IssuerTBSHash = $Signer.Signer.Certificates[0] | Get-TBSHash
-                    $NotValidBefore = $Signer.Signer.Certificates[-1].NotBefore
-                    $NotValidAfter = $Signer.Signer.Certificates[-1].NotAfter
 
-                    $Signer.Signer.Certificates[-1].Subject -match '(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))' | Out-Null
+                    $Publisher = $Signer.Chain.ChainElements[0].Certificate
+
+                    #According to how the ConfigCI module works, the PCACert is just 1 level below the root certificate (unless the only other cert is a root certificate)
+                    if ($Signer.Chain.ChainElements.Count -eq 2) {
+                        $Issuer = $Signer.Chain.ChainElements[1].Certificate
+                    } elseif ($Signer.Chain.ChainElements.Count -ne 1) {
+                        # -2 will get the certificate below root
+                        $Issuer = $Signer.Chain.ChainElements[$Signer.Chain.ChainElements.Count -2].Certificate
+                    }
+
+                    $PublisherTBSHash = $Publisher | Get-TBSHash
+                    $NotValidBefore = $Publisher.NotBefore
+                    $NotValidAfter = $Publisher.NotAfter
+
+                    $Publisher.Subject -match '(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))' | Out-Null
                     $PublisherName = $Matches[0]
-
-                    $Signer.Signer.Certificates[0].Subject -match '(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))' | Out-Null
-                    $IssuerName = $Matches[0]
+                    
+                    if ($Issuer) {
+                        $IssuerTBSHash = $Issuer | Get-TBSHash
+                        $Issuer.Subject -match '(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))' | Out-Null
+                        $IssuerName = $Matches[0]
+                    }
 
                     $Signers += New-Object -TypeName PSObject -Property ([Ordered]@{
                         SignatureIndex = $SignerIndex
@@ -258,16 +271,29 @@ function Get-SystemDriversModified {
                 $Signers = @()
                 $SignerIndex = 0
                 foreach ($Signer in $Driver.Signers) {
-                    $PublisherTBSHash = $Signer.Signer.Certificates[-1] | Get-TBSHash
-                    $IssuerTBSHash = $Signer.Signer.Certificates[0] | Get-TBSHash
-                    $NotValidBefore = $Signer.Signer.Certificates[-1].NotBefore
-                    $NotValidAfter = $Signer.Signer.Certificates[-1].NotAfter
 
-                    $Signer.Signer.Certificates[-1].Subject -match '(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))' | Out-Null
+                    $Publisher = $Signer.Chain.ChainElements[0].Certificate
+
+                    #According to how the ConfigCI module works, the PCACert is just 1 level below the root certificate (unless the only other cert is a root certificate)
+                    if ($Signer.Chain.ChainElements.Count -eq 2) {
+                        $Issuer = $Signer.Chain.ChainElements[1].Certificate
+                    } elseif ($Signer.Chain.ChainElements.Count -ne 1) {
+                        # -2 will get the certificate below root
+                        $Issuer = $Signer.Chain.ChainElements[$Signer.Chain.ChainElements.Count -2].Certificate
+                    }
+
+                    $PublisherTBSHash = $Publisher | Get-TBSHash
+                    $NotValidBefore = $Publisher.NotBefore
+                    $NotValidAfter = $Publisher.NotAfter
+
+                    $Publisher.Subject -match '(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))' | Out-Null
                     $PublisherName = $Matches[0]
 
-                    $Signer.Signer.Certificates[0].Subject -match '(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))' | Out-Null
-                    $IssuerName = $Matches[0]
+                    if ($Issuer) {
+                        $IssuerTBSHash = $Issuer | Get-TBSHash
+                        $Issuer.Subject -match '(?<=CN=)(.*?)($|(?=,\s?[^\s,]+=))' | Out-Null
+                        $IssuerName = $Matches[0]
+                    }
 
                     $Signers += New-Object -TypeName PSObject -Property ([Ordered]@{
                         SignatureIndex = $SignerIndex
