@@ -167,6 +167,7 @@ function Get-SystemDriversModified {
     
         $ProcessID = $PID
         $User = whoami.exe
+        $Hostname = HOSTNAME.EXE
         $ProcessName = "System file scan"
 
         $MSIs = @()
@@ -222,7 +223,13 @@ function Get-SystemDriversModified {
                 $Signed = $true
             }
 
+            $SignerInfo = $null
+            if ($Signers.Count -ge 1) {
+                $SignerInfo = ($Signers | Sort-Object -Property SignatureIndex)
+            }
+
             $MSIs += New-Object -TypeName PSObject -Property ([Ordered] @{
+                PSComputerName = $Hostname
                 TimeCreated = $DateTime
                 ProcessID = $ProcessID
                 User = $User
@@ -234,7 +241,7 @@ function Get-SystemDriversModified {
                 #SHA256AuthenticodeHash = 
                 UserWriteable = $Driver.UserWriteable
                 Signed = $Signed
-                SignerInfo = ($Signers | Sort-Object -Property SignatureIndex)
+                SignerInfo = $SignerInfo
             })
         }
     
@@ -290,7 +297,13 @@ function Get-SystemDriversModified {
                 $SigningScenario = "Driver"
             }
 
+            $SignerInfo = $null
+            if ($Signers.Count -ge 1) {
+                $SignerInfo = ($Signers | Sort-Object -Property SignatureIndex)
+            }
+
             $PEs += New-Object -TypeName PSObject -Property ([Ordered] @{
+                PSComputerName = $Hostname
                 TimeCreated = $DateTime
                 ProcessID = $ProcessID
                 User = $User
@@ -321,7 +334,7 @@ function Get-SystemDriversModified {
                 PackageFamilyName = $Driver.PackageFamilyName
                 UserWriteable = $Driver.UserWriteable
                 #FailedWHQL = $null
-                SignerInfo = ($Signers | Sort-Object -Property SignatureIndex)
+                SignerInfo = $SignerInfo
             })
         }
 

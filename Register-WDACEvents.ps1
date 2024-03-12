@@ -81,7 +81,7 @@ function Register-PEEvent {
     try {
         if (-not (Find-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop)) {
             
-            $Var1 = (Add-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -FileName $FileName -TimeDetected $WDACEvent.TimeCreated -FirstDetectedPath $FirstDetectedPath -FirstDetectedUser $WDACEvent.User -FirstDetectedProcessID $WDACEvent.ProcessID -FirstDetectedProcessName $WDACEvent.ProcessName -SHA256AuthenticodeHash $WDACEvent.SHA256AuthenticodeHash -OriginDevice $DeviceName -EventType $WDACEvent.EventType -SigningScenario $WDACEvent.SigningScenario -OriginalFileName $WDACEvent.OriginalFileName -FileVersion $WDACEvent.FileVersion -InternalName $WDACEvent.InternalName -FileDescription $WDACEvent.FileDescription -ProductName $WDACEvent.ProductName -PackageFamilyName $WDACEvent.PackageFamilyName -UserWriteable $WDACEvent.UserWriteable -FailedWHQL $WDACEvent.FailedWHQL -BlockingPolicyID $WDACEvent.PolicyGUID -RequestedSigningLevel $WDACEvent.RequestedSigningLevel -ValidatedSigningLevel $WDACEvent.ValidatedSigningLevel -Connection $Connection -ErrorAction Stop)
+            $Var1 = (Add-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -FileName $FileName -TimeDetected $WDACEvent.TimeCreated -FirstDetectedPath $FirstDetectedPath -FirstDetectedUser $WDACEvent.User -FirstDetectedProcessID $WDACEvent.ProcessID -FirstDetectedProcessName $WDACEvent.ProcessName -SHA256AuthenticodeHash $WDACEvent.SHA256AuthenticodeHash -SHA256SipHash $WDACEvent.SIPHash256 -OriginDevice $DeviceName -EventType $WDACEvent.EventType -SigningScenario $WDACEvent.SigningScenario -OriginalFileName $WDACEvent.OriginalFileName -FileVersion $WDACEvent.FileVersion -InternalName $WDACEvent.InternalName -FileDescription $WDACEvent.FileDescription -ProductName $WDACEvent.ProductName -PackageFamilyName $WDACEvent.PackageFamilyName -UserWriteable $WDACEvent.UserWriteable -FailedWHQL $WDACEvent.FailedWHQL -BlockingPolicyID $WDACEvent.PolicyGUID -RequestedSigningLevel $WDACEvent.RequestedSigningLevel -ValidatedSigningLevel $WDACEvent.ValidatedSigningLevel -Connection $Connection -ErrorAction Stop)
             if (-not $Var1) {
                 throw "Unsuccessful in adding this app to the database: $($WDACEvent.SHA256FileHash)"
             }
@@ -115,7 +115,7 @@ function Register-MSIorScriptEvent {
     try {
         if (-not (Find-MSIorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop)) {
             
-            $Var1 = (Add-MSIorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -TimeDetected $WDACEvent.TimeCreated -FirstDetectedPath $WDACEvent.FilePath -FirstDetectedUser $WDACEvent.User -FirstDetectedProcessID $WDACEvent.ProcessID -SHA256AuthenticodeHash $WDACEvent.SHA256AuthenticodeHash -UserWriteable $WDACEvent.UserWriteable -Signed $WDACEvent.Signed -OriginDevice $DeviceName -EventType $WDACEvent.EventType -Connection $Connection -ErrorAction Stop)
+            $Var1 = (Add-MSIorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -TimeDetected $WDACEvent.TimeCreated -FirstDetectedPath $WDACEvent.FilePath -FirstDetectedUser $WDACEvent.User -FirstDetectedProcessID $WDACEvent.ProcessID -SHA256AuthenticodeHash $WDACEvent.SHA256AuthenticodeHash -SHA256SipHash $WDACEvent.SIPHash256 -UserWriteable $WDACEvent.UserWriteable -Signed $WDACEvent.Signed -OriginDevice $DeviceName -EventType $WDACEvent.EventType -Connection $Connection -ErrorAction Stop)
             if (-not $Var1) {
                 throw "Unsuccessful in adding this app to the database: $($WDACEvent.SHA256FileHash)"
             }
@@ -137,19 +137,20 @@ filter Register-WDACEvents {
 
     .DESCRIPTION
     Add individual apps, signers, certificates, and MSIs or scripts to the trust database based on the schema of events returned from WDACAuditing. 
-    You will need to pipe the results of Get-WDACEvents to this function.
+    You can also pipe-in results from the Get-WDACFiles cmdlet (which is the same format as events from WDACAuditing.)
+    You will need to pipe the results of Get-WDACEvents or Get-WDACFiles to this function.
 
     Author: Nathan Jepson
     License: MIT License
 
     .INPUTS
-    [PSCustomObject] Result of Get-WDACEvents
+    [PSCustomObject] Result of Get-WDACEvents or Get-WDACFiles
 
     .OUTPUTS
     Pipes out a replica of the inputs if you still need them.
 
     .PARAMETER WDACEvent
-    Events as PSCustomObjects piped from Get-WDACEvents
+    Events as PSCustomObjects piped from Get-WDACEvents or Get-WDACFiles
 
     .PARAMETER NoOut
     When this is set, no output is returned.
@@ -162,6 +163,9 @@ filter Register-WDACEvents {
 
     .EXAMPLE
     Get-WDACEvents | Register-WDACEvents
+
+    .EXAMPLE
+    Get-WDACFiles -RemoteMachine PC1 -NoShadowCopy -ScanPath "C:\Program Files (x86)\" -UserPEs -NoScript -Verbose | Register-WDACEvents -Level Publisher -Fallbacks Hash -Verbose
 
     .EXAMPLE
     Get-WDACEvents -RemoteMachine PC2,PC3 -SignerInformation -CheckWhqlStatus | Register-WDACEvents -Verbose
@@ -232,7 +236,7 @@ filter Register-WDACEvents {
                     Add-NewPublishersFromAppSigners -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop
                 }
             } catch {
-                Write-Verbose $WDACEvent
+                Write-Verbose ($_ | Format-List -Property * | Out-String)
                 Write-Verbose "Failed to add this event (or its signers): $WDACEvent"
                 $Transaction.Rollback()
             }
@@ -244,14 +248,16 @@ filter Register-WDACEvents {
                     Add-NewPublishersFromAppSigners -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop
                 }
             } catch {
-                Write-Verbose $WDACEvent
+                Write-Verbose ($_ | Format-List -Property * | Out-String)
                 Write-Verbose "Failed to add this event (or its signers): $WDACEvent"
                 $Transaction.Rollback()
                 
             }
         }
 
-        $Transaction.Commit()
+        if ($Connection.AutoCommit -eq $false) {
+            $Transaction.Commit()
+        }        
     }
 
     $Connection.Close()

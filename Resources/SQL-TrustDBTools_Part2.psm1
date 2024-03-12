@@ -60,6 +60,7 @@ function Get-PotentialHashRules {
                         FirstDetectedUser = $Reader["FirstDetectedUser"];
                         FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
                         SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                        SHA256SipHash = $Reader["SHA256SipHash"];
                         UserWriteable = [bool]($Reader["UserWriteable"]);
                         Signed = [bool]($Reader["Signed"]);
                         OriginDevice = $Reader["OriginDevice"];
@@ -88,6 +89,7 @@ function Get-PotentialHashRules {
                         FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
                         FirstDetectedProcessName = $Reader["FirstDetectedProcessName"];
                         SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                        SHA256SipHash = $Reader["SHA256SipHash"];
                         OriginDevice  = $Reader["OriginDevice"];
                         EventType = $Reader["EventType"];
                         SigningScenario = $Reader["SigningScenario"];

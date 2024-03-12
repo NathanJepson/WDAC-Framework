@@ -841,6 +841,9 @@ filter Approve-WDACRulesFilter {
     .EXAMPLE
     Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -SignerInformation -PEEvents | Register-WDACEvents -Level FilePublisher | Approve-WDACRulesFilter -VersioningType 11 -OverrideUserorKernelDefaults -Verbose
     
+    .EXAMPLE
+    Get-WDACFiles -RemoteMachine PC1 -NoShadowCopy -ScanPath "C:\Program Files (x86)\" -UserPEs -NoScript -Verbose | Register-WDACEvents -Level Publisher -Fallbacks Hash -Verbose | Approve-WDACRulesFilter -PolicyGUID "959A0F15-8985-4551-A208-5FFE9EDB3A70" -MultiRuleMode -ApplyRuleEachSigner -Purge -Verbose
+
     .PARAMETER Events
     Pipeline input of WDAC events which are piped from Register-WDACEvents
     #>
