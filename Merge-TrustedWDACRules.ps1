@@ -108,6 +108,27 @@ function Add-WDACRuleComments {
     }
 }
 
+function Get-YesOrNoPrompt {
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $Prompt
+    )
+
+    Write-Host ($Prompt + " (Y/N): ") -NoNewline
+    while ($true) {
+        $InputString = Read-Host
+        if ($InputString.ToLower() -eq "y") {
+            return $true
+        } elseif ($InputString.ToLower() -eq "n") {
+            return $false
+        } else {
+            Write-Host "Not a valid option. Please supply y or n."
+        }
+    }
+}
+
 function Merge-TrustedWDACRules {
     <#
     .SYNOPSIS
@@ -155,7 +176,7 @@ function Merge-TrustedWDACRules {
         [string[]]$PolicyName,
         [string[]]$PolicyGUID,
         [string[]]$PolicyID,
-        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
+        [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName","Certificate")]
         [Alias("Level")]
         [string[]]$Levels
     )
@@ -166,8 +187,20 @@ function Merge-TrustedWDACRules {
     Import-Module -SkipEditionCheck -Name "ConfigCI" -Verbose:$false
 
     if (-not $Levels) {
-        $Levels = @("Hash","FilePath","FileName","LeafCertificate","PcaCertificate","Publisher","FilePublisher")
+        $Levels = @("Hash","FilePath","FileName","Certificate","Publisher","FilePublisher")
+    } elseif (($Levels -contains "LeafCertificate") -or ($Levels -contains "PcaCertificate")) {
+        if (Get-YesOrNoPrompt -Prompt "In this cmdlet, ALL certificate rules are merged if PcaCertificate or LeafCertificate is provided. Is this okay?") {
+            $Levels = $Levels | Where-Object {$_ -ne "LeafCertificate"}
+            $Levels = $Levels | Where-Object {$_ -ne "PcaCertificate"}
+            if (-not ($Levels -contains "Certificate")) {
+                $Levels += "Certificate"
+            }
+        } else {
+            return
+        }
     }
+
+
     $Policies = @()
     if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
         $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
@@ -306,32 +339,21 @@ function Merge-TrustedWDACRules {
                     }
                 }
                 "LeafCertificate" {
-                    $PotentialLeafCertRules = Get-PotentialLeafCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
-                    foreach ($LeafCertRule in $PotentialLeafCertRules) {
-                        if ( ($LeafCertRule.Blocked -eq $true) -and (($LeafCertRule.TrustedDriver -eq $true) -or ($LeafCertRule.TrustedUserMode -eq $true))) {
-                            Write-Warning "LeafCert rule with TBS Hash $($LeafCertRule.TBSHash) is both trusted and blocked. Skipping."
-                            continue
-                        }
-                        $rule,$IDsAndComments = New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $LeafCertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
-                        if (-not (Set-CertificateRuleStaged -TBSHash $LeafCertRule.TBSHash -Connection $Connection -ErrorAction Stop)) {
-                            throw "Could not set LeafCertificate rule with TBSHash $($LeafCertRule.TBSHash) to STAGED."
-                        }
-                        if ($rule) {
-                            $RulesToMerge += $rule
-                            $RulesAdded += ($rule.Count)
-                        }
-                    }
+                    throw "This block should not be reached."
                 }
                 "PcaCertificate" {
-                    $PotentialPcaCertRules = Get-PotentialPcaCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
-                    foreach ($PcaCertRule in $PotentialPcaCertRules) {
-                        if ( ($PcaCertRule.Blocked -eq $true) -and (($PcaCertRule.TrustedDriver -eq $true) -or ($PcaCertRule.TrustedUserMode -eq $true))) {
-                            Write-Warning "PcaCert rule with TBS Hash $($PcaCertRule.TBSHash) is both trusted and blocked. Skipping."
+                    throw "This block should not be reached."
+                }
+                "Certificate" {
+                    $PotentialCertRules = Get-PotentialCertificateRules -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
+                    foreach ($CertRule in $PotentialCertRules) {
+                        if ( ($CertRule.Blocked -eq $true) -and (($CertRule.TrustedDriver -eq $true) -or ($CertRule.TrustedUserMode -eq $true))) {
+                            Write-Warning "Cert rule with TBS Hash $($CertRule.TBSHash) is both trusted and blocked. Skipping."
                             continue
                         }
-                        $rule,$IDsAndComments = New-MicrosoftSecureBootPcaCertificateRule -RuleInfo $PcaCertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
-                        if (-not (Set-CertificateRuleStaged -TBSHash $PcaCertRule.TBSHash -Connection $Connection -ErrorAction Stop)) {
-                            throw "Could not set PcaCertificate rule with TBSHash $($PcaCertRule.TBSHash) to STAGED."
+                        $rule,$IDsAndComments = New-MicrosoftSecureBootCertificateRule -RuleInfo $CertRule -RuleMap $IDsAndComments -PSModuleRoot $PSModuleRoot -ErrorAction Stop
+                        if (-not (Set-CertificateRuleStaged -TBSHash $CertRule.TBSHash -Connection $Connection -ErrorAction Stop)) {
+                            throw "Could not set Certificate rule with TBSHash $($CertRule.TBSHash) to STAGED."
                         }
                         if ($rule) {
                             $RulesToMerge += $rule

@@ -303,7 +303,7 @@ function Set-FileNameRuleStaged {
     }
 }
 
-function Get-PotentialLeafCertificateRules {
+function Get-PotentialCertificateRules {
     [CmdletBinding()]
     Param (
         $PolicyGUID,
@@ -320,10 +320,10 @@ function Get-PotentialLeafCertificateRules {
         }
         $Command = $Connection.CreateCommand()
         if ($PolicyGUID) {
-            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 1 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
+            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
             $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
         } else {
-            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 1"
+            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0"
         }
         
         $Command.CommandType = [System.Data.CommandType]::Text
@@ -338,7 +338,6 @@ function Get-PotentialLeafCertificateRules {
                 $result += [PSCustomObject]@{
                     TBSHash = $Reader["TBSHash"];
                     CommonName = $Reader["CommonName"];
-                    IsLeaf = [bool]($Reader["IsLeaf"]);
                     ParentCertTBSHash = $Reader["ParentCertTBSHash"];
                     NotValidBefore = $Reader["NotValidBefore"];
                     NotValidAfter = $Reader["NotValidAfter"];
@@ -376,6 +375,16 @@ function Get-PotentialLeafCertificateRules {
     }
 }
 
+function Get-PotentialLeafCertificateRules {
+    [CmdletBinding()]
+    Param (
+        $PolicyGUID,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    return (Get-PotentialCertificateRules -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)
+}
+
 function Get-PotentialPcaCertificateRules {
     [CmdletBinding()]
     Param (
@@ -383,69 +392,7 @@ function Get-PotentialPcaCertificateRules {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
-    $result = $null
-    $NoConnectionProvided = $false
-
-    try {
-        if (-not $Connection) {
-            $Connection = New-SQLiteConnection -ErrorAction Stop
-            $NoConnectionProvided = $true
-        }
-        $Command = $Connection.CreateCommand()
-        if ($PolicyGUID) {
-            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 0 AND (AllowedPolicyID = @PolicyGUID OR BlockingPolicyID = @PolicyGUID)"
-            $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
-        } else {
-            $Command.Commandtext = "Select * from certificates WHERE (TrustedDriver = 1 OR TrustedUserMode = 1 OR Blocked = 1) AND Staged = 0 AND IsLeaf = 0"
-        }
-        $Command.CommandType = [System.Data.CommandType]::Text
-        $Reader = $Command.ExecuteReader()
-        $Reader.GetValues() | Out-Null
-   
-        while($Reader.HasRows) {
-            if (-not $result) {
-                $result = @()
-            }
-            if($Reader.Read()) {
-                $result += [PSCustomObject]@{
-                    TBSHash = $Reader["TBSHash"];
-                    CommonName = $Reader["CommonName"];
-                    IsLeaf = [bool]($Reader["IsLeaf"]);
-                    ParentCertTBSHash = $Reader["ParentCertTBSHash"];
-                    NotValidBefore = $Reader["NotValidBefore"];
-                    NotValidAfter = $Reader["NotValidAfter"];
-                    Untrusted = [bool]($Reader["Untrusted"]);
-                    TrustedDriver = [bool]($Reader["TrustedDriver"]);
-                    TrustedUserMode = [bool]($Reader["TrustedUserMode"]);
-                    Staged = [bool]($Reader["Staged"]);
-                    Revoked = [bool]($Reader["Revoked"]);
-                    Deferred = [bool]($Reader["Deferred"]);
-                    Blocked = [bool]($Reader["Blocked"]);
-                    AllowedPolicyID = $Reader["AllowedPolicyID"];
-                    DeferredPolicyIndex = $Reader["DeferredPolicyIndex"];
-                    Comment = $Reader["Comment"];
-                    BlockingPolicyID = $Reader["BlockingPolicyID"]
-                }
-            }
-        }
-
-        if ($Reader) {
-            $Reader.Close()
-        }
-        if ($NoConnectionProvided -and $Connection) {
-            $Connection.close()
-        }
-        return (Format-SQLResult $result)
-    } catch {
-        $theError = $_
-        if ($NoConnectionProvided -and $Connection) {
-            $Connection.close()
-        }
-        if ($Reader) {
-            $Reader.Close()
-        }
-        throw $theError
-    }
+    return (Get-PotentialCertificateRules -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)
 }
 
 function Set-CertificateRuleStaged {

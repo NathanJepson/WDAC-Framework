@@ -425,7 +425,7 @@ function New-MicrosoftSecureBootFileNameRule {
     return $result,$RuleMap
 }
 
-function New-MicrosoftSecureBootLeafCertificateRule {
+function New-MicrosoftSecureBootCertificateRule {
     [CmdletBinding()]
     param (
         [ValidateNotNullOrEmpty()]
@@ -510,6 +510,22 @@ function New-MicrosoftSecureBootLeafCertificateRule {
     return $result,$RuleMap
 }
 
+function New-MicrosoftSecureBootLeafCertificateRule {
+    [CmdletBinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        $RuleInfo,
+        $RuleMap,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $PSModuleRoot
+    )
+
+    #As of now, there is no reasonable difference between a PcaCertificate rule and a LeafCertificate rule (by XML alone)
+    $result,$RuleMap = (New-MicrosoftSecureBootCertificateRule -RuleInfo $RuleInfo -RuleMap $RuleMap -PSModuleRoot $PSModuleRoot -ErrorAction Stop)
+    return $result,$RuleMap
+}
+
 function New-MicrosoftSecureBootPcaCertificateRule {
     [CmdletBinding()]
     param (
@@ -522,7 +538,7 @@ function New-MicrosoftSecureBootPcaCertificateRule {
     )
 
     #As of now, there is no reasonable difference between a PcaCertificate rule and a LeafCertificate rule (by XML alone)
-    $result,$RuleMap = (New-MicrosoftSecureBootLeafCertificateRule -RuleInfo $RuleInfo -RuleMap $RuleMap -PSModuleRoot $PSModuleRoot -ErrorAction Stop)
+    $result,$RuleMap = (New-MicrosoftSecureBootCertificateRule -RuleInfo $RuleInfo -RuleMap $RuleMap -PSModuleRoot $PSModuleRoot -ErrorAction Stop)
     return $result,$RuleMap
 }
 

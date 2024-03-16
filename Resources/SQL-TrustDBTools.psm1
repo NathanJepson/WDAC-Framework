@@ -1886,7 +1886,6 @@ function Get-WDACCertificate {
                 $result += [PSCustomObject]@{
                     TBSHash = $Reader["TBSHash"];
                     CommonName = $Reader["CommonName"];
-                    IsLeaf = [bool]($Reader["IsLeaf"]);
                     ParentCertTBSHash = $Reader["ParentCertTBSHash"];
                     NotValidBefore = $Reader["NotValidBefore"];
                     NotValidAfter = $Reader["NotValidAfter"];
@@ -1984,7 +1983,6 @@ function Add-WDACCertificate {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$CommonName,
-        [bool]$IsLeaf=$false,
         $ParentCertTBSHash,
         $NotValidBefore,
         $NotValidAfter,
@@ -1999,10 +1997,9 @@ function Add-WDACCertificate {
         }
 
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "INSERT INTO certificates (TBSHash,CommonName,IsLeaf,ParentCertTBSHash,NotValidBefore,NotValidAfter) values (@TBSHash,@CommonName,@IsLeaf,@ParentCertTBSHash,@NotValidBefore,@NotValidAfter)"
+        $Command.Commandtext = "INSERT INTO certificates (TBSHash,CommonName,ParentCertTBSHash,NotValidBefore,NotValidAfter) values (@TBSHash,@CommonName,@ParentCertTBSHash,@NotValidBefore,@NotValidAfter)"
             $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
             $Command.Parameters.AddWithValue("CommonName",$CommonName) | Out-Null
-            $Command.Parameters.AddWithValue("IsLeaf",$IsLeaf) | Out-Null
             $Command.Parameters.AddWithValue("ParentCertTBSHash",$ParentCertTBSHash) | Out-Null
             $Command.Parameters.AddWithValue("NotValidBefore",$NotValidBefore) | Out-Null
             $Command.Parameters.AddWithValue("NotValidAfter",$NotValidAfter) | Out-Null
@@ -2019,6 +2016,300 @@ function Add-WDACCertificate {
         throw $theError
     }
 
+}
+
+function Test-WDACCertificateNotValidBefore {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $lookupResult = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select NotValidBefore from certificates WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+   
+        while($Reader.HasRows) {
+            
+            if($Reader.Read()) {
+                $lookupResult = [PSCustomObject]@{
+                    NotValidBefore = $Reader["NotValidBefore"]
+                }
+            }
+        }
+
+        $lookupResult = Format-SQLResult $lookupResult
+
+        if (($null -eq $lookupResult.NotValidBefore) -or ("" -eq $lookupResult.NotValidBefore)) {
+            $result = $false
+        } else {
+            $result = $true
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Set-WDACCertificateNotValidBefore {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$NotValidBefore,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE certificates SET NotValidBefore = @NotValidBefore WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.Parameters.AddWithValue("NotValidBefore",$NotValidBefore) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Test-WDACCertificateNotValidAfter {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $lookupResult = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select NotValidAfter from certificates WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+   
+        while($Reader.HasRows) {
+            
+            if($Reader.Read()) {
+                $lookupResult = [PSCustomObject]@{
+                    NotValidAfter = $Reader["NotValidAfter"]
+                }
+            }
+        }
+
+        $lookupResult = Format-SQLResult $lookupResult
+
+        if (($null -eq $lookupResult.NotValidAfter) -or ("" -eq $lookupResult.NotValidAfter)) {
+            $result = $false
+        } else {
+            $result = $true
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Set-WDACCertificateNotValidAfter {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$NotValidAfter,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE certificates SET NotValidAfter = @NotValidAfter WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.Parameters.AddWithValue("NotValidAfter",$NotValidAfter) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
+function Test-WDACCertificateParentCertTBSHash {
+    [cmdletbinding()]
+    Param ( 
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $false
+    $lookupResult = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "Select ParentCertTBSHash from certificates WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+   
+        while($Reader.HasRows) {
+            
+            if($Reader.Read()) {
+                $lookupResult = [PSCustomObject]@{
+                    ParentCertTBSHash = $Reader["ParentCertTBSHash"]
+                }
+            }
+        }
+
+        $lookupResult = Format-SQLResult $lookupResult
+
+        if (($null -eq $lookupResult.ParentCertTBSHash) -or ("" -eq $lookupResult.ParentCertTBSHash)) {
+            $result = $false
+        } else {
+            $result = $true
+        }
+
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return $result
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Set-WDACCertificateParentCertTBSHash {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$TBSHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$ParentCertTBSHash,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        $Command.Commandtext = "UPDATE certificates SET ParentCertTBSHash = @ParentCertTBSHash WHERE TBSHash = @TBSHash"
+        $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
+        $Command.Parameters.AddWithValue("ParentCertTBSHash",$ParentCertTBSHash) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
 }
 
 function Add-WDACAppSigner {
@@ -5627,52 +5918,53 @@ function Update-WDACTrust {
             "LeafCertificate" {
                 if ($UserMode) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE certificates SET TrustedUserMode = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET TrustedUserMode = 1 WHERE TBSHash = @TBSHash"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Driver) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE certificates SET TrustedDriver = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET TrustedDriver = 1 WHERE TBSHash = @TBSHash"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Block) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE certificates SET Blocked = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET Blocked = 1 WHERE TBSHash = @TBSHash"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Untrusted) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE certificates SET Untrusted = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET Untrusted = 1 WHERE TBSHash = @TBSHash"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
             }
     
             "PcaCertificate" {
+            #This block is exactly identical to "LeafCertificate"
                 if ($UserMode) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE certificates SET TrustedUserMode = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET TrustedUserMode = 1 WHERE TBSHash = @TBSHash"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Driver) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE certificates SET TrustedDriver = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET TrustedDriver = 1 WHERE TBSHash = @TBSHash"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Block) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE certificates SET Blocked = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET Blocked = 1 WHERE TBSHash = @TBSHash"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
                 if ($Untrusted) {
                     $Command = $Connection.CreateCommand()
-                    $Command.Commandtext = "UPDATE certificates SET Untrusted = 1 WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET Untrusted = 1 WHERE TBSHash = @TBSHash"
                     $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                     $Command.ExecuteNonQuery()
                 }
@@ -5809,9 +6101,9 @@ function Update-WDACTrustPoliciesAndComment {
             "LeafCertificate" {
                 $Command = $Connection.CreateCommand()
                 if ($Block) {
-                    $Command.Commandtext = "UPDATE certificates SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash"
                 } else {
-                    $Command.Commandtext = "UPDATE certificates SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash AND IsLeaf = 1"
+                    $Command.Commandtext = "UPDATE certificates SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash"
                 }
                 $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                 $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null
@@ -5822,9 +6114,9 @@ function Update-WDACTrustPoliciesAndComment {
             "PcaCertificate" {
                 $Command = $Connection.CreateCommand()
                 if ($Block) {
-                    $Command.Commandtext = "UPDATE certificates SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET BlockingPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash"
                 } else {
-                    $Command.Commandtext = "UPDATE certificates SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash AND IsLeaf = 0"
+                    $Command.Commandtext = "UPDATE certificates SET AllowedPolicyID = @PolicyGUID, Comment = @Comment WHERE TBSHash = @TBSHash"
                 }
                 $Command.Parameters.AddWithValue("TBSHash",$PrimaryKey1) | Out-Null
                 $Command.Parameters.AddWithValue("PolicyGUID",$PolicyGUID) | Out-Null

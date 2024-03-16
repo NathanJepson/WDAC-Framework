@@ -16,7 +16,7 @@ function Register-Signer {
     if (-not $MSI) {
         $TempDate = Get-Date ("12/31/1610 5:00:00 PM")
 
-        if ( (Get-Date ($SignerDetails.NotValidBefore)) -lt $TempDate -or (Get-Date ($SignerDetails.NotValidAfter)) -lt $TempDate) {
+        if ( ((Get-Date ($SignerDetails.NotValidBefore)) -lt $TempDate) -or ((Get-Date ($SignerDetails.NotValidAfter)) -lt $TempDate)) {
             #Microsoft arbitrarily sets some signers to be dated around the year 1600. Let's skip these
             return;
         } 
@@ -28,13 +28,47 @@ function Register-Signer {
 
     try {
         if (-not (Find-WDACCertificate $SignerDetails.IssuerTBSHash -Connection $Connection -ErrorAction Stop)) {
-            if (-not (Add-WDACCertificate -TBSHash $SignerDetails.IssuerTBSHash -CommonName $SignerDetails.IssuerName -IsLeaf $false -Connection $Connection -ErrorAction Stop)) {
+            if (-not (Add-WDACCertificate -TBSHash $SignerDetails.IssuerTBSHash -CommonName $SignerDetails.IssuerName -Connection $Connection -ErrorAction Stop)) {
                 throw "Failed to add Issuer certificate."
             }
         }
         if (-not (Find-WDACCertificate $SignerDetails.PublisherTBSHash -Connection $Connection -ErrorAction Stop)) {
-            if (-not (Add-WDACCertificate -TBSHash $SignerDetails.PublisherTBSHash -CommonName $SignerDetails.PublisherName -IsLeaf $true -ParentCertTBSHash $SignerDetails.IssuerTBSHash -NotValidBefore $SignerDetails.NotValidBefore -NotValidAfter $SignerDetails.NotValidAfter -Connection $Connection -ErrorAction Stop)) {
+            if (-not (Add-WDACCertificate -TBSHash $SignerDetails.PublisherTBSHash -CommonName $SignerDetails.PublisherName -ParentCertTBSHash $SignerDetails.IssuerTBSHash -NotValidBefore $SignerDetails.NotValidBefore -NotValidAfter $SignerDetails.NotValidAfter -Connection $Connection -ErrorAction Stop)) {
                 throw "Failed to add Publisher certificate."
+            }
+        } else {
+        #If a certificate was already in the database, but never had a parent certificate listed, or it never had NotValidBefore or NotValidAfter date.
+            try {
+                if (-not (Test-WDACCertificateParentCertTBSHash -TBSHash $SignerDetails.PublisherTBSHash -Connection $Connection -ErrorAction Stop)) {
+                    if (-not (Set-WDACCertificateParentCertTBSHash -TBSHash $SignerDetails.PublisherTBSHash -ParentCertTBSHash $SignerDetails.IssuerTBSHash -Connection $Connection -ErrorAction Stop)) {
+                        throw "Could not update parent cert."
+                    }
+                }
+            } catch {
+                Write-Verbose ($_ | Format-List -Property * | Out-String)
+                Write-Warning "Could not update Parent cert for certificate with TBS hash $($SignerDetails.PublisherTBSHash)"
+            }
+
+            try {
+                if (-not (Test-WDACCertificateNotValidBefore -TBSHash $SignerDetails.PublisherTBSHash -Connection $Connection -ErrorAction Stop)) {
+                    if (-not (Set-WDACCertificateNotValidBefore -TBSHash $SignerDetails.PublisherTBSHash -NotValidBefore $SignerDetails.NotValidBefore -Connection $Connection -ErrorAction Stop)) {
+                        throw "Could not update NotValidBefore date."
+                    }
+                }
+            } catch {
+                Write-Verbose ($_ | Format-List -Property * | Out-String)
+                Write-Warning "Could not update NotValidBefore for certificate with TBS hash $($SignerDetails.PublisherTBSHash)"
+            }
+
+            try {
+                if (-not (Test-WDACCertificateNotValidAfter -TBSHash $SignerDetails.PublisherTBSHash -Connection $Connection -ErrorAction Stop)) {
+                    if (-not (Set-WDACCertificateNotValidAfter -TBSHash $SignerDetails.PublisherTBSHash -NotValidAfter $SignerDetails.NotValidAfter -Connection $Connection -ErrorAction Stop)) {
+                        throw "Could not update NotValidAfter date."
+                    }
+                }
+            } catch {
+                Write-Verbose ($_ | Format-List -Property * | Out-String)
+                Write-Warning "Could not update NotValidAfter date for certificate with TBS hash $($SignerDetails.PublisherTBSHash)"
             }
         }
 

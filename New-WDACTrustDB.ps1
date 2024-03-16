@@ -150,7 +150,6 @@ function New-WDACTrustDB {
     CREATE TABLE certificates (
         TBSHash Text PRIMARY KEY,
         CommonName Text NOT NULL,
-        IsLeaf DEFAULT 1 NOT NULL,
         ParentCertTBSHash Text,
         NotValidBefore Text,
         NotValidAfter Text,
