@@ -79,7 +79,7 @@ function Set-SignedPowerShellModules {
         throw "Not a valid certificate path for the signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
     }
 
-    $PSCodeSigningJSON = (Get-LocalStorageJSON)."PowerShellCodeSigningCertificate"
+    $PSCodeSigningJSON = (Get-LocalStorageJSON -ErrorAction Stop)."PowerShellCodeSigningCertificate"
 
     if ( (-not $PSCodeSigningCert) -and $PSCodeSigningJSON) {
         if (-not ($PSCodeSigningJSON.ToLower() -match "cert\:\\")) {
