@@ -672,6 +672,9 @@ function New-MicrosoftSecureBootFilePublisherRule {
         $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"MinimumFileVersion",$RuleInfo.MinimumAllowedVersion);
         $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"MinimumFileVersion",$RuleInfo.MinimumAllowedVersion);
 
+        $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"MaximumFileVersion",$RuleInfo.MaximumAllowedVersion);
+        $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"MaximumFileVersion",$RuleInfo.MaximumAllowedVersion);
+
         $result += $blockResultUserMode
         $result += $blockResultKernel
     } else {

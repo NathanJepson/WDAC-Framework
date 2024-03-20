@@ -27,6 +27,11 @@ function Compare-Versions {
             $Version1,
             $Version2
         )
+
+        if ((-not (Test-ValidVersionNumber $Version1)) -or (-not (Test-ValidVersionNumber $Version2))) {
+            return -2
+        }
+
         $vnum1,$vnum2 = 0;
     
         for ($i=$j=0; $i -lt $Version1.Length -or $j -lt $Version2.Length;) {
@@ -596,6 +601,52 @@ function Get-FileVersionPrompt {
 
     if ( ($VersionNumber -eq "0") -or ($VersionNumber -eq 0)) {
         $VersionNumber = "0.0.0.0"
+    } elseif ($VersionNumber.ToLower() -eq "k") {
+        return $CurrentVersionNum
+    }
+
+    return $VersionNumber
+}
+
+function Get-MaxFileVersionPrompt {
+    [cmdletbinding()]
+    param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$Prompt,
+        $CurrentVersionNum,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $MinimumVersion,
+        $FileVersionInfo
+    )
+
+    Write-Host ($Prompt)
+    Write-Host("Enter VersionNumber [OR] `"k`" to use Current App FileVersion [OR] `"Max`" for 65535.65535.65535.65535 [OR] `"f`" for FilePublisher info")
+    Write-Host("(Version numbers are from 0.0.0.0 to 65535.65535.65535.65535)")
+    $VersionNumber = Read-Host -Prompt "Selection"
+
+    while (((Compare-Versions -Version1 $VersionNumber -Version2 $MinimumVersion) -eq -1) -or (-not ( (Test-ValidVersionNumber $VersionNumber) -or ($VersionNumber -eq 0) -or ($VersionNumber.ToLower() -eq "max") -or ($VersionNumber.ToLower() -eq "k")))) {
+        if ($VersionNumber.ToLower() -eq "f") {
+            Write-Host $FileVersionInfo
+            Write-Host "Your selected MinimumVersionNumber: $MinimumVersion"
+            $VersionNumber = Read-Host -Prompt "Selection"
+            continue
+        }
+
+        if ((Compare-Versions -Version1 $VersionNumber -Version2 $MinimumVersion) -eq -1) {
+            Write-Host "VersionNumber $VersionNumber is less than your selected minimum of $MinimumVersion"
+            Write-Host "Please select a valid version number."
+        } else {
+            Write-Host "Not a valid version number. Enter a version from 0.0.0.0 to 65535.65535.65535.65535"
+            Write-Host "Also, no leading zeroes except for when a number itself is 0."
+        }
+        
+        $VersionNumber = Read-Host -Prompt "Selection"
+    }
+
+    if ( $VersionNumber.ToLower() -eq "max") {
+        $VersionNumber = "65535.65535.65535.65535"
     } elseif ($VersionNumber.ToLower() -eq "k") {
         return $CurrentVersionNum
     }
