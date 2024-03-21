@@ -163,6 +163,9 @@ function Merge-TrustedWDACRules {
     .PARAMETER Levels
     When Levels are specified, only rules from the specified levels will be merged to policies
 
+    .PARAMETER PreserveBackup
+    When this is set, it will keep a backup of the previous version of the policy before your rules were merged into it.
+
     .EXAMPLE
     Merge-TrustedWDACRules -PolicyGUID "d800d7bc-7be6-45d6-8665-91d9d61c3530" -Level Publisher -Verbose
 
@@ -178,7 +181,9 @@ function Merge-TrustedWDACRules {
         [string[]]$PolicyID,
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName","Certificate")]
         [Alias("Level")]
-        [string[]]$Levels
+        [string[]]$Levels,
+        [Alias("KeepBackup","RetainBackup","NoOverwrite")]
+        [switch]$PreserveBackup
     )
 
     #The only reason that -SkipEditionCheck is used here is that I'm reasonably sure that using these commands won't break in PowerShell 7, but I could be wrong!
@@ -541,6 +546,17 @@ function Merge-TrustedWDACRules {
                         if (Test-Path $TempFilePath) {
                             Remove-Item -Path $TempFilePath -ErrorAction SilentlyContinue
                         }
+                    }
+                    if ($BackupOldPolicy) {
+                        if ((Test-Path $BackupOldPolicy) -and (-not $PreserveBackup)) {
+                            Remove-Item -Path $BackupOldPolicy -ErrorAction SilentlyContinue
+                        } elseif (Test-Path $BackupOldPolicy) {
+                            Write-Host "Backup old policy can be recovered at $BackupOldPolicy"
+                        } else {
+                            Write-Warning "Backup old policy was not able to be recovered, as the file at $BackupOldPolicy appears to be missing."
+                        }
+                    } elseif ($PreserveBackup) {
+                        Write-Warning "Backup policy cannot be recovered, as backup file path is null."
                     }
                 } else {
                     $Transaction.Rollback()
