@@ -858,8 +858,32 @@ function Deploy-WDACPolicies {
                 }
 
                 $RemoveEFIFailure = @()
+                $SuccessIterator = $false
 
                 $results | ForEach-Object {
+
+                    if (-not $SuccessIterator) {
+                        
+                        if ($PolicyInfo.IsSigned -eq $true) {
+                        # The Add-FirstSignedPolicyDeployment function already checks whether the flag is set, this is just a fallback to 
+                        # cover supplemental policies which don't utilize those types of DB entries -- since those are only used to check
+                        # whether a device needs to restart or not
+
+                            if ((($_.ReadyForARestart -eq $true) -or ($_.RefreshCompletedSuccessfully -eq $true)) -and ($_.CopyToEFIMount -eq $true)) {
+                                try {
+                                    if (-not (Get-DeployedSignedPolicyStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                                        if (-not (Set-ToggledDeployedSignedStatus -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
+                                            throw "Unable to set DeployedSigned flag for policy $PolicyGUID"
+                                        }
+                                    }
+                                } catch {
+                                    Write-Warning "Unable to set DeployedSigned flag for this signed policy."
+                                }
+                            }
+                        }
+                        $SuccessIterator = $true
+                    }
+
                     if ($SignedToUnsigned) {
                         if ( (-not ($SuccessfulMachines -contains $_.PSComputerName)) -and (($_.PSComputerName -ne $LocalDeviceName) -or ( ($_.PSComputerName -eq $LocalDeviceName) -and (-not $ClearUEFIBootLocalDevice)))) {
                             #Defer
