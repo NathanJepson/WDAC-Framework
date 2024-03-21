@@ -3,6 +3,14 @@ $AppsToBlock = @{}
 $AppsToPurge = @{}
 $AppComments = @{}
 $SpecificFileNameLevels = @{}
+$PreferredOrganizationRuleLevel = $null
+$PreferredOrganizationRuleFallbacks = $null
+
+$TempJSONInitial = (Get-LocalStorageJSON -ErrorAction SilentlyContinue)
+if ($TempJSONInitial) {
+    $PreferredOrganizationRuleLevel = $TempJSONInitial."PreferredOrganizationRuleLevel"
+    $PreferredOrganizationRuleFallbacks = $TempJSONInitial."PreferredOrganizationRuleFallbacks"
+}
 
 function Test-ValidVersionNumber {
     [CmdletBinding()]
@@ -889,6 +897,12 @@ filter Approve-WDACRulesFilter {
         Write-Warning "When more than of these options (GroupName, PolicyName, PolicyGUID, or PolicyID) are selected, the user will be prompted to select which policy a rule should be applied to."
     }
 
+    if (-not ($Level -or $Fallbacks)) {
+        #Only grab preferred rule level and preferred fallbacks if both aren't supplied to this cmdlet
+        $Level = $PreferredOrganizationRuleLevel
+        $Fallbacks = $PreferredOrganizationRuleFallbacks
+    }
+
     if ($Level -or $Fallbacks) {
         if ($Fallbacks -and $Level) {
             $Fallbacks = $Fallbacks | Where-Object {$_ -ne $Level}
@@ -945,7 +959,7 @@ filter Approve-WDACRulesFilter {
 
     try {
         $TempVersioningNum = (Get-LocalStorageJSON -ErrorAction Stop)."GlobalVersioningType"
-        if ($TempVersioningNum -and -not $VersioningType) {
+        if ($TempVersioningNum -and (-not $VersioningType)) {
         #GlobalVersioningType is only used if the user hasn't specifically specified one when running the cmdlet
             $VersioningType = $TempVersioningNum
         }

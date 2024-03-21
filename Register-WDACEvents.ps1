@@ -1,3 +1,11 @@
+$PreferredOrganizationRuleLevel = $null
+$PreferredOrganizationRuleFallbacks = $null
+$TempJSONInitial = (Get-LocalStorageJSON -ErrorAction SilentlyContinue)
+if ($TempJSONInitial) {
+    $PreferredOrganizationRuleLevel = $TempJSONInitial."PreferredOrganizationRuleLevel"
+    $PreferredOrganizationRuleFallbacks = $TempJSONInitial."PreferredOrganizationRuleFallbacks"
+}
+
 function Register-Signer {
     [CmdletBinding()]
     param (
@@ -227,6 +235,12 @@ filter Register-WDACEvents {
     $AllLevels = $null
     $SkipRegister = $false
     $MSI_OR_SCRIPT_PSOBJECT_LENGTH = 14
+
+    if (-not ($Level -or $Fallbacks)) {
+        #Only grab preferred rule level and preferred fallbacks if both aren't supplied to this cmdlet
+        $Level = $PreferredOrganizationRuleLevel
+        $Fallbacks = $PreferredOrganizationRuleFallbacks
+    }
 
     if ($Level -or $Fallbacks) {
         if ($Fallbacks -and $Level) {
