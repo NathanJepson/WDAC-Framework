@@ -2,6 +2,7 @@ $AppsToSkip = @{}
 $AppsToBlock = @{}
 $AppsToPurge = @{}
 $AppComments = @{}
+$AppSigningScenarios = @{}
 $SpecificFileNameLevels = @{}
 $PreferredOrganizationRuleLevel = $null
 $PreferredOrganizationRuleFallbacks = $null
@@ -824,6 +825,11 @@ function Read-WDACConferredTrust {
         }
 
         $AppsToSkip.Add($SHA256FlatHash,$true)
+        if (-not $IsMSI) {
+        # If the same app comes along again with a different signing scenario, we need to account for that,
+        # and that's what this hashtable is for
+            $AppSigningScenarios.Add($SHA256FlatHash, $AppInfo.SigningScenario)
+        }
         Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
 
         if (($LevelToTrustAt.ToLower() -ne "hash") -and ($AppTrustLevels.Hash -eq $false)) {
@@ -981,7 +987,20 @@ filter Approve-WDACRulesFilter {
                 $FileName = $Event.FilePath
 
                 $IsMSI = Test-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
-                
+
+                if (-not $IsMSI) {
+                    if ($AppSigningScenarios[$AppHash]) {
+                        if ((Get-WDACAppSigningScenario -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) -ne $AppSigningScenarios[$AppHash]) {
+                        #If the signing scenario is different, then we should consider the app again, therefore, remove its skipped status
+                            if ($AppsToSkip[$AppHash]) {
+                                $AppsToSkip.Remove($AppHash)
+                            }
+                            Set-WDACSkipped -SHA256FlatHash $AppHash -UndoSkip -Connection $Connection -ErrorAction Stop | Out-Null
+                            $AppSigningScenarios.Remove($AppHash)
+                        }
+                    }
+                }
+
                 if ($AppsToSkip[$AppHash] -or $AppsToBlock[$AppHash]) {
                 #User already designated that they want to skip this app for this session
                     $Transaction.Rollback()
@@ -991,12 +1010,6 @@ filter Approve-WDACRulesFilter {
                 if (-not $IsMSI) {
                     if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                     #Even if the app is piped into the cmdlet it still has to exist in the database.
-                        if (-not ($AppsToSkip[$AppHash])) {
-                            $AppsToSkip.Add($AppHash,$true)
-                            $Transaction.Rollback()
-                            Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
-                            continue;
-                        }
                         $Transaction.Rollback()
                         continue;
                     }
@@ -1017,9 +1030,6 @@ filter Approve-WDACRulesFilter {
                 if ( (Get-MSIorScriptSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) -or (Get-WDACAppSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue)) {
                     if (-not ($AppsToSkip[$AppHash])) {
                         $AppsToSkip.Add($AppHash,$true)
-                        $Transaction.Rollback()
-                        Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
-                        continue;
                     }
                     $Transaction.Rollback()
                     continue;
@@ -1121,6 +1131,7 @@ filter Approve-WDACRulesFilter {
                         } else {
                             Remove-WDACApp -Sha256FlatHash $AppHash -Connection $Connection -ErrorAction Stop | Out-Null
                         }
+                        $AppsToPurge.Remove($AppHash)
                     }
                 } catch {
                     Write-Verbose ($_ | Format-List * -Force | Out-String)
@@ -1309,6 +1320,14 @@ function Approve-WDACRules {
     )
 
     begin {
+        $global:AppsToSkip = @{}
+        $global:AppsToBlock = @{}
+        $global:AppsToPurge = @{}
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')] 
+        $global:AppComments = @{}
+        [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')] 
+        $global:SpecificFileNameLevels = @{}
+
         $Connection = $null
         $Transaction = $null
         if ($Fallbacks -and -not $Level) {
@@ -1451,32 +1470,6 @@ function Approve-WDACRules {
                     #User already designated that they want to skip this app for this session
                         $Transaction.Rollback()
                         continue;
-                    }
-
-                    if ($MSIorScripts) {
-                        if (-not (Find-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
-                        #Even if the app is piped into the cmdlet it still has to exist in the database.
-                            if (-not ($AppsToSkip[$AppHash])) {
-                                $AppsToSkip.Add($AppHash,$true)
-                                $Transaction.Rollback()
-                                Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
-                                continue;
-                            }
-                            $Transaction.Rollback()
-                            continue;
-                        }
-                    } else {
-                        if (-not (Find-WDACApp -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
-                        #Even if the app is piped into the cmdlet it still has to exist in the database.
-                            if (-not ($AppsToSkip[$AppHash])) {
-                                $AppsToSkip.Add($AppHash,$true)
-                                $Transaction.Rollback()
-                                Set-WDACSkipped -SHA256FlatHash $AppHash -ErrorAction SilentlyContinue | Out-Null
-                                continue;
-                            }
-                            $Transaction.Rollback()
-                            continue;
-                        }
                     }
 
                     if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) -or (Get-MSIorScriptUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {

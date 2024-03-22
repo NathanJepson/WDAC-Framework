@@ -5708,7 +5708,7 @@ function Get-AppTrustedNoAppEntry {
 
     try {
 
-        if (-not $Driver -and -not $UserMode) {
+        if (-not ($Driver -or $UserMode)) {
             if ($WDACEvent.SigningScenario -eq "DriverAndUserMode") {
                 $UserMode = $true
                 $Driver = $true
