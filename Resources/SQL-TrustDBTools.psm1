@@ -1531,6 +1531,45 @@ function Get-WDACAppSigningScenario {
 
 }
 
+function Set-WDACAppSigningScenario {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SigningScenario,
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "UPDATE apps SET SigningScenario = @SigningScenario WHERE SHA256FlatHash = @SHA256FlatHash"
+            $Command.Parameters.AddWithValue("SigningScenario",$SigningScenario) | Out-Null
+            $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+           
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
 function Get-WDACAppSkippedStatus {
     [cmdletbinding()]
     Param (
@@ -5406,11 +5445,11 @@ function Test-AppTrusted {
             }
         }
 
-        if (-not $CertInfo -and -not $WDACEvent) {
+        if ((-not $CertInfo) -and (-not $WDACEvent)) {
             $CertInfo = Expand-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
         }
 
-        if (-not $Driver -and -not $UserMode) {
+        if (-not ($Driver -or $UserMode)) {
             if ($AppInstance.SigningScenario -eq "UserMode") {
                 $UserMode = $true
             } elseif ($AppInstance.SigningScenario -eq "Driver") {
@@ -5431,12 +5470,14 @@ function Test-AppTrusted {
                 [switch]$UserMode
             )
     
-            if ($Driver -and $UserMode -and ($Instance.TrustedDriver -and $Instance.TrustedUserMode)) {
+            if (($Driver -and $UserMode) -and ($Instance.TrustedDriver -and $Instance.TrustedUserMode)) {
                 return $true
-            } elseif ($Driver -and $Instance.TrustedDriver) {
+            } elseif ( ($Driver) -and (-not $UserMode) -and ($Instance.TrustedDriver)) {
                 return $true
-            } elseif ($UserMode -and $Instance.TrustedUserMode) {
+            } elseif ( ($UserMode) -and (-not $Driver) -and ($Instance.TrustedUserMode)) {
                 return $true
+            } else {
+                return $false
             }
         }
 
@@ -5668,7 +5709,10 @@ function Get-AppTrustedNoAppEntry {
     try {
 
         if (-not $Driver -and -not $UserMode) {
-            if ($WDACEvent.SigningScenario -eq "UserMode") {
+            if ($WDACEvent.SigningScenario -eq "DriverAndUserMode") {
+                $UserMode = $true
+                $Driver = $true
+            } elseif ($WDACEvent.SigningScenario -eq "UserMode") {
                 $UserMode = $true
             } elseif ($WDACEvent.SigningScenario -eq "Driver") {
                 $Driver = $true

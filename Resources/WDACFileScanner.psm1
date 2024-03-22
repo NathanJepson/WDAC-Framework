@@ -1,3 +1,4 @@
+$SigningScenarios = @{}
 filter Get-TBSHash {
     <#
         .SYNOPSIS
@@ -182,7 +183,8 @@ function Get-SystemDriversModified {
 
                     $Publisher = $Signer.Chain.ChainElements[0].Certificate
 
-                    #According to how the ConfigCI module works, the PCACert is just 1 level below the root certificate (unless the only other cert is a root certificate)
+                    #According to how the ConfigCI module works, the PCACert is often just 1 level below the root certificate, even for 4 certificates
+                    # (unless the only other cert is a root certificate)
                     if ($Signer.Chain.ChainElements.Count -eq 2) {
                         $Issuer = $Signer.Chain.ChainElements[1].Certificate
                     } elseif ($Signer.Chain.ChainElements.Count -ne 1) {
@@ -274,7 +276,8 @@ function Get-SystemDriversModified {
 
                     $Publisher = $Signer.Chain.ChainElements[0].Certificate
 
-                    #According to how the ConfigCI module works, the PCACert is just 1 level below the root certificate (unless the only other cert is a root certificate)
+                    #According to how the ConfigCI module works, the PCACert is often just 1 level below the root certificate, even for 4 certificates
+                    # (unless the only other cert is a root certificate)
                     if ($Signer.Chain.ChainElements.Count -eq 2) {
                         $Issuer = $Signer.Chain.ChainElements[1].Certificate
                     } elseif ($Signer.Chain.ChainElements.Count -ne 1) {
@@ -326,6 +329,20 @@ function Get-SystemDriversModified {
             $SignerInfo = $null
             if ($Signers.Count -ge 1) {
                 $SignerInfo = ($Signers | Sort-Object -Property SignatureIndex)
+            }
+
+            if ($null -ne $SigningScenarios[$Driver.FilePath]) {
+            # If there is a 2nd identical instance of an app entry -- with just the signing scenario different -- then modify the previous app entry to 
+            # indicate that it's a binary that lives in kernel mode and usermode land
+                if ($SigningScenarios[$Driver.FilePath] -ne $SigningScenario) {
+                    if ((($SigningScenarios[$Driver.FilePath] -eq "UserMode") -and ($SigningScenario -eq "Driver")) -or (($SigningScenarios[$Driver.FilePath] -eq "Driver") -and ($SigningScenario -eq "UserMode"))) {
+                        ($PEs | Where-Object {$_.UnresolvedFilePath -eq $Driver.FilePath}).SigningScenario = "DriverAndUserMode"
+                        $SigningScenarios[$Driver.FilePath] = "DriverAndUserMode"
+                        continue
+                    }
+                }
+            } else {
+                $SigningScenarios += @{ ($Driver.FilePath) = $SigningScenario}
             }
 
             $PEs += New-Object -TypeName PSObject -Property ([Ordered] @{

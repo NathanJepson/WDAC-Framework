@@ -495,7 +495,7 @@ function Read-WDACConferredTrust {
             $AppInfo = Get-WDACApp -Sha256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction Stop
         }
         $CertInfoAndMisc = Expand-WDACAppV2 -SHA256FlatHash $SHA256FlatHash -Levels $Levels -GetCerts -Connection $Connection -ErrorAction Stop
-        $AppTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver:($AppInfo.SigningScenario -eq "Driver") -UserMode:($AppInfo.SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop
+        $AppTrustLevels = Get-AppTrustedAllLevels -SHA256FlatHash $SHA256FlatHash -Driver:( ($AppInfo.SigningScenario -eq "Driver") -or ($AppInfo.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($AppInfo.SigningScenario -eq "UserMode") -or ($AppInfo.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
         if ($IsMSI) {
             $FileName = $AppInfo.FirstDetectedPath
         } else {
@@ -712,6 +712,8 @@ function Read-WDACConferredTrust {
                         $SigningLevelToTrustRuleAt = "UserMode"
                     } elseif ($SigningScenario -eq "Driver") {
                         $SigningLevelToTrustRuleAt = "Driver"
+                    } elseif ($SigningScenario -eq "DriverAndUserMode") {
+                        $SigningLevelToTrustRuleAt = "Both"
                     } else {
                         $SigningLevelToTrustRuleAt = "UserMode"
                     }
@@ -779,33 +781,33 @@ function Read-WDACConferredTrust {
 
         switch ($LevelToTrustAt) {
             "Hash" {
-                Write-WDACConferredTrust -PrimaryKeyPart1 $SHA256FlatHash -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                Write-WDACConferredTrust -PrimaryKeyPart1 $SHA256FlatHash -PrimaryKeyPart2 "Nonce" -TrustedDriver:(($SigningLevelToTrustRuleAt -eq "Driver") -or ($SigningLevelToTrustRuleAt -eq "Both")) -TrustedUserMode:(($SigningLevelToTrustRuleAt -eq "UserMode") -or ($SigningLevelToTrustRuleAt -eq "Both")) -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
             }
             "Publisher" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if ($RuleSignerMapping -eq $Signer.SignatureIndex -or ($RuleSignerMapping -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:(($SigningLevelToTrustRuleAt -eq "Driver") -or ($SigningLevelToTrustRuleAt -eq "Both")) -TrustedUserMode:(($SigningLevelToTrustRuleAt -eq "UserMode") -or ($SigningLevelToTrustRuleAt -eq "Both")) -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
                     }
                 }
             }
             "FilePublisher" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if (($RuleSignerMapping -eq $Signer.SignatureIndex) -or ($RuleSignerMapping -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 $AppInfo.$($SpecificFileNameLevel) -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -CurrentVersionNum $AppInfo.FileVersion -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $Publishers[$Signer.SignatureIndex] -PrimaryKeyPart2 $AppInfo.$($SpecificFileNameLevel) -TrustedDriver:(($SigningLevelToTrustRuleAt -eq "Driver") -or ($SigningLevelToTrustRuleAt -eq "Both")) -TrustedUserMode:(($SigningLevelToTrustRuleAt -eq "UserMode") -or ($SigningLevelToTrustRuleAt -eq "Both")) -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -CurrentVersionNum $AppInfo.FileVersion -Connection $Connection
                     }
                 }
             }
             "LeafCertificate" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if ($RuleSignerMapping -eq $Signer.SignatureIndex -or ($RuleSignerMapping -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $LeafCertTBSHashes[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $LeafCertTBSHashes[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:(($SigningLevelToTrustRuleAt -eq "Driver") -or ($SigningLevelToTrustRuleAt -eq "Both")) -TrustedUserMode:(($SigningLevelToTrustRuleAt -eq "UserMode") -or ($SigningLevelToTrustRuleAt -eq "Both")) -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
                     }
                 }
             }
             "PcaCertificate" {
                 foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
                     if ($RuleSignerMapping -eq $Signer.SignatureIndex -or ($RuleSignerMapping -eq "a")) {
-                        Write-WDACConferredTrust -PrimaryKeyPart1 $PcaCertTBSHashes[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                        Write-WDACConferredTrust -PrimaryKeyPart1 $PcaCertTBSHashes[$Signer.SignatureIndex] -PrimaryKeyPart2 "Nonce" -TrustedDriver:(($SigningLevelToTrustRuleAt -eq "Driver") -or ($SigningLevelToTrustRuleAt -eq "Both")) -TrustedUserMode:(($SigningLevelToTrustRuleAt -eq "UserMode") -or ($SigningLevelToTrustRuleAt -eq "Both")) -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
                     }
                 }
             }
@@ -814,7 +816,7 @@ function Read-WDACConferredTrust {
                 Write-Verbose "FilePath rules have not yet been implemented."
             }
             "FileName" {
-                Write-WDACConferredTrust -PrimaryKeyPart1 $AppInfo.$($SpecificFileNameLevel) -PrimaryKeyPart2 "Nonce" -TrustedDriver:($SigningLevelToTrustRuleAt -eq "Driver" -or $SigningLevelToTrustRuleAt -eq "Both") -TrustedUserMode:($SigningLevelToTrustRuleAt -eq "UserMode" -or $SigningLevelToTrustRuleAt -eq "Both") -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
+                Write-WDACConferredTrust -PrimaryKeyPart1 $AppInfo.$($SpecificFileNameLevel) -PrimaryKeyPart2 "Nonce" -TrustedDriver:(($SigningLevelToTrustRuleAt -eq "Driver") -or ($SigningLevelToTrustRuleAt -eq "Both")) -TrustedUserMode:(($SigningLevelToTrustRuleAt -eq "UserMode") -or ($SigningLevelToTrustRuleAt -eq "Both")) -Block:($null -ne $AppsToBlock[$SHA256FlatHash]) -Comment $Comment -SpecificFileNameLevel $SpecificFileNameLevel -PolicyID $PolicyToApplyRuleTo -Level $LevelToTrustAt -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -Connection $Connection
             }
             Default {
                 throw "$LevelToTrustAt is not a valid WDAC rule level!"
@@ -1047,12 +1049,12 @@ filter Approve-WDACRulesFilter {
 
                 $SigningScenario = $Event.SigningScenario
                 if ($SigningScenario) {
-                    if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                    if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                     #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
                         
                         if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
                             $MiscLevels = @()
-                            $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
+                            $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
                             $AppTrustAllLevels = Restore-ProvidedLevelsOrder -Levels $AppTrustAllLevels -ProvidedLevels $AllLevels
                             #^This restores the original order the user provided the levels and fallbacks
                             foreach ($AppTrustLevel in $AppTrustAllLevels) {
@@ -1070,11 +1072,12 @@ filter Approve-WDACRulesFilter {
                                 continue;
                             }
                         }
-                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                         #The difference between this if statement and the one above is this one provides the AllLevels parameter
                             Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
-                            $AppTrustAllLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
-                            if ((-not ($AppTrustAllLevels.Hash)) -and (-not $AppsToPurge[$AppHash])) {
+                            $HashRuleTrustedUserMode = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
+                            $HashRuleTrustedDriver = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
+                            if ((-not ($HashRuleTrustedUserMode -or $HashRuleTrustedDriver)) -and (-not $AppsToPurge[$AppHash])) {
                                 $AppsToPurge.Add($AppHash,$true)
                             }
                             if (-not ($AppsToSkip[$AppHash])) {
@@ -1525,12 +1528,12 @@ function Approve-WDACRules {
 
                     $SigningScenario = $Event.SigningScenario
                     if ($SigningScenario) {
-                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                         #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
                             
                             if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
                                 $MiscLevels = @()
-                                $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
+                                $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
                                 $AppTrustAllLevels = Restore-ProvidedLevelsOrder -Levels $AppTrustAllLevels -ProvidedLevels $AllLevels
                                 #^This restores the original order the user provided the levels and fallbacks
                                 foreach ($AppTrustLevel in $AppTrustAllLevels) {
@@ -1548,11 +1551,12 @@ function Approve-WDACRules {
                                     continue;
                                 }
                             }
-                            if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:($SigningScenario -eq "Driver") -UserMode:($SigningScenario -eq "UserMode") -Connection $Connection -ErrorAction Stop)) {
+                            if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                             #The difference between this if statement and the one above is this one provides the AllLevels parameter
                                 Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
-                                $AppTrustAllLevels = Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
-                                if ((-not ($AppTrustAllLevels.Hash)) -and (-not $AppsToPurge[$AppHash])) {
+                                $HashRuleTrustedUserMode = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
+                                $HashRuleTrustedDriver = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
+                                if ((-not ($HashRuleTrustedUserMode -or $HashRuleTrustedDriver)) -and (-not $AppsToPurge[$AppHash])) {
                                     $AppsToPurge.Add($AppHash,$true)
                                 }
                                 if (-not ($AppsToSkip[$AppHash])) {

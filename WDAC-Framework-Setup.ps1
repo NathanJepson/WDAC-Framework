@@ -155,13 +155,13 @@ if ((-not $DatabaseLocation) -or (-not (Test-Path $DatabaseLocation))) {
             $DBLocation = Read-Host -Prompt "Please provide a valid location for your database"
         }
 
-        if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath "SignedModules\New-WDACTrustDB.ps1")) {
-            $NewDBScript = (Join-Path -Path $PSModuleRoot -ChildPath "SignedModules\New-WDACTrustDB.ps1")
+        if (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath "SignedModules\New-WDACTrustDB.psm1")) {
+            $NewDBModule = (Join-Path -Path $PSModuleRoot -ChildPath "SignedModules\New-WDACTrustDB.psm1")
         } else {
-            $NewDBScript = (Join-Path -Path $PSModuleRoot -ChildPath "New-WDACTrustDB.ps1")
+            $NewDBModule = (Join-Path -Path $PSModuleRoot -ChildPath "New-WDACTrustDB.psm1")
         }
 
-        . $NewDBScript
+        Import-Module $NewDBModule -ErrorAction Stop
 
         New-WDACTrustDB -DBName $DBName -Destination $DBLocation -SqliteAssembly $SqliteAssembly -ErrorAction Stop
 
@@ -307,3 +307,5 @@ if (Get-YesOrNoPrompt -Prompt "Do you plan on signing your WDAC policies?") {
         }
     }
 }
+
+Write-Host "Setup is complete. You may now import the WDAC-Framework module."

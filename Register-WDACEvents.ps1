@@ -6,6 +6,8 @@ if ($TempJSONInitial) {
     $PreferredOrganizationRuleFallbacks = $TempJSONInitial."PreferredOrganizationRuleFallbacks"
 }
 
+$AppSigningScenarios = @{}
+
 function Register-Signer {
     [CmdletBinding()]
     param (
@@ -129,6 +131,29 @@ function Register-PEEvent {
             }
             foreach ($signer in $WDACEvent.SignerInfo) {
                 Register-Signer -SignerDetails $signer -AppIndex ((Get-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop).AppIndex) -Connection $Connection -ErrorAction Stop
+            }
+        } else {
+        #If this instance of the app has a different signing scenario, then update signing scenario in the database to include both
+            $AppSigningScenario = Get-WDACAppSigningScenario -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop
+            if (($WDACEvent.SigningScenario -ne "DriverAndUserMode") -and ($WDACEvent.SigningScenario -ne $AppSigningScenario)) {
+                if ( (($WDACEvent.SigningScenario -eq "Driver") -and ($AppSigningScenario -eq "UserMode")) -or (($WDACEvent.SigningScenario -eq "UserMode") -and ($AppSigningScenario -eq "Driver"))) {
+                    if (-not (Set-WDACAppSigningScenario -SHA256FlatHash $WDACEvent.SHA256FileHash -SigningScenario "DriverAndUserMode" -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update signing scenario for app with hash $($WDACEvent.SHA256FileHash) to DriverAndUserMode."
+                    }
+                    # This sends a signal back to the calling function to change the signing scenario of the powershell object -- which will be useful
+                    # when it gets piped out
+                    $AppSigningScenarios += @{($WDACEvent.SHA256FileHash) = "DriverAndUserMode"}
+                } elseif ((($AppSigningScenario -eq "Driver") -or ($AppSigningScenario -eq "UserMode")) -and ($WDACEvent.SigningScenario -eq "DriverAndUserMode")) {
+                    if (-not (Set-WDACAppSigningScenario -SHA256FlatHash $WDACEvent.SHA256FileHash -SigningScenario "DriverAndUserMode" -Connection $Connection -ErrorAction Stop)) {
+                        throw "Unable to update signing scenario for app with hash $($WDACEvent.SHA256FileHash) to DriverAndUserMode."
+                    }
+                } elseif (($AppSigningScenario -eq "DriverAndUserMode") -and ((($WDACEvent.SigningScenario -eq "UserMode")) -or (($WDACEvent.SigningScenario -eq "Driver")))) {
+                    # This sends a signal back to the calling function to change the signing scenario of the powershell object -- which will be useful
+                    # when it gets piped out
+                    $AppSigningScenarios += @{($WDACEvent.SHA256FileHash) = "DriverAndUserMode"}
+                } else {
+                    throw "One of these signing scenarios is unrecognized: $($WDACEvent.SigningScenario)  or  $AppSigningScenario"
+                }
             }
         }
     } catch {
@@ -277,7 +302,7 @@ filter Register-WDACEvents {
 
     if (-not $SkipRegister) {
         if ($WDACEvent.Psobject.Properties.value.count -le ($MSI_OR_SCRIPT_PSOBJECT_LENGTH + 1)) {
-            #Case 1: It is an MSI or Script
+        #Case 1: It is an MSI or Script
             try {
                 Register-MSIorScriptEvent -WDACEvent $WDACEvent -Connection $Connection -ErrorAction Stop
                 if (($AllLevels -contains "Publisher") -or ($AllLevels -contains "FilePublisher")) {
@@ -294,6 +319,9 @@ filter Register-WDACEvents {
                 Register-PEEvent -WDACEvent $WDACEvent -Connection $Connection -ErrorAction Stop
                 if (($AllLevels -contains "Publisher") -or ($AllLevels -contains "FilePublisher")) {
                     Add-NewPublishersFromAppSigners -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop
+                }
+                if ($AppSigningScenarios[$($WDACEvent.SHA256FileHash)] -eq "DriverAndUserMode") {
+                    $WDACEvent.SigningScenario = "DriverAndUserMode"
                 }
             } catch {
                 Write-Verbose ($_ | Format-List -Property * | Out-String)
