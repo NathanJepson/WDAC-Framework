@@ -1062,7 +1062,7 @@ filter Approve-WDACRulesFilter {
                     if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                     #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
                         
-                        if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
+                        if ($AllLevels -and $MultiRuleMode -and ($AllLevels.Count -ge 1)) {
                             $MiscLevels = @()
                             $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
                             $AppTrustAllLevels = Restore-ProvidedLevelsOrder -Levels $AppTrustAllLevels -ProvidedLevels $AllLevels
@@ -1259,9 +1259,11 @@ function Approve-WDACRules {
     This means that the VersioningType will be applied to all file name + publisher index combinations for the entire policy IF NOT ALREADY SET EXPLICITLY.
 
     .PARAMETER MultiRuleMode
+    Only works when Level AND fallbacks are specified.
+
     Even if an app is already trusted at separate levels, this option allows you to check to see if you can allow the app at another level--for example, 
     if a file publisher is allowed for one policy and allows an app to run, you can still allow an app by hash for another policy. 
-    (This will prompt the user whether they want to allow the other rule.) Can only be set when Level AND fallbacks are specified.
+    (This will prompt the user whether they want to allow the other rule.) 
     Does not apply to "BLOCK" rules.
 
     .PARAMETER ResetUntrusted
