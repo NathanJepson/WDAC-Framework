@@ -391,9 +391,11 @@ function New-WDACTrustDB {
     
         $oSQLiteDBConnection.close()
         Remove-Variable oSQLiteDBConnection -ErrorAction SilentlyContinue
-        Write-Host "New trust database created successfully."
+        Write-Host "New trust database created successfully." -ForegroundColor Green
     } catch {
         Write-Verbose ($_ | Format-List -Property * | Out-String)
         throw $_
     }
 }
+
+Export-ModuleMember -Function New-WDACTrustDB

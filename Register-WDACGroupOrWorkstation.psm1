@@ -49,6 +49,7 @@ function Register-WDACGroup {
         [Alias("ID","IDs","PolicyGUID","GUID","GUIDs","PolicyGUIDs")]
         [string[]]$PolicyID,
         [ValidateNotNullOrEmpty()]
+        [Alias("Name")]
         [string[]]$PolicyName,
         [ValidateNotNullOrEmpty()]
         [string]$GroupName

@@ -702,7 +702,7 @@ function New-WDACPolicy {
             throw "There was a problem placing the new policy file into your working policies directory."
         }
 
-        Write-Host "Policy creation successful." -ForegroundColor Green
+        Write-Host "Policy creation successful, with Policy GUID $PolicyID" -ForegroundColor Green
     }
 
     end {
