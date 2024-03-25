@@ -40,15 +40,13 @@ Take not of where you downloaded it.
 
 It's recommended that you obtain a PowerShell code signing certificate. You can create one using your enterprise CA, such as shown [here](https://devblogs.microsoft.com/scripting/hey-scripting-guy-how-can-i-sign-windows-powershell-scripts-with-an-enterprise-windows-pki-part-1-of-2/). The article is partially outdated but the process is similar to creating and signing a WDAC policy signing cert with your enterprise CA (see below.)
 
-For Signing Policies
-================================
+__For Signing Policies__
 If you want to sign your WDAC policies (which provides the maximum protection for WDAC), then you will need to obtain a policy signing certificate as well as the Microsoft "signtool". 
 Instructions for creating a WDAC policy signing certificate are here:
 https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/create-code-signing-cert-for-wdac 
 
 For obtaining the SignTool.exe file, you will need to install the [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk).
 The SignTool should be located in "the \Bin folder of the Microsoft Windows Software Development Kit (SDK) installation path, for example: C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe." [Source](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool)
-=================================
 
 Once you've obtained the correct pre-requisites, install the WDAC-Framework module into your "C:\Program Files\WindowsPowerShell\Modules" folder. 
 ```
