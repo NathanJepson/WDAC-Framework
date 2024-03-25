@@ -45,9 +45,10 @@ If you want to sign your WDAC policies (which provides the maximum protection fo
 Instructions for creating a WDAC policy signing certificate are here:
 https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/create-code-signing-cert-for-wdac 
 
-For obtaining the SignTool.exe file, you will need to install the [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk).
+__For Signing Policies (2)__ For obtaining the SignTool.exe file, you will need to install the [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk).
 The SignTool should be located in "the \Bin folder of the Microsoft Windows Software Development Kit (SDK) installation path, for example: C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe." [Source](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool)
 
+### __Installation Instructions__
 Once you've obtained the correct pre-requisites, install the WDAC-Framework module into your "C:\Program Files\WindowsPowerShell\Modules" folder. 
 ```
 Invoke-WebRequest "https://github.com/NathanJepson/WDAC-Framework/archive/refs/heads/main.zip" -OutFile "C:\Program Files\WindowsPowerShell\Modules\WDAC-Framework.zip"
@@ -69,7 +70,7 @@ Now, you can import the module.
 Import-Module "WDAC-Framework"
 ```
 
-Constrained language mode errors with above: If you run into constrained language mode restrictions when importing--for example if a WDAC policy is already implemented on your device--try signing the "Set-SignedPowerShellModules.psm1" file with your PowerShell signing certificate, importing that module individually and running it. (Your PowerShell code signing certificate must be allowed by your WDAC policies). This will sign all PowerShell files included with WDAC-Framework. Then, try importing the WDAC-Framework module again.
+__Constrained language mode errors with importing the module__: If you run into constrained language mode restrictions when importing--for example if a WDAC policy is already implemented on your device--try signing the "Set-SignedPowerShellModules.psm1" file with your PowerShell signing certificate, importing that module individually and running it. (Your PowerShell code signing certificate must be allowed by your WDAC policies). This will sign all PowerShell files included with WDAC-Framework. Then, try importing the WDAC-Framework module again.
 
 ```
 $file = 'C:\Program Files\WindowsPowerShell\Modules\WDAC-Framework\Set-SignedPowerShellModules.psm1'
@@ -130,7 +131,7 @@ Merge-TrustedWDACRules -PolicyName Cashiers -Levels Publisher -PreserveBackup -V
 
 Then, if you decide that you want this policy to be enforced before deploying it again:
 ```
-Edit-WDACPolicy -PolicyName "CashiersPolicy" -Enforce -Verbose
+Edit-WDACPolicy -PolicyName "Cashiers" -Enforce -Verbose
 ```
 
 If a policy fails to deploy on a particular device, for example, PowerShell remoting is not available, then you can use the `Restore-WDACWorkstations` cmdlet to fix it later.
@@ -142,7 +143,8 @@ Get-WDACFiles -RemoteMachine PC1 -NoShadowCopy -ScanPath "C:\Program Files (x86)
 ```
 
 ## What even is Windows Defender Application Control?
-Windows Defender Application Control (or WDAC) is an application control solution which is meant to work with your ["enterprise antivirus solution for a well-rounded enterprise security portfolio"](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac). "Application control is a crucial line of defense for protecting enterprises given today's threat landscape, and it has an inherent advantage over traditional antivirus solutions. Specifically, application control moves away from an application trust model where all applications are assumed trustworthy to one where applications must earn trust in order to run." ([Source](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac))
+Windows Defender Application Control (or WDAC) is an application control solution which is meant to work with your ["enterprise antivirus solution for a well-rounded enterprise security portfolio"](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac). 
+"Application control is a crucial line of defense for protecting enterprises given today's threat landscape, and it has an inherent advantage over traditional antivirus solutions. Specifically, application control moves away from an application trust model where all applications are assumed trustworthy to one where applications must earn trust in order to run." ([Source](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac))
 
 Basically, WDAC can block untrusted code, or apps which may violate company policy.
 For, example, if you decide that the XBox Windows Gaming App (a packaged app or Windows Store app) is not appropriate for company computers,
