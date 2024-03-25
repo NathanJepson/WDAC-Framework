@@ -113,7 +113,9 @@ Assume that 86b19455-6a4d-40dc-9dcb-8598e3c5eb1a is the PolicyGUID of the "Cashi
 
 When running this, you will see a pseudo-shell console that look like this:
 ```
-Do you trust the app C:\Users\User1\Downloads\Firefox Installer.exe with SHA256 Flat Hash 93A2AD1E8FEA2402E3C94B18093045C7AB78B8D2067172A9D942031697F73254 ?: ([Y] (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [/ or COMM] (Add a comment about the app); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher Info); [T] (View Trust for this App for Respective Rule Levels); [V] (Change Specific FileName Level))
+Do you trust the app C:\Users\User1\Downloads\Firefox Installer.exe with SHA256 Flat Hash 93A2AD1E8FEA2402E3C94B18093045C7AB78B8D2067172A9D942031697F73254 ?: ([Y] 
+(Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [/ or COMM] (Add a comment about the app); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher 
+Info); [T] (View Trust for this App for Respective Rule Levels); [V] (Change Specific FileName Level))
 Option Selection:
 ```
 You can expand file information (such as the original file name, file version, and authenticode hash, and much more) using "A" or "E".
