@@ -143,7 +143,8 @@ Get-WDACFiles -RemoteMachine PC1 -NoShadowCopy -ScanPath "C:\Program Files (x86)
 ```
 
 ## What even is Windows Defender Application Control?
-Windows Defender Application Control (or WDAC) is an application control solution which is meant to work with your ["enterprise antivirus solution for a well-rounded enterprise security portfolio"](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac). 
+Windows Defender Application Control (or WDAC) is an application control solution which is meant to work with your ["enterprise antivirus solution for a well-rounded enterprise security portfolio"](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac).
+ 
 "Application control is a crucial line of defense for protecting enterprises given today's threat landscape, and it has an inherent advantage over traditional antivirus solutions. Specifically, application control moves away from an application trust model where all applications are assumed trustworthy to one where applications must earn trust in order to run." ([Source](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac))
 
 Basically, WDAC can block untrusted code, or apps which may violate company policy.
