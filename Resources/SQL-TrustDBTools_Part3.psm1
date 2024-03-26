@@ -374,17 +374,17 @@ function Get-WDACDevicesNeedingWDACPolicy {
         $DeviceList3 = Get-WDACDevicesByAdHocPolicyMapping -PolicyGUID $PolicyGUID -Deferred:$Deferred -Connection $Connection
 
         foreach ($Device in $DeviceList1) {
-            if (-not ($DeviceMap[($Device.DeviceName)])) {
+            if (-not ($DeviceMap.ContainsKey($Device.DeviceName))) {
                 $DeviceMap += @{ ($Device.DeviceName) = $Device.processor_architecture}
             }
         }
         foreach ($Device in $DeviceList2) {
-            if (-not ($DeviceMap[($Device.DeviceName)])) {
+            if (-not ($DeviceMap.ContainsKey($Device.DeviceName))) {
                 $DeviceMap += @{ ($Device.DeviceName) = $Device.processor_architecture}
             }
         }
         foreach ($Device in $DeviceList3) {
-            if (-not ($DeviceMap[($Device.DeviceName)])) {
+            if (-not ($DeviceMap.ContainsKey($Device.DeviceName))) {
                 $DeviceMap += @{ ($Device.DeviceName) = $Device.processor_architecture}
             }
         }
