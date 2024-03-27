@@ -115,9 +115,11 @@ function Get-WDACEvents {
         [switch]$Kernel,
         [Parameter(ParameterSetName = 'Both')]
         [Parameter(ParameterSetName = 'PEEvents')]
+        [Parameter(ParameterSetName = 'MSIorScripts')]
         [switch]$Audit,
         [Parameter(ParameterSetName = 'Both')]
         [Parameter(ParameterSetName = 'PEEvents')]
+        [Parameter(ParameterSetName = 'MSIorScripts')]
         [switch]$Enforce,
         [Parameter(ParameterSetName = 'Both')]
         [Parameter(ParameterSetName = 'PEEvents')]
