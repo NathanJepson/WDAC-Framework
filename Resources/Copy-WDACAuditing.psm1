@@ -1,5 +1,5 @@
 function Copy-WDACAuditing {
-
+    [CmdletBinding()]
     param(
         [string[]]$RemoteMachine,
         [string]$PSModuleRoot,
@@ -82,3 +82,5 @@ function Copy-WDACAuditing {
         $job | Wait-Job | Out-Null
     }
 }
+
+Export-ModuleMember -Function Copy-WDACAuditing

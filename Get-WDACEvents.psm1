@@ -1,3 +1,22 @@
+if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+    Write-Verbose "The current file is in the SignedModules folder."
+} else {
+    $PSModuleRoot = $PSScriptRoot
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Copy-WDACAuditing.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Copy-WDACAuditing.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\Copy-WDACAuditing.psm1")
+}
+
 function Get-WDACEvents {
     <#
     .SYNOPSIS
@@ -303,3 +322,5 @@ function Get-WDACEvents {
         }
     }
 }
+
+Export-ModuleMember -Function Get-WDACEvents
