@@ -1227,7 +1227,7 @@ function Restore-WDACWorkstations {
         }
 
         if ( (($null -eq $ComputerMap) -or $ComputerMap.Count -le 0)) {
-            throw "No deferred workstations currently assigned to policy $PolicyGUID"
+            throw "No deferred workstations currently assigned to policy $PolicyGUID (or the devices you've provided are not assigned this policy)."
         }
 
         $AllDeferred = Get-DeferredWDACPolicies -DeferredDevicePolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
