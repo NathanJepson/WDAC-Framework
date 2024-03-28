@@ -109,7 +109,7 @@ Deploy-WDACPolicies -PolicyName "Cashiers" Verbose
 Then, check which apps would be blocked by this policy by parsing code integrity logs, and pipe that into "Register-WDACEvents" and "Approve-WDACRulesFilter".
 Assume that 86b19455-6a4d-40dc-9dcb-8598e3c5eb1a is the PolicyGUID of the "Cashiers" policy. Use -purge flag if you want to remove the code integrity event from the database but leave the resultant publisher rule.
 ```
-    Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -SignerInformation -PEEvents | Register-WDACEvents -Level Publisher -Verbose | Approve-WDACRulesFilter -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -Level Publisher -Fallbacks Hash -Purge -Verbose
+Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -SignerInformation -PEEvents | Register-WDACEvents -Level Publisher -Verbose | Approve-WDACRulesFilter -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -Level Publisher -Fallbacks Hash -Purge -Verbose
 ```
 
 When running this, you will see a pseudo-shell console that look like this:
