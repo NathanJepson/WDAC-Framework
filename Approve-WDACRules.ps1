@@ -1160,9 +1160,17 @@ filter Approve-WDACRulesFilter {
         }
 
         throw $theError
+    } finally {
+        if ($Transaction -and $Connection) {
+            if ($Connection.AutoCommit -eq $false) {
+                $Transaction.Rollback()
+            }
+        }
+        if ($Connection) {
+            $Connection.Close()
+        }
     }
 
-    $Connection.Close()
     Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
 }
 
