@@ -162,6 +162,7 @@ function New-WDACPolicy {
         [ValidateNotNullOrEmpty()]
         [ValidateScript({-not ($_ -match "(\{|\})")}, ErrorMessage = "Please provide the base policy ID without curly braces.")]
         [string]$BasePolicyID,
+        [switch]$Supplemental,
         [switch]$AddPSCodeSigner,
         [switch]$UpdatePolicySigner,
         [switch]$SupplementalPolicySigner,
@@ -180,15 +181,14 @@ function New-WDACPolicy {
         [switch]$DefaultWindowsMode,
         [Alias("Microsoft")]
         [switch]$AllowMicrosoftMode,
-        [switch]$Supplemental,
         [ValidateScript({-not $Unsigned}, ErrorMessage = "A policy cannot be both signed and unsigned. You cannot serve two masters.")]
         [switch]$Signed,
         [ValidateScript({-not $Signed}, ErrorMessage = "A policy cannot be both signed and unsigned. You cannot serve two masters.")]
         [switch]$Unsigned,
-        [ValidateScript({-not $Enforced}, ErrorMessage = "A policy cannot be both an Audit policy and an Enforced policy. This is according to Plato's Law of non-contradiction. The philosphers are laughing you to scorn.")]
+        [ValidateScript({-not $Enforced}, ErrorMessage = "A policy cannot be both an Audit policy and an Enforced policy. This is according to the Law of non-contradiction. The philosphers are laughing you to scorn.")]
         [switch]$Audit,
         [Alias("Enforce")]
-        [ValidateScript({-not $Audit}, ErrorMessage = "A policy cannot be both an Audit policy and an Enforced policy. This is according to Plato's Law of non-contradiction. The philosphers are laughing you to scorn.")]
+        [ValidateScript({-not $Audit}, ErrorMessage = "A policy cannot be both an Audit policy and an Enforced policy. This is according to the Law of non-contradiction. The philosphers are laughing you to scorn.")]
         [switch]$Enforced,
         [Alias("UserModeCodeIntegrity")]
         [switch]$UMCI,
@@ -523,7 +523,7 @@ function New-WDACPolicy {
                 if ($UpdatePolicySigner) {
                     Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Update -ErrorAction Stop
                 } 
-                if ($SupplementalPolicySigner) {
+                if ($SupplementalPolicySigner -and (-not $Supplemental)) {
                     Add-SignerRule -FilePath $TempPolicyPath -CertificatePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\WDACCodeSigning.cer") -Supplemental -ErrorAction Stop
                 }
             }

@@ -1,5 +1,5 @@
 # WDAC-Framework
-This is the Beta release of WDAC-Framework, a PowerShell module I created to more easily manage creating, deploying, and editing Windows Defender Application Control policies, and the ability to track what Publishers, Certificates, app Hashes, and other "rules" that you trust using a Sqlite database. Rules are easily constructed using file-scans or Windows event log parsing. WDAC Policies can be created with one command -- and optionally merges them with Microsoft recommended rules (including the Microsoft recommended lists of usermode and kernel mode block rules).
+This is the Beta release of WDAC-Framework, a PowerShell module I created to more easily manage creating, deploying, and editing Windows Defender Application Control policies (what Microsoft is starting to call "App Control for Business"), and the ability to track what Publishers, Certificates, app Hashes, and other "rules" that you trust using a Sqlite database. Rules are easily constructed using file-scans or Windows event log parsing. WDAC Policies can be created with one command -- and optionally merges them with Microsoft recommended rules (including the Microsoft recommended lists of usermode and kernel mode block rules).
 
 There is also the ability to __manage WDAC on remote devices__ using WinRM (remote PowerShell) and SMB file-copying. Create groups of devices, and assign WDAC policies to those groups. (This can be useful if you don't already have a Unified Enpoint Management solution. If you already have a UEM solution like Microsoft Intune, then you might consider using that to manage WDAC remotely rather than using WDAC-Framework.)
 
@@ -144,6 +144,8 @@ Get-WDACFiles -RemoteMachine PC1 -NoShadowCopy -ScanPath "C:\Program Files (x86)
 
 ## What even is Windows Defender Application Control?
 Windows Defender Application Control (or WDAC) is an application control solution which is meant to work with your ["enterprise antivirus solution for a well-rounded enterprise security portfolio"](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac).
+
+"Application control is often cited as one of the most effective means of defending against malware." ([Source](https://www.microsoft.com/en-us/security/blog/2023/09/21/new-microsoft-security-tools-to-protect-families-and-businesses/))
  
 "Application control is a crucial line of defense for protecting enterprises given today's threat landscape, and it has an inherent advantage over traditional antivirus solutions. Specifically, application control moves away from an application trust model where all applications are assumed trustworthy to one where applications must earn trust in order to run." ([Source](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac))
 
