@@ -112,7 +112,7 @@ Assume that 86b19455-6a4d-40dc-9dcb-8598e3c5eb1a is the PolicyGUID of the "Cashi
 Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -SignerInformation -PEEvents | Register-WDACEvents -Level Publisher -Verbose | Approve-WDACRulesFilter -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -Level Publisher -Fallbacks Hash -Purge -Verbose
 ```
 
-When running this, you will see a pseudo-shell console that look like this:
+When running this, you will see a pseudo-shell console that looks like this:
 ```
 Do you trust the app C:\Users\User1\Downloads\Firefox Installer.exe with SHA256 Flat Hash 93A2AD1E8FEA2402E3C94B18093045C7AB78B8D2067172A9D942031697F73254 ?: ([Y] 
 (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [/ or COMM] (Add a comment about the app); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher 
@@ -134,7 +134,7 @@ Then, if you decide that you want this policy to be enforced before deploying it
 Edit-WDACPolicy -PolicyName "Cashiers" -Enforce -Verbose
 ```
 
-If a policy fails to deploy on a particular device, for example, PowerShell remoting is not available, then you can use the `Restore-WDACWorkstations` cmdlet to fix it later.
+If a policy fails to deploy on a particular device, for example, PowerShell remoting is not available, then you can use the `Restore-WDACWorkstations` cmdlet to fix it later. Additionally, if the `Deploy-WDACPolicies` cmdlet is used with the "-TestComputers" parameter, other non-test devices will be put into a "deferred" state until you use `Restore-WDACWorkstations` to deploy the most recent version on those deferred devices.
 
 Alternatively, you can make an allow-by-default policy (DenyList variant) which allows everything except for apps that you specifically block.
 You can create block rules based on the Get-WDACFiles cmdlet. (You might try using the FilePublisher or FileName parameter to block specific apps, so that you don't accidentally block all apps from a particular organization using publisher rules.)
