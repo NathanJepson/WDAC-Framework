@@ -6,8 +6,8 @@ There is also the ability to __manage WDAC on remote devices__ using WinRM (remo
 WDAC-Framework requires PowerShell 7, and the Sqlite bundle for "Precompiled Binaries for 64-bit Windows (.NET Framework 4.6)" (provided on the Sqlite website: https://system.data.sqlite.org/index.html/doc/trunk/www/downloads.wiki). Additionally, you will need access to the "ConfigCI" suite of PowerShell cmdlets, which is not available on Windows 10 \ Windows 11 home editions (i.e., you will need Windows 10 / Windows 11 Pro or Enterprise editions.)
 Obtaining a Sqlite database browser is highly recommended for testing or DB management.
 
-This module makes use of Matthew Graber's ["WDACAuditing" Powershell Module](https://github.com/mattifestation/WDACTools) to easily parse code integrity logs. I've created a wrapper for this module to be able to copy it to remote devices and parse WDAC event logs on remote devices. I've also created a wrapper for Microsoft's Get-SystemDriver cmdlet to be able to scan files (locally or remotely) and format the results to mirror the parsed event-log formats of WDACAuditing. 
-These parsed file-scans or Windows event logs must then be piped into "Register-WDACEvents" -- and once they are registered, you can begin to decide what file publishers, publishers, file names, certificates, or specific binaries that you trust by piping the result of Register-WDACEvents into "Approve-WDACRulesFilter". (Or, you can check any rules which haven't had trust set using "Approve-WDACRules"). 
+This module makes use of Matthew Graber's ["WDACAuditing" Powershell Module](https://github.com/mattifestation/WDACTools) to easily parse code integrity logs. I've created a wrapper for this module to be able to copy it to remote devices and parse WDAC event logs on remote devices. I've also created a wrapper for Microsoft's `Get-SystemDriver` cmdlet to be able to scan files (locally or remotely) and format the results to mirror the parsed event-log formats of WDACAuditing. 
+These parsed file-scans or Windows event logs must then be piped into `Register-WDACEvents` -- and once they are registered, you can begin to decide what file publishers, publishers, file names, certificates, or specific binaries that you trust by piping the result of `Register-WDACEvents` into `Approve-WDACRulesFilter`. (Or, you can check any rules which haven't had trust set using `Approve-WDACRules`). 
 You have the ability to "purge" file scan or event log information from the Trust database once you've established trust at higher levels (e.g., publisher, FileName, etc.) There is the ability to create comments to be placed above WDAC rules so you can designate _why_ an app is trusted.
 
 Hopefully this module makes managing WDAC a lot easier for you.
@@ -106,7 +106,7 @@ Then, deploy that new WDAC policy to the PC1 workstation which is a member of th
 Deploy-WDACPolicies -PolicyName "Cashiers" Verbose
 ```
 
-Then, check which apps would be blocked by this policy by parsing code integrity logs, and pipe that into "Register-WDACEvents" and "Approve-WDACRulesFilter".
+Then, check which apps would be blocked by this policy by parsing code integrity logs, and pipe that into `Register-WDACEvents` and `Approve-WDACRulesFilter`.
 Assume that 86b19455-6a4d-40dc-9dcb-8598e3c5eb1a is the PolicyGUID of the "Cashiers" policy. Use -purge flag if you want to remove the code integrity event from the database but leave the resultant publisher rule.
 ```
 Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -SignerInformation -PEEvents | Register-WDACEvents -Level Publisher -Verbose | Approve-WDACRulesFilter -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -Level Publisher -Fallbacks Hash -Purge -Verbose
@@ -123,6 +123,7 @@ You can expand file information (such as the original file name, file version, a
 Use "C" to see information about the signers of the file, including certificate information and TBS hashes.
 Then, you can decide to trust the file with "Y", untrust it with "N", skip assigning trust with "S", or block the file with "B". 
 Deciding to trust the file will trust the _publisher_ of the file, not just the file itself (unless your selected level was "Hash"). Same idea for if you select "B"--it will block every file from that specific publisher. (A publisher is a combination of 1. Common Name of the LeafCertificate and 2. The issuer certificate).
+Trust or Block actions will be assigned to the first-applicable level of your provided Levels (i.e., what you provided to both "Level" and "Fallbacks"). Trust or Block actions cannot be assigned to a file on a specific level if the level doesn't apply to the file.
 
 Then, once you've decided that you've trusted enough apps, you can merge them into the relevant WDAC policy.
 ```
@@ -137,7 +138,7 @@ Edit-WDACPolicy -PolicyName "Cashiers" -Enforce -Verbose
 If a policy fails to deploy on a particular device, for example, PowerShell remoting is not available, then you can use the `Restore-WDACWorkstations` cmdlet to fix it later. Additionally, if the `Deploy-WDACPolicies` cmdlet is used with the "-TestComputers" parameter, other non-test devices will be put into a "deferred" state until you use `Restore-WDACWorkstations` to deploy the most recent version on those deferred devices.
 
 Alternatively, you can make an allow-by-default policy (DenyList variant) which allows everything except for apps that you specifically block.
-You can create block rules based on the Get-WDACFiles cmdlet. (You might try using the FilePublisher or FileName parameter to block specific apps, so that you don't accidentally block all apps from a particular organization using publisher rules.)
+You can create block rules based on the `Get-WDACFiles` cmdlet. (You might try using the FilePublisher or FileName parameter to block specific apps, so that you don't accidentally block all apps from a particular organization using publisher rules.)
 ```
 Get-WDACFiles -RemoteMachine PC1 -NoShadowCopy -ScanPath "C:\Program Files (x86)\Some_Application_You_Want_To_Block" -UserPEs -NoScript -Verbose | Register-WDACEvents -Level FilePublisher -Fallback Publisher -Verbose | Approve-WDACRulesFilter -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -Level FilePublisher -ApplyRuleEachSigner -Verbose
 ```
@@ -182,20 +183,20 @@ The other reason I created this module is so I could more easily track what poli
 Microsoft maintains a project called the "WDAC Wizard" which can be used to create and modify WDAC policies, but it doesn't have the automation that I would like, especially when I urgently need to block or allow something quickly.
 
 ## Known Issues
-- There is currently an issue with using Merge-TrustedWDACRules with FilePublisher rules, but there is a workaround if you 
+- There is currently an issue with using `Merge-TrustedWDACRules` with FilePublisher rules, but there is a workaround if you 
 import the module and run the cmdlet in a trusted PowerShell script. (Rather than in the PowerShell console.)
 If you can find a way to fix this, let me know.
 
 - Additionally, I haven't yet implemented a way to successfully implement custom comments for file-publisher rules. 
 
 ## Interesting Problems I ran into when making this project
-- For some reason, when creating a new Microsoft.SecureBoot.UserConfig.Rule object for a publisher or certificate rule, it doesn't let you create the object without the relevant X509Certificate2 object, even when you already know the TBS hash of the certificate, so I created a workaround which uses temporary publisher / certificate placeholders (.XML files), and using the "Get-CIPolicy" cmdlet on these files, after replacing placeholder information with the correct TBS hashes and publisher names
+- For some reason, when creating a new Microsoft.SecureBoot.UserConfig.Rule object for a publisher or certificate rule, it doesn't let you create the object without the relevant X509Certificate2 object, even when you already know the TBS hash of the certificate, so I created a workaround which uses temporary publisher / certificate placeholders (.XML files), and using the `Get-CIPolicy` cmdlet on these files, after replacing placeholder information with the correct TBS hashes and publisher names
 
 - When parsing event logs from multiple devices, there is a possibility that you can get different versions of the same app (or, nearly identical file publishers except for different file version numbers). To account for this, I created options to handle "versioning behavior" in the Approve-WDACRules cmdlet. A lot of it is real spaghetti code, but at least you get the option whether to automatically increment or decrement the minimum version number, or choose it each time, among other options.
 
 - Testing whether something was already blocked or trusted at a higher rule level, thus allowing you to skip those apps when they are piped into Approve-WDACRulesFilter or iterated over using Approve-WDACRules. I created a few background functions to accomplish this (Test-AppTrusted and Test-AppBlocked)
 
-- There were several uses of ConfigCI which only work in PowerShell 5. For example, when creating new Microsoft.SecureBoot.UserConfig.Rule objects ($rules), and merging them into a WDAC policy with Merge-CIPolicy -Rules $rules, this does not work in PowerShell 7. (ConfigCI has [yet to be certified for PowerShell 7](https://learn.microsoft.com/en-us/powershell/windows/module-compatibility?view=windowsserver2022-ps).) As a workaround, there are several places where I wrapped things in PowerShell 5 blocks. In some cases, this does look ugly, but it works.
+- There were several uses of ConfigCI which only work in PowerShell 5. For example, when creating new Microsoft.SecureBoot.UserConfig.Rule objects ($rules), and merging them into a WDAC policy with `Merge-CIPolicy -Rules $rules`, this does not work in PowerShell 7. (ConfigCI has [yet to be certified for PowerShell 7](https://learn.microsoft.com/en-us/powershell/windows/module-compatibility?view=windowsserver2022-ps).) As a workaround, there are several places where I wrapped things in PowerShell 5 blocks. In some cases, this does look ugly, but it works.
 
 - When deploying a signed policy to a device, it's important to restart it without using the refresh tool. Then, supsequent updates to the policy can use the refresh tool without a restart. Additionally, you will need to restart devices after removing a signed policy. Knowing how to keep track of whether a device needs to be restarted or not, or received its initial restart for a particular policy, was another interesting problem. I created a SQL table to track "first_signed_policy_deployments" to solve the first problem, and I also have functions to check whether a signed policy is being removed to address the second problem.
 
@@ -203,10 +204,10 @@ If you can find a way to fix this, let me know.
 
 ## Possible future additions to WDAC-Framework
 
-- Create an automated "trust engine" which will allow you to automatically trust new rules if the app information from Get-WDACEvents or Get-WDACFiles matches certain patterns or regex. The "trust engine" could use incorporate external libraries if desired (such as VirusTotal plugins)
+- Create an automated "trust engine" which will allow you to automatically trust new rules if the app information from `Get-WDACEvents` or `Get-WDACFiles` matches certain patterns or regex. The "trust engine" could use incorporate external libraries if desired (such as VirusTotal plugins)
 
 - Use of commit tools to, for example, sync your Trust database or WDAC policies with an AWS S3 bucket
 
 - Explicit blocking for lower file publisher versions when you trust a file publisher rule
 
-- Allow a "full skip" in Approve-WDACRules which will set a skip attribute on all files which match the highest designated rule level
+- Allow a "full skip" in `Approve-WDACRules` which will set a skip attribute on all files which match the highest designated rule level
