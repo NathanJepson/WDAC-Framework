@@ -43,6 +43,42 @@ function Test-ValidP7SignedFile {
     }
 }
 
+function Select-WDACCertificateToUse {
+    [CmdletBinding()]
+    param (
+        $WDACCodeSigningCert,
+        $WDACCodeSigningCert2,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        $PartialPrompt
+    )
+
+    $result = $null
+    if ((Test-Path $WDACCodeSigningCert) -and (Test-Path $WDACCodeSigningCert2)) {
+        Write-Host "What certificate do you want to use $PartialPrompt ?"
+        Write-Host "[1] (WDAC Code Signing Cert 1)"
+        Write-Host (Get-ChildItem $WDACCodeSigningCert | Select-Object Thumbprint,Subject)
+        Write-Host "[2] (WDAC Code Signing Cert 2)"
+        Write-Host (Get-ChildItem $WDACCodeSigningCert2 | Select-Object Thumbprint,Subject)
+        $InputString = Read-Host -Prompt "Option Selection"
+        while (($InputString -ne 1) -and ($InputString -ne 2)) {
+            $InputString = Read-Host "Please select either `"1`" or `"2`""
+        }
+        if ($InputString -eq 1) {
+            $result = $WDACCodeSigningCert
+        } else {
+            $result = $WDACCodeSigningCert2
+        }
+        return $result
+    } elseif (Test-Path $WDACCodeSigningCert) {
+        return $WDACCodeSigningCert
+    } elseif (Test-Path $WDACCodeSigningCert2) {
+        return $WDACCodeSigningCert2
+    } else {
+        return $null
+    }
+}
+
 function Export-CodeSignerAsCER {
     [CmdletBinding()]
     param (
@@ -60,6 +96,8 @@ function Export-CodeSignerAsCER {
                 throw "Error: Empty or null value for WDAC Policy signing certificate retreived from Local Storage."
             } elseif (-not ($PSCodeSigningCert.ToLower() -match "cert\:\\")) {
                 throw "Local cache does not specify a valid certificate path for the WDAC policy signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
+            } elseif (-not (Test-Path $PSCodeSigningCert)) {
+                throw "Cannot find the PowerShell code signing certificate in the certificate store. (Have you provided a full, valid cert:\ path?)"
             }
             $cert = Get-ChildItem -Path $PSCodeSigningCert
             Export-Certificate -Cert $cert -FilePath (Join-Path -Path $Destination -ChildPath "PSCodeSigning.cer")
@@ -71,13 +109,19 @@ function Export-CodeSignerAsCER {
 
     if ($WDACCodeSigner) {
         try {
-            $WDACodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
-            if (-not $WDACodeSigningCert -or "" -eq $WDACodeSigningCert) {
+            $WDACCodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
+            $WDACCodeSigningCert2 = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate2"
+
+            $WDACCodeSigningCert = [string](Select-WDACCertificateToUse -WDACCodeSigningCert $WDACCodeSigningCert -WDACCodeSigningCert2 $WDACCodeSigningCert2 -PartialPrompt "to add this signer rule (or rules)")
+
+            if ((-not $WDACCodeSigningCert) -or ("" -eq $WDACCodeSigningCert)) {
                 throw "Error: Empty or null value for WDAC Policy signing certificate retreived from Local Storage."
-            } elseif (-not ($WDACodeSigningCert.ToLower() -match "cert\:\\")) {
+            } elseif (-not ($WDACCodeSigningCert.ToLower() -match "cert\:\\")) {
                 throw "Local cache does not specify a valid certificate path for the WDAC policy signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
+            } elseif (-not (Test-Path $WDACCodeSigningCert)) {
+                throw "Cannot find the WDAC Signing certificate in the certificate store. (Have you provided a full, valid cert:\ path?)"
             }
-            $cert = Get-ChildItem -Path $WDACodeSigningCert
+            $cert = Get-ChildItem -Path $WDACCodeSigningCert
             Export-Certificate -Cert $cert -FilePath (Join-Path -Path $Destination -ChildPath "WDACCodeSigning.cer")
         } catch {
             throw $_
@@ -96,13 +140,17 @@ function Invoke-SignTool {
     )
     
     try {
-        $WDACodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
-        if (-not $WDACodeSigningCert -or "" -eq $WDACodeSigningCert) {
+        $WDACCodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
+        $WDACCodeSigningCert2 = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate2"
+
+        $WDACCodeSigningCert = [string](Select-WDACCertificateToUse -WDACCodeSigningCert $WDACCodeSigningCert -WDACCodeSigningCert2 $WDACCodeSigningCert2 -PartialPrompt "to sign this WDAC policy")
+
+        if (-not $WDACCodeSigningCert -or "" -eq $WDACCodeSigningCert) {
             throw "Error: Empty or null value for WDAC Policy signing certificate retreived from Local Storage."
-        } elseif (-not ($WDACodeSigningCert.ToLower() -match "cert\:\\")) {
+        } elseif (-not ($WDACCodeSigningCert.ToLower() -match "cert\:\\")) {
             throw "Local cache does not specify a valid certificate path for the WDAC policy signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
         }
-        $cert = Get-ChildItem -Path $WDACodeSigningCert -ErrorAction Stop
+        $cert = Get-ChildItem -Path $WDACCodeSigningCert -ErrorAction Stop
         
         $SignTool = (Get-LocalStorageJSON -ErrorAction Stop)."SignTool"
         if (-not $SignTool -or ("" -eq $SignTool) -or ("Full_Path_To_SignTool.exe" -eq $SignTool)) {
