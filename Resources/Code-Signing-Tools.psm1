@@ -55,7 +55,7 @@ function Select-WDACCertificateToUse {
 
     $result = $null
     if ((Test-Path $WDACCodeSigningCert) -and (Test-Path $WDACCodeSigningCert2)) {
-        Write-Host "What certificate do you want to use $PartialPrompt ?"
+        Write-Host "Which certificate do you want to use $PartialPrompt ?"
         Write-Host "[1] (WDAC Code Signing Cert 1)"
         Write-Host (Get-ChildItem $WDACCodeSigningCert | Select-Object Thumbprint,Subject)
         Write-Host "[2] (WDAC Code Signing Cert 2)"
@@ -142,15 +142,16 @@ function Invoke-SignTool {
     try {
         $WDACCodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
         $WDACCodeSigningCert2 = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate2"
-
         $WDACCodeSigningCert = [string](Select-WDACCertificateToUse -WDACCodeSigningCert $WDACCodeSigningCert -WDACCodeSigningCert2 $WDACCodeSigningCert2 -PartialPrompt "to sign this WDAC policy")
 
-        if (-not $WDACCodeSigningCert -or "" -eq $WDACCodeSigningCert) {
+        if ((-not $WDACCodeSigningCert) -or ("" -eq $WDACCodeSigningCert)) {
             throw "Error: Empty or null value for WDAC Policy signing certificate retreived from Local Storage."
         } elseif (-not ($WDACCodeSigningCert.ToLower() -match "cert\:\\")) {
             throw "Local cache does not specify a valid certificate path for the WDAC policy signing certificate. Please use a valid path. Example of a valid certificate path: `"Cert:\\CurrentUser\\My\\005A924AA26ABD88F84D6795CCC0AB09A6CE88E3`""
         }
+        
         $cert = Get-ChildItem -Path $WDACCodeSigningCert -ErrorAction Stop
+        $thumbprint = $cert.Thumbprint
         
         $SignTool = (Get-LocalStorageJSON -ErrorAction Stop)."SignTool"
         if (-not $SignTool -or ("" -eq $SignTool) -or ("Full_Path_To_SignTool.exe" -eq $SignTool)) {
@@ -167,7 +168,7 @@ function Invoke-SignTool {
             throw "WDACCodeSigningCert subject name not in the correct format. Example: CN=WDACSigningCertificate "
         }
 
-        Start-Process $SignTool -ArgumentList 'sign', '/v' , '/n', "`"$cert_subject`"", '/p7', "`"$DestinationDirectory`"", '/p7co', '1.3.6.1.4.1.311.79.1', '/fd', 'sha256', "`"$CIPPolicyPath`"" -Wait -NoNewWindow -ErrorAction Stop | Out-Null
+        Start-Process $SignTool -ArgumentList 'sign', '/v' , '/n', "`"$cert_subject`"", '/p7', "`"$DestinationDirectory`"", '/p7co', '1.3.6.1.4.1.311.79.1', '/sha1', $thumbprint, '/fd', 'sha256', "`"$CIPPolicyPath`"" -Wait -NoNewWindow -ErrorAction Stop | Out-Null
         
         $ResultSignedPath = ( (Join-Path $DestinationDirectory -ChildPath (Split-Path $CIPPolicyPath -Leaf)) + ".p7")
 
