@@ -129,8 +129,10 @@ function Register-PEEvent {
             if (-not $Var1) {
                 throw "Unsuccessful in adding this app to the database: $($WDACEvent.SHA256FileHash)"
             }
-            foreach ($signer in $WDACEvent.SignerInfo) {
-                Register-Signer -SignerDetails $signer -AppIndex ((Get-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop).AppIndex) -Connection $Connection -ErrorAction Stop
+            if (($null -ne $WDACEvent.SignerInfo) -and ("" -ne $WDACEvent.SignerInfo)) {
+                foreach ($signer in $WDACEvent.SignerInfo) {
+                    Register-Signer -SignerDetails $signer -AppIndex ((Get-WDACApp -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop).AppIndex) -Connection $Connection -ErrorAction Stop
+                }
             }
         } else {
         #If this instance of the app has a different signing scenario, then update signing scenario in the database to include both
@@ -186,8 +188,10 @@ function Register-MSIorScriptEvent {
             if (-not $Var1) {
                 throw "Unsuccessful in adding this app to the database: $($WDACEvent.SHA256FileHash)"
             }
-            foreach ($signer in $WDACEvent.SignerInfo) {
-                Register-Signer -SignerDetails $signer -AppIndex ((Get-MsiorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop).AppIndex) -MSI -Connection $Connection -ErrorAction Stop
+            if (($null -ne $WDACEvent.SignerInfo) -and ("" -ne $WDACEvent.SignerInfo)) {
+                foreach ($signer in $WDACEvent.SignerInfo) {
+                    Register-Signer -SignerDetails $signer -AppIndex ((Get-MsiorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop).AppIndex) -MSI -Connection $Connection -ErrorAction Stop
+                }
             }
         }
     } catch {
