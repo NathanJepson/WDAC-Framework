@@ -1,3 +1,29 @@
+$ThisIsASignedModule = $false
+if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+    $ThisIsASignedModule = $true
+} else {
+    $PSModuleRoot = $PSScriptRoot
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Code-Signing-Tools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Code-Signing-Tools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\Code-Signing-Tools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
+}
+
 function Test-InvalidValidFileNameChars {
 #Invalid characters: \ / : * ? " < > |
 [CmdletBinding()]
@@ -216,11 +242,8 @@ function New-WDACPolicy {
     )
 
     begin {
-        if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
-            $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+        if ($ThisIsASignedModule) {
             Write-Verbose "The current file is in the SignedModules folder."
-        } else {
-            $PSModuleRoot = $PSScriptRoot
         }
 
         if (Test-InvalidValidFileNameChars -FileChars $PolicyName) {
@@ -733,3 +756,5 @@ function New-WDACPolicy {
         }
     }
 }
+
+Export-ModuleMember -Function New-WDACPolicy

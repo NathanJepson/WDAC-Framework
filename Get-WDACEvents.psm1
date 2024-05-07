@@ -1,6 +1,7 @@
+$ThisIsASignedModule = $false
 if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
     $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-    Write-Verbose "The current file is in the SignedModules folder."
+    $ThisIsASignedModule = $true
 } else {
     $PSModuleRoot = $PSScriptRoot
 }
@@ -158,6 +159,10 @@ function Get-WDACEvents {
     )
 
     begin {
+        if ($ThisIsASignedModule) {
+            Write-Verbose "The current file is in the SignedModules folder."
+        }
+
         if ($PolicyGUID -and $PolicyName) {
             throw "Cannot provide both a policy GUID and a policy name."
         }
@@ -176,13 +181,6 @@ function Get-WDACEvents {
 
         if (($PolicyGUID -or $PolicyName) -and (($MSIorScripts) -or ((-not $MSIorScripts) -and (-not $PEEvents)))) {
             Write-Warning "Filtering by policy is not available for MSI or Script events, this parameter has been ignored for these types of event logs."
-        }
-
-        if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
-            $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-            Write-Verbose "The current file is in the SignedModules folder."
-        } else {
-            $PSModuleRoot = $PSScriptRoot
         }
 
         $Signed = $false

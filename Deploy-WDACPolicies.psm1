@@ -1,3 +1,59 @@
+$ThisIsASignedModule = $false
+if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+    $ThisIsASignedModule = $true
+} else {
+    $PSModuleRoot = $PSScriptRoot
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools_Part3.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools_Part3.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools_Part3.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\WorkingPolicies-and-DB-IO.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\WorkingPolicies-and-DB-IO.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\WorkingPolicies-and-DB-IO.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Restart-WDACDevices.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Restart-WDACDevices.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\Restart-WDACDevices.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Copy-StagedWDACPolicies.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Copy-StagedWDACPolicies.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\Copy-StagedWDACPolicies.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Invoke-ActivateAndRefreshWDACPolicy.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Invoke-ActivateAndRefreshWDACPolicy.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\Invoke-ActivateAndRefreshWDACPolicy.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Code-Signing-Tools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Code-Signing-Tools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\Code-Signing-Tools.psm1")
+}
+
 function Get-X86Path {
     $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
     if (-not $X86_Path -or ("" -eq $X86_Path)) {
@@ -216,7 +272,11 @@ function Deploy-WDACPolicies {
         [switch]$ForceRestart,
         [int]$SleepTime=480
     )
-    
+
+    if ($ThisIsASignedModule) {
+        Write-Verbose "The current file is in the SignedModules folder."
+    }
+
     if ($PolicyName -and $PolicyGUID) {
         throw "Cannot provide both a policy name and policy GUID."
     }
@@ -240,13 +300,6 @@ function Deploy-WDACPolicies {
         } catch {
             throw "The RemoteStagingDirectory must have a qualifier such as `"C:\`" or `"D:\`" at the beginning."
         }
-    }
-
-    if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
-        $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-        Write-Verbose "The current file is in the SignedModules folder."
-    } else {
-        $PSModuleRoot = $PSScriptRoot
     }
 
     $Connection = $null
@@ -1139,6 +1192,10 @@ function Restore-WDACWorkstations {
         [int]$SleepTime=480
     )
 
+    if ($ThisIsASignedModule) {
+        Write-Verbose "The current file is in the SignedModules folder."
+    }
+
     if ($PolicyName -and $PolicyGUID) {
         throw "Cannot provide both a policy name and policy GUID."
     }
@@ -1181,13 +1238,6 @@ function Restore-WDACWorkstations {
             Split-Path $RemoteStagingDirectory -Qualifier -ErrorAction Stop | Out-Null
         } catch {
             throw "The RemoteStagingDirectory must have a qualifier such as `"C:\`" or `"D:\`" at the beginning."
-        }
-
-        if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
-            $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-            Write-Verbose "The current file is in the SignedModules folder."
-        } else {
-            $PSModuleRoot = $PSScriptRoot
         }
 
         $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
@@ -1738,3 +1788,6 @@ function Restore-WDACWorkstations {
         throw $theError
     }
 }
+
+Export-ModuleMember -Function Deploy-WDACPolicies
+Export-ModuleMember -Function Restore-WDACWorkstations

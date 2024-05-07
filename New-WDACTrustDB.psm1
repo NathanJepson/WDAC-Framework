@@ -1,6 +1,7 @@
+$ThisIsASignedModule = $false
 if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
     $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-    Write-Verbose "The current file is in the SignedModules folder."
+    $ThisIsASignedModule = $true
 } else {
     $PSModuleRoot = $PSScriptRoot
 }
@@ -51,6 +52,10 @@ function New-WDACTrustDB {
         [ValidateNotNullOrEmpty()]
         [string]$SqliteAssembly
     )
+
+    if ($ThisIsASignedModule) {
+        Write-Verbose "The current file is in the SignedModules folder."
+    }
 
     if (-not $SqliteAssembly) {
         try {

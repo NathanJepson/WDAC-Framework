@@ -1,6 +1,7 @@
+$ThisIsASignedModule = $false
 if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
     $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-    Write-Verbose "The current file is in the SignedModules folder."
+    $ThisIsASignedModule = $true
 } else {
     $PSModuleRoot = $PSScriptRoot
 }
@@ -56,6 +57,10 @@ function Register-WDACGroup {
     )
 
     try {
+        if ($ThisIsASignedModule) {
+            Write-Verbose "The current file is in the SignedModules folder."
+        }
+
         if ($PolicyID -and $PolicyName) {
             throw "You must provider Policy names or Policy IDs, but not both."
         } elseif ($PolicyID -or $PolicyName) {

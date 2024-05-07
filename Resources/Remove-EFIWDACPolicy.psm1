@@ -1,3 +1,27 @@
+if ((Split-Path ((Get-Item $PSScriptRoot).Parent) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\..\"
+} else {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools_Part3.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools_Part3.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools_Part3.psm1")
+}
+
 function Get-X86Path {
     $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
     if (-not $X86_Path -or ("" -eq $X86_Path)) {
@@ -259,3 +283,5 @@ function Remove-EFIWDACPolicy {
         $Result | Select-Object PSComputerName,ResultMessage,WinRMSuccess,UEFIRemoveSuccess | Format-List -Property *
     }
 }
+
+Export-ModuleMember -Function Remove-EFIWDACPolicy

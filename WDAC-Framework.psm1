@@ -1,8 +1,6 @@
-$Modules = @("Resources\SQL-TrustDBTools.psm1", "Resources\JSON-LocalStorageTools.psm1", "WDACAuditing\WDACAuditing.psm1","Resources\Microsoft-Recommended-Rules.psm1","Resources\Code-Signing-Tools.psm1","Register-WDACGroupOrWorkstation.psm1","Resources\File-Publisher-Helpers.psm1","Resources\SQL-TrustDBTools_Part2.psm1","Resources\WorkingPolicies-and-DB-IO.psm1","Resources\Microsoft-SecureBoot-UserConfig-RuleManip.psm1","Resources\SQL-TrustDBTools_Part3.psm1","Resources\Copy-WDACFileScanner.psm1","Resources\WDACFileScanner.psm1")
+$Modules = @("Resources\SQL-TrustDBTools.psm1", "Resources\JSON-LocalStorageTools.psm1", "WDACAuditing\WDACAuditing.psm1","Resources\Microsoft-Recommended-Rules.psm1","Resources\Code-Signing-Tools.psm1","Register-WDACGroupOrWorkstation.psm1","Resources\File-Publisher-Helpers.psm1","Resources\SQL-TrustDBTools_Part2.psm1","Resources\WorkingPolicies-and-DB-IO.psm1","Resources\Microsoft-SecureBoot-UserConfig-RuleManip.psm1","Resources\SQL-TrustDBTools_Part3.psm1","Resources\Copy-WDACFileScanner.psm1","Resources\WDACFileScanner.psm1","Resources\Remove-EFIWDACPolicy.psm1","Resources\Invoke-ActivateAndRefreshWDACPolicy.psm1","Resources\Restart-WDACDevices.psm1","Resources\Copy-StagedWDACPolicies.psm1")
 
-$SubModules = @("Get-WDACEvents.psm1","Resources\Copy-WDACAuditing.psm1","New-WDACTrustDB.psm1","Get-WDACFiles.psm1","Set-SignedPowerShellModules.psm1","UsefulCmdlets\Get-MiscWDACEvents.psm1")
-
-$Scripts = @("New-WDACGroup.ps1","Register-WDACEvents.ps1","New-WDACPolicy.ps1","Approve-WDACRules.ps1","Import-WDACPolicy.ps1","Merge-TrustedWDACRules.ps1","Edit-WDACPolicy.ps1","Deploy-WDACPolicies.ps1","Resources\Copy-StagedWDACPolicies.ps1","Resources\Invoke-ActivateAndRefreshWDACPolicy.ps1","Resources\Restart-WDACDevices.ps1","Resources\Remove-EFIWDACPolicy.ps1","Remove-WDACRule.ps1","Import-WDACRule.ps1","UsefulCmdlets\Update-WDACRuleIDs.ps1")
+$SubModules = @("Import-WDACRule.psm1","Import-WDACPolicy.psm1","New-WDACGroup.psm1","Register-WDACEvents.psm1","Merge-TrustedWDACRules.psm1","Edit-WDACPolicy.psm1","New-WDACPolicy.psm1","Get-WDACEvents.psm1","Resources\Copy-WDACAuditing.psm1","New-WDACTrustDB.psm1","Get-WDACFiles.psm1","Set-SignedPowerShellModules.psm1","UsefulCmdlets\Get-MiscWDACEvents.psm1","UsefulCmdlets\Update-WDACRuleIDs.psm1","Remove-WDACRule.psm1","Approve-WDACRules.psm1","Deploy-WDACPolicies.psm1")
 
 for ($i=0; $i -lt $Modules.Count; $i++) {
     if (Test-Path (Join-Path -Path $PSScriptRoot -ChildPath "SignedModules\$($Modules[$i])")) {
@@ -17,14 +15,6 @@ for ($i=0; $i -lt $SubModules.Count; $i++) {
         Import-Module (Join-Path -Path $PSScriptRoot -ChildPath "SignedModules\$($SubModules[$i])")
     } else {
         Import-Module (Join-Path -Path $PSScriptRoot -ChildPath $($SubModules[$i]))
-    }
-}
-
-for ($i=0; $i -lt $Scripts.Count; $i++) {
-    if (Test-Path (Join-Path -Path $PSScriptRoot -ChildPath "SignedModules\$($Scripts[$i])")) {
-        . (Join-Path -Path $PSScriptRoot -ChildPath "SignedModules\$($Scripts[$i])")
-    } else {
-        . (Join-Path -Path $PSScriptRoot -ChildPath $($Scripts[$i]))
     }
 }
 

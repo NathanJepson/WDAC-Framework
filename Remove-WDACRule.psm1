@@ -1,3 +1,29 @@
+$ThisIsASignedModule = $false
+if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+    $ThisIsASignedModule = $true
+} else {
+    $PSModuleRoot = $PSScriptRoot
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\WorkingPolicies-and-DB-IO.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\WorkingPolicies-and-DB-IO.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\WorkingPolicies-and-DB-IO.psm1")
+}
+
 function Add-LineBeforeSpecificLine {
     [CmdletBinding()]
     param (
@@ -127,14 +153,11 @@ function Remove-WDACRule {
     $Transaction = $null
     $HVCIOption = $null
 
-    if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
-        $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-        Write-Verbose "The current file is in the SignedModules folder."
-    } else {
-        $PSModuleRoot = $PSScriptRoot
-    }
-
     try {
+        if ($ThisIsASignedModule) {
+            Write-Verbose "The current file is in the SignedModules folder."
+        }
+
         $IDsAndComments = @{}
         $Connection = New-SQLiteConnection -ErrorAction Stop
         $Transaction = $Connection.BeginTransaction()
@@ -286,3 +309,5 @@ function Remove-WDACRule {
         throw $_
     }
 }
+
+Export-ModuleMember -Function Remove-WDACRule

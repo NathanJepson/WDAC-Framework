@@ -232,3 +232,5 @@ function Copy-StagedWDACPolicies {
     }
 }
 
+Export-ModuleMember -Function Copy-StagedWDACPolicies
+

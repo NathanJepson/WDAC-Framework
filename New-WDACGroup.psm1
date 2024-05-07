@@ -1,3 +1,23 @@
+$ThisIsASignedModule = $false
+if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+    $ThisIsASignedModule = $true
+} else {
+    $PSModuleRoot = $PSScriptRoot
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
+}
+
 function New-WDACGroup {
     <#
     .SYNOPSIS
@@ -27,6 +47,10 @@ function New-WDACGroup {
     )
 
     try {
+        if ($ThisIsASignedModule) {
+            Write-Verbose "The current file is in the SignedModules folder."
+        }
+
         if (Find-WDACGroup -GroupName $GroupName -ErrorAction Stop) {
             throw "There is already a group with the name $GroupName in the database."
         }
@@ -97,3 +121,6 @@ function New-WDACGroupMirror {
         throw $theError
     }
 }
+
+Export-ModuleMember -Function New-WDACGroup
+Export-ModuleMember -Function New-WDACGroupMirror

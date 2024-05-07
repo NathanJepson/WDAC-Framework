@@ -9,3 +9,5 @@ function Restart-WDACDevices {
 
     Restart-Computer -ComputerName $Devices -Force -ErrorAction SilentlyContinue
 }
+
+Export-ModuleMember -Function Restart-WDACDevices

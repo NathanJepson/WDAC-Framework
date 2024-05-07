@@ -1,6 +1,7 @@
+$ThisIsASignedModule = $false
 if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
     $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-    Write-Verbose "The current file is in the SignedModules folder."
+    $ThisIsASignedModule = $true
 } else {
     $PSModuleRoot = $PSScriptRoot
 }
@@ -96,16 +97,12 @@ function Get-WDACFiles {
     )
 
     begin {
+        if ($ThisIsASignedModule) {
+            Write-Verbose "The current file is in the SignedModules folder."
+        }
 
         if ($NoScript -and $MSIorScript) {
             throw "Cannot provide both MSIorScript parameter and NoScript parameters (contradictory)"
-        }
-
-        if ((Split-Path (Get-Item $PSScriptRoot) -Leaf) -eq "SignedModules") {
-            $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
-            Write-Verbose "The current file is in the SignedModules folder."
-        } else {
-            $PSModuleRoot = $PSScriptRoot
         }
     
         $Signed = $false

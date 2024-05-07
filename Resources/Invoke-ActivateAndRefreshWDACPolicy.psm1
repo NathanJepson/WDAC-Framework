@@ -1,3 +1,15 @@
+if ((Split-Path ((Get-Item $PSScriptRoot).Parent) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\..\"
+} else {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+}
+
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\JSON-LocalStorageTools.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\JSON-LocalStorageTools.psm1")
+}
+
 function Invoke-ActivateAndRefreshWDACPolicy {
     [cmdletbinding()]
     param(
@@ -269,3 +281,5 @@ function Invoke-ActivateAndRefreshWDACPolicy {
 
     return $Result
 }
+
+Export-ModuleMember -Function Invoke-ActivateAndRefreshWDACPolicy
