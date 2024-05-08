@@ -183,8 +183,10 @@ The other reason I created this module is so I could more easily track what poli
 Microsoft maintains a project called the "WDAC Wizard" which can be used to create and modify WDAC policies, but it doesn't have the automation that I would like, especially when I urgently need to block or allow something quickly.
 
 ## Known Issues
-- There is currently an issue with using `Merge-TrustedWDACRules` with FilePublisher rules, but there is a workaround if you 
-import the module and run the cmdlet in a trusted PowerShell script. (Rather than in the PowerShell console.)
+- There is currently an issue with using `Merge-TrustedWDACRules` in certain scenarios (including when merging FilePublisher rules).
+The error is:
+`System.Management.Automation.RuntimeException: Cannot bind parameter 'Rules'. Cannot convert value "Microsoft.SecureBoot.UserConfig.Rule" to type "Microsoft.SecureBoot.UserConfig.Rule". Error: "Cannot convert hashtable to an object of the following type: Microsoft.SecureBoot.UserConfig.Rule. Hashtable-to-Object conversion is not supported in constrained language mode, restricted language mode or a Data section.` 
+There is a workaround if you import the module into a trusted PowerShell script and run the cmdlet in the same script. (Rather than in the PowerShell console.)
 If you can find a way to fix this, let me know.
 
 - Additionally, I haven't yet implemented a way to successfully implement custom comments for file-publisher rules. 
