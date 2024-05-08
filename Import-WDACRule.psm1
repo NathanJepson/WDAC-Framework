@@ -144,6 +144,7 @@ function Import-WDACRule {
 
     $TempPolicyPath = $null
     $BackupOldPolicy = $null
+    $FullPolicyPath = $null
     $Connection = $null
     $Transaction = $null
     $HVCIOption = $null
