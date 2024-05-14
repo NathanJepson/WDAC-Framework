@@ -107,7 +107,7 @@ Deploy-WDACPolicies -PolicyName "Cashiers" Verbose
 ```
 
 Then, check which apps would be blocked by this policy by parsing code integrity logs, and pipe that into `Register-WDACEvents` and `Approve-WDACRulesFilter`.
-Assume that 86b19455-6a4d-40dc-9dcb-8598e3c5eb1a is the PolicyGUID of the "Cashiers" policy. Use -purge flag if you want to remove the code integrity event from the database but leave the resultant publisher rule.
+Assume that 86b19455-6a4d-40dc-9dcb-8598e3c5eb1a is the PolicyGUID of the "Cashiers" policy in this specific example. Use -purge flag if you want to remove the code integrity event from the database but leave the resultant publisher rule.
 ```
 Get-WDACEvents -MaxEvents 200 -RemoteMachine PC1 -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -SignerInformation -PEEvents | Register-WDACEvents -Level Publisher -Verbose | Approve-WDACRulesFilter -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -Level Publisher -Fallbacks Hash -Purge -Verbose
 ```
@@ -180,14 +180,13 @@ Addtionally, when merging WDAC policies, the HVCI setting you have might be set 
 
 The other reason I created this module is so I could more easily track what policies have been deployed on which devices (since the CiTool is currently only available on Windows 11 devices). I also needed a way to track which devices have received their initial restart, if deployed policies are signed policies. (When deploying a signed policy, you will need to restart the device initially rather than using the refresh tool.)
 
-Microsoft maintains a project called the "WDAC Wizard" which can be used to create and modify WDAC policies, but it doesn't have the automation that I would like, especially when I urgently need to block or allow something quickly.
+Microsoft maintains a project called the ["WDAC Wizard"](https://github.com/MicrosoftDocs/WDAC-Toolkit) which can be used to create and modify WDAC policies, but it doesn't have the automation that I would like, especially when I urgently need to block or allow something quickly.
 
 ## Known Issues
 - There is currently an issue with using `Merge-TrustedWDACRules` in certain scenarios (including when merging FilePublisher rules).
 The error is:
 `System.Management.Automation.RuntimeException: Cannot bind parameter 'Rules'. Cannot convert value "Microsoft.SecureBoot.UserConfig.Rule" to type "Microsoft.SecureBoot.UserConfig.Rule". Error: "Cannot convert hashtable to an object of the following type: Microsoft.SecureBoot.UserConfig.Rule. Hashtable-to-Object conversion is not supported in constrained language mode, restricted language mode or a Data section.` 
-There is a workaround if you import the module into a trusted PowerShell script and run the cmdlet in the same script. (Rather than in the PowerShell console.)
-If you can find a way to fix this, let me know.
+There is a workaround if you import the WDAC-Framework module into a trusted PowerShell script and run the Merge-TrustedWDACRules cmdlet in the same script. (Rather than in the PowerShell console.) If you can find a way to fix this, let me know.
 Note: You have to invoke the workaround script with `pwsh` rather than using dot-slash `.\` to run it.
 
 - Additionally, I haven't yet implemented a way to successfully implement custom comments for file-publisher rules. 
