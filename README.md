@@ -188,6 +188,7 @@ The error is:
 `System.Management.Automation.RuntimeException: Cannot bind parameter 'Rules'. Cannot convert value "Microsoft.SecureBoot.UserConfig.Rule" to type "Microsoft.SecureBoot.UserConfig.Rule". Error: "Cannot convert hashtable to an object of the following type: Microsoft.SecureBoot.UserConfig.Rule. Hashtable-to-Object conversion is not supported in constrained language mode, restricted language mode or a Data section.` 
 There is a workaround if you import the module into a trusted PowerShell script and run the cmdlet in the same script. (Rather than in the PowerShell console.)
 If you can find a way to fix this, let me know.
+Note: You have to invoke the workaroudn script with `pwsh` rather than using dot-slash `.\` to run it.
 
 - Additionally, I haven't yet implemented a way to successfully implement custom comments for file-publisher rules. 
 
