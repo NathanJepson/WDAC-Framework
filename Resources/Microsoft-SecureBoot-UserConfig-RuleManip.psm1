@@ -41,7 +41,7 @@ function IncrementAllowID {
         $Max = -1
         foreach ($Entry in $RuleMap.GetEnumerator()) {
             #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
-            if ($Entry.Name -match "ID_ALLOW_[A-Z][_A-F0-9]+$") {
+            if ($Entry.Name -match "ID_ALLOW_[A-F][_A-F0-9]+$") {
                 $Split = ($Entry.Name) -split "_"
                 $Hex = "0x$($Split[-1])"
                 $nextInt = [int]$Hex
@@ -83,7 +83,7 @@ function IncrementDenyID {
         $Max = -1
         foreach ($Entry in $RuleMap.GetEnumerator()) {
             #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
-            if ($Entry.Name -match "ID_DENY_[A-Z][_A-F0-9]+$") {
+            if ($Entry.Name -match "ID_DENY_[A-F][_A-F0-9]+$") {
                 $Split = ($Entry.Name) -split "_"
                 $Hex = "0x$($Split[-1])"
                 $nextInt = [int]$Hex
@@ -124,7 +124,7 @@ function IncrementSignerID {
         $Max = -1
         foreach ($Entry in $RuleMap.GetEnumerator()) {
             #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
-            if ($Entry.Name -match "ID_SIGNER_[A-Z][_A-F0-9]+$") {
+            if ($Entry.Name -match "ID_SIGNER_[A-F][_A-F0-9]+$") {
                 $Split = ($Entry.Name) -split "_"
                 $Hex = "0x$($Split[-1])"
                 $nextInt = [int]$Hex
@@ -166,7 +166,7 @@ function IncrementFileAttribID {
         $Max = -1
         foreach ($Entry in $RuleMap.GetEnumerator()) {
             #Here we specify [_A-F0-9] as the final part of the ID even though [_A-Z0-9] is permitted as an id. This is because hexadecimal is easier to work with.
-            if ($Entry.Name -match "ID_FILEATTRIB_[A-Z][_A-F0-9]+$") {
+            if ($Entry.Name -match "ID_FILEATTRIB_[A-F][_A-F0-9]+$") {
                 $Split = ($Entry.Name) -split "_"
                 $Hex = "0x$($Split[-1])"
                 $nextInt = [int]$Hex
