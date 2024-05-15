@@ -38,6 +38,9 @@ If devices in your environment have more exotic CPU architecture, you may need t
 Take not of where you downloaded it.
 (Note: Downloading the refresh tool is not required if your whole environment consists of Windows 11 devices).
 
+For managing remote devices, you will need to make sure that WinRM (ports 5985 and 5986) and SMB (port 445) is allowed through your firewall(s).
+You may need to configure the WinRM service on managed devices.
+
 It's recommended that you obtain a PowerShell code signing certificate. You can create one using your enterprise CA, such as shown [here](https://devblogs.microsoft.com/scripting/hey-scripting-guy-how-can-i-sign-windows-powershell-scripts-with-an-enterprise-windows-pki-part-1-of-2/). The article is partially outdated but the process is similar to creating and signing a WDAC policy signing cert with your enterprise CA (see below.)
 
 __For Signing Policies__
