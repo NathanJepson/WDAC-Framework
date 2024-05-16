@@ -92,7 +92,12 @@ function Update-WDACRuleIDs {
         $ruleIDs = @{}
         foreach ($rule in $rules) {
         #I'm putting this all into a map because I've run into issues with SecureBoot rule references before
-            $ruleIDs += @{$rule.ID = $true}
+            if (-not ($ruleIDs[$rule.ID])) {
+            #I had to check for the existence of the rule here because when the Get-CIPolicy cmdlet
+            #parses rules, it sometimes creates duplicate ID_FILEATTRIB rules, especially when 
+            #there is both a driver and usermode rule for something.
+                $ruleIDs += @{$rule.ID = $true}
+            }
         }
     
         $FileContent = Get-Content -Path $OldPolicyPath -ErrorAction Stop
