@@ -27,6 +27,9 @@ function Set-WDACDeviceDeferred {
     This will set the deferred flag on a device in the SQL database, and add a relevant deferred-policy-assignment entry
     in the database for the specific policy GUID provided.
 
+    Author: Nathan Jepson
+    License: MIT License
+
     .PARAMETER PolicyGUID
     GUID of the Policy
 
