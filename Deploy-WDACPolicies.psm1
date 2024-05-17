@@ -1708,9 +1708,7 @@ function Restore-WDACWorkstations {
 
                     try {
                         if (-not (Test-WDACPolicySigned -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
-                            if (-not (Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop)) {
-                                Write-Warning "Unable to remove all entries first_signed_policy_deployments or unsetting DeployedSigned flag for Policy $PolicyGUID `n It is recommended to clear these entries out before next running this script."
-                            }
+                            Remove-AllFirstSignedPolicyDeployments -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop | Out-Null
                         }
                     } catch {
                         Write-Warning "Unable to remove all entries first_signed_policy_deployments or unsetting DeployedSigned flag for Policy $PolicyGUID `n It is recommended to clear these entries out before next running this script."
