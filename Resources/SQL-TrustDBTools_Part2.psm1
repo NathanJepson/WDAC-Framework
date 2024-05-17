@@ -55,6 +55,7 @@ function Get-PotentialHashRules {
                 if ($MSIorScript) {
                     $result += [PSCustomObject]@{
                         SHA256FlatHash = $Reader["SHA256FlatHash"];
+                        SHA1FlatHash = $Reader["SHA1FlatHash"];
                         TimeDetected = $Reader["TimeDetected"];
                         FirstDetectedPath = $Reader["FirstDetectedPath"];
                         FirstDetectedUser = $Reader["FirstDetectedUser"];
@@ -89,6 +90,9 @@ function Get-PotentialHashRules {
                         FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
                         FirstDetectedProcessName = $Reader["FirstDetectedProcessName"];
                         SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                        SHA1AuthenticodeHash = $Reader["SHA1AuthenticodeHash"];
+                        SHA256PageHash = $Reader["SHA256PageHash"];
+                        SHA1PageHash = $Reader["SHA1PageHash"];
                         SHA256SipHash = $Reader["SHA256SipHash"];
                         OriginDevice  = $Reader["OriginDevice"];
                         EventType = $Reader["EventType"];

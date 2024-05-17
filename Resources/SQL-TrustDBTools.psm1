@@ -549,6 +549,7 @@ function Add-MSIorScript {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
+        $SHA1FlatHash,
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$TimeDetected,
@@ -578,8 +579,9 @@ function Add-MSIorScript {
         }
     
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "INSERT INTO msi_or_script (SHA256FlatHash,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,SHA256AuthenticodeHash,SHA256SipHash,UserWriteable,Signed,OriginDevice,EventType,AppIndex) VALUES (@SHA256FlatHash,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@SHA256AuthenticodeHash,@SHA256SipHash,@UserWriteable,@Signed,@OriginDevice,@EventType,(SELECT Max(maxindex) FROM (Select max(coalesce(max(msi.AppIndex),0),coalesce(max(smsi.AppIndex),0))+1 as maxindex FROM msi_or_script AS msi LEFT JOIN signers_msi_or_script AS smsi Using(AppIndex) UNION ALL SELECT max(coalesce(max(msi.AppIndex),0),coalesce(max(smsi.AppIndex),0))+1 as maxindex FROM signers_msi_or_script AS smsi LEFT JOIN msi_or_script AS msi Using(AppIndex) WHERE msi.AppIndex IS NULL)))"
+        $Command.Commandtext = "INSERT INTO msi_or_script (SHA256FlatHash,SHA1FlatHash,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,SHA256AuthenticodeHash,SHA256SipHash,UserWriteable,Signed,OriginDevice,EventType,AppIndex) VALUES (@SHA256FlatHash,@SHA1FlatHash,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@SHA256AuthenticodeHash,@SHA256SipHash,@UserWriteable,@Signed,@OriginDevice,@EventType,(SELECT Max(maxindex) FROM (Select max(coalesce(max(msi.AppIndex),0),coalesce(max(smsi.AppIndex),0))+1 as maxindex FROM msi_or_script AS msi LEFT JOIN signers_msi_or_script AS smsi Using(AppIndex) UNION ALL SELECT max(coalesce(max(msi.AppIndex),0),coalesce(max(smsi.AppIndex),0))+1 as maxindex FROM signers_msi_or_script AS smsi LEFT JOIN msi_or_script AS msi Using(AppIndex) WHERE msi.AppIndex IS NULL)))"
             $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+            $Command.Parameters.AddWithValue("SHA1FlatHash",$SHA1FlatHash) | Out-Null
             $Command.Parameters.AddWithValue("TimeDetected",$TimeDetected) | Out-Null
             $Command.Parameters.AddWithValue("FirstDetectedPath",$FirstDetectedPath) | Out-Null
             $Command.Parameters.AddWithValue("FirstDetectedUser",$FirstDetectedUser) | Out-Null
@@ -767,6 +769,7 @@ function Get-MsiorScript {
 
                 $Result = [PSCustomObject]@{
                     SHA256FlatHash = $Reader["SHA256FlatHash"];
+                    SHA1FlatHash = $Reader["SHA1FlatHash"];
                     TimeDetected = $Reader["TimeDetected"];
                     FirstDetectedPath = $Reader["FirstDetectedPath"];
                     FirstDetectedUser = $Reader["FirstDetectedUser"];
@@ -1104,6 +1107,9 @@ function Get-WDACApp {
                     FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
                     FirstDetectedProcessName = $Reader["FirstDetectedProcessName"];
                     SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                    SHA1AuthenticodeHash = $Reader["SHA1AuthenticodeHash"];
+                    SHA256PageHash = $Reader["SHA256PageHash"];
+                    SHA1PageHash = $Reader["SHA1PageHash"];
                     SHA256SipHash = $Reader["SHA256SipHash"];
                     OriginDevice  = $Reader["OriginDevice"];
                     EventType = $Reader["EventType"];
@@ -1356,6 +1362,9 @@ function Get-WDACAppsToSetTrust {
                     FirstDetectedProcessID = ($Reader["FirstDetectedProcessID"]);
                     FirstDetectedProcessName = $Reader["FirstDetectedProcessName"];
                     SHA256AuthenticodeHash = $Reader["SHA256AuthenticodeHash"];
+                    SHA1AuthenticodeHash = $Reader["SHA1AuthenticodeHash"];
+                    SHA256PageHash = $Reader["SHA256PageHash"];
+                    SHA1PageHash = $Reader["SHA1PageHash"];
                     SHA256SipHash = $Reader["SHA256SipHash"];
                     OriginDevice  = $Reader["OriginDevice"];
                     EventType = $Reader["EventType"];
@@ -1431,6 +1440,7 @@ function Get-MsiorScriptsToSetTrust {
             if($Reader.Read()) {
                 $Result += [PSCustomObject]@{
                     SHA256FlatHash = $Reader["SHA256FlatHash"];
+                    SHA1FlatHash = $Reader["SHA1FlatHash"];
                     TimeDetected = $Reader["TimeDetected"];
                     FirstDetectedPath = $Reader["FirstDetectedPath"];
                     FirstDetectedUser = $Reader["FirstDetectedUser"];
@@ -1705,6 +1715,9 @@ function Add-WDACApp {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$SHA256AuthenticodeHash,
+        $SHA1AuthenticodeHash,
+        $SHA256PageHash,
+        $SHA1PageHash,
         $SHA256SipHash,
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
@@ -1733,7 +1746,7 @@ function Add-WDACApp {
         }
         
         $Command = $Connection.CreateCommand()
-        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,SHA256SipHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@SHA256SipHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,(SELECT Max(maxindex) FROM (Select max(coalesce(max(apps.AppIndex),0),coalesce(max(signers.AppIndex),0))+1 as maxindex FROM apps LEFT JOIN signers Using(AppIndex) UNION ALL SELECT max(coalesce(max(apps.AppIndex),0),coalesce(max(signers.AppIndex),0))+1 as maxindex FROM signers LEFT JOIN apps Using(AppIndex) WHERE apps.AppIndex IS NULL)))"
+        $Command.Commandtext = "INSERT INTO apps (SHA256FlatHash,FileName,TimeDetected,FirstDetectedPath,FirstDetectedUser,FirstDetectedProcessID,FirstDetectedProcessName,SHA256AuthenticodeHash,SHA1AuthenticodeHash,SHA256PageHash,SHA1PageHash,SHA256SipHash,OriginDevice,EventType,SigningScenario,OriginalFileName,FileVersion,InternalName,FileDescription,ProductName,PackageFamilyName,UserWriteable,FailedWHQL,RequestedSigningLevel,ValidatedSigningLevel,BlockingPolicyID,AppIndex) VALUES (@SHA256FlatHash,@FileName,@TimeDetected,@FirstDetectedPath,@FirstDetectedUser,@FirstDetectedProcessID,@FirstDetectedProcessName,@SHA256AuthenticodeHash,@SHA1AuthenticodeHash,@SHA256PageHash,@SHA1PageHash,@SHA256SipHash,@OriginDevice,@EventType,@SigningScenario,@OriginalFileName,@FileVersion,@InternalName,@FileDescription,@ProductName,@PackageFamilyName,@UserWriteable,@FailedWHQL,@RequestedSigningLevel,@ValidatedSigningLevel,@BlockingPolicyID,(SELECT Max(maxindex) FROM (Select max(coalesce(max(apps.AppIndex),0),coalesce(max(signers.AppIndex),0))+1 as maxindex FROM apps LEFT JOIN signers Using(AppIndex) UNION ALL SELECT max(coalesce(max(apps.AppIndex),0),coalesce(max(signers.AppIndex),0))+1 as maxindex FROM signers LEFT JOIN apps Using(AppIndex) WHERE apps.AppIndex IS NULL)))"
             $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
             $Command.Parameters.AddWithValue("FileName",$FileName) | Out-Null
             $Command.Parameters.AddWithValue("TimeDetected",$TimeDetected) | Out-Null
@@ -1742,6 +1755,9 @@ function Add-WDACApp {
             $Command.Parameters.AddWithValue("FirstDetectedProcessID",$FirstDetectedProcessID) | Out-Null
             $Command.Parameters.AddWithValue("FirstDetectedProcessName",$FirstDetectedProcessName) | Out-Null
             $Command.Parameters.AddWithValue("SHA256AuthenticodeHash",$SHA256AuthenticodeHash) | Out-Null
+            $Command.Parameters.AddWithValue("SHA1AuthenticodeHash",$SHA1AuthenticodeHash) | Out-Null
+            $Command.Parameters.AddWithValue("SHA256PageHash",$SHA256PageHash) | Out-Null
+            $Command.Parameters.AddWithValue("SHA1PageHash",$SHA1PageHash) | Out-Null
             $Command.Parameters.AddWithValue("SHA256SipHash",$SHA256SipHash) | Out-Null
             $Command.Parameters.AddWithValue("OriginDevice",$OriginDevice) | Out-Null
             $Command.Parameters.AddWithValue("EventType",$EventType) | Out-Null

@@ -80,6 +80,9 @@ function New-WDACTrustDB {
         FirstDetectedProcessID Integer,
         FirstDetectedProcessName TEXT NOT NULL,
         SHA256AuthenticodeHash TEXT NOT NULL,
+        SHA1AuthenticodeHash TEXT,
+        SHA256PageHash TEXT,
+        SHA1PageHash TEXT,
         SHA256SipHash Text,
         OriginDevice TEXT NOT NULL,
         EventType Text,
@@ -113,6 +116,7 @@ function New-WDACTrustDB {
 
     CREATE TABLE msi_or_script (
         SHA256FlatHash TEXT PRIMARY KEY,
+        SHA1FlatHash TEXT,
         TimeDetected TEXT NOT NULL,
         FirstDetectedPath TEXT NOT NULL,
         FirstDetectedUser TEXT,

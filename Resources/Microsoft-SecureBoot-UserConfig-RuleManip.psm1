@@ -229,6 +229,7 @@ function New-MicrosoftSecureBootHashRule {
         #I'm not sure why, but I have to specify a FileName level even though it's just a hash rule
         $blockResultUserMode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
         $blockResultKernel = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+        
         $ID_User = IncrementDenyID -RuleMap $RuleMap
         $RuleMap = $RuleMap + @{$ID_User=$true}
         $ID_Kernel = IncrementDenyID -RuleMap $RuleMap
@@ -244,34 +245,15 @@ function New-MicrosoftSecureBootHashRule {
         }
         $blockResultUserMode.Id = $ID_User
         $blockResultKernel.Id = $ID_Kernel
-        # $blockResultUserMode.TypeId = "Deny"
-        # $blockResultKernel.TypeId = "Deny"
+        
         $blockResultUserMode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$Hash);
         $blockResultKernel.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$Hash);
-        # $blockResultUserMode.Name = $Name
-        # $blockResultKernel.Name = $Name
+       
         $result += $blockResultUserMode
         if (-not $MSIorScript) {
             $result += $blockResultKernel
         }
-        
-        if ($RuleInfo.SHA256SipHash -and $MSIorScript) {
-        #Note, SIP hashes are often used when blocking MSIs or Scripts
-            $SIPHash = $RuleInfo.SHA256SipHash
-            $blockResultSIP = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Authenticode SIP Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
-            $ID_User_SIP = IncrementDenyID -RuleMap $RuleMap
-            $RuleMap = $RuleMap + @{$ID_User_SIP=$true}
-            if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
-                $RuleMap[$ID_User_SIP] = $RuleInfo.Comment
-            } else {
-                $FlatHashComment = "SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)"
-                $RuleMap[$ID_User_SIP] = $FlatHashComment
-            }
 
-            $blockResultSIP.Id = $ID_User_SIP
-            $blockResultSIP.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$SIPHash);
-            $result += $blockResultSIP
-        }
     } else {
         if ($RuleInfo.TrustedDriver -eq $true) {
             $kernelResult = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile,[Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
@@ -284,9 +266,9 @@ function New-MicrosoftSecureBootHashRule {
                 $RuleMap = $RuleMap + @{$ID_Kernel=$true}
             }
             $kernelResult.ID = $ID_Kernel
-            # $kernelResult.TypeId = "Allow"
+            
             $kernelResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$Hash);
-            # $kernelResult.Name = $Name
+            
             $result += $kernelResult
         }
         if ($RuleInfo.TrustedUserMode -eq $true) {
@@ -300,10 +282,174 @@ function New-MicrosoftSecureBootHashRule {
                 $RuleMap = $RuleMap + @{$ID_User=$true}
             }
             $userModeResult.ID = $ID_User
-            # $userModeResult.TypeId = "Allow"
+            
             $userModeResult.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$Hash);
-            # $userModeResult.Name = $Name
+            
             $result += $userModeResult
+        }
+    }
+
+    if ($RuleInfo.SHA256SipHash -and $MSIorScript) {
+    #Note, SIP hashes are often used when blocking MSIs or Scripts, but can also be used in allow rules
+        $SIPHash = $RuleInfo.SHA256SipHash
+        if ($RuleInfo.Blocked -eq $true) {
+            $ResultSIP = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Authenticode SIP Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+        } else {
+            $ResultSIP = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Authenticode SIP Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+        }
+        $ID_User_SIP = IncrementDenyID -RuleMap $RuleMap
+        $RuleMap = $RuleMap + @{$ID_User_SIP=$true}
+        if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
+            $RuleMap[$ID_User_SIP] = $RuleInfo.Comment
+        } else {
+            $FlatHashComment = "SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)"
+            $RuleMap[$ID_User_SIP] = $FlatHashComment
+        }
+
+        $ResultSIP.Id = $ID_User_SIP
+        $ResultSIP.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$SIPHash);
+        $result += $ResultSIP
+    }
+
+    if ($MSIorScript -and $RuleInfo.SHA1FlatHash) {
+    #Add Sha1 Flat Hash
+        $Sha1FlatHash = $RuleInfo.SHA1FlatHash
+        if ($RuleInfo.Blocked -eq $true) {
+            $ResultSha1FlatHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+        } else {
+            $ResultSha1FlatHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+        }
+        $ID_User_Sha1FlatHash = IncrementDenyID -RuleMap $RuleMap
+        $RuleMap = $RuleMap + @{$ID_User_Sha1FlatHash=$true}
+        if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
+            $RuleMap[$ID_User_Sha1FlatHash] = $RuleInfo.Comment
+        } else {
+            $RuleMap[$ID_User_Sha1FlatHash] = "SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)"
+        }
+
+        $ResultSha1FlatHash.Id = $ID_User_Sha1FlatHash
+        $ResultSha1FlatHash.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$Sha1FlatHash);
+        $result += $ResultSha1FlatHash
+
+    } elseif (-not $MSIorScript) {
+    #Add Sha1 Authenticode Hash, and Sha1 and Sha256 page hashes
+            
+        #Sha1 Authenticode Hash
+        if ($RuleInfo.SHA1AuthenticodeHash) {
+            $Sha1AuthenticodeHash = $RuleInfo.SHA1AuthenticodeHash
+            if ($RuleInfo.Blocked -eq $true) {
+                $ResultUserMode_Sha1Authenticode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+                $ResultKernel_Sha1Authenticode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+            } else {
+                $ResultUserMode_Sha1Authenticode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+                $ResultKernel_Sha1Authenticode = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+            }
+            $ID_User_Sha1Authenticode = IncrementDenyID -RuleMap $RuleMap
+            $RuleMap = $RuleMap + @{$ID_User_Sha1Authenticode=$true}
+            $ID_Kernel_Sha1Authenticode = IncrementDenyID -RuleMap $RuleMap
+            if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
+                $RuleMap[$ID_User_Sha1Authenticode] = $RuleInfo.Comment
+                $RuleMap = $RuleMap + @{$ID_Kernel_Sha1Authenticode=$RuleInfo.Comment}
+            } else {
+                $FlatHashComment = "SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)"
+                $RuleMap[$ID_User_Sha1Authenticode] = $FlatHashComment
+                $RuleMap = $RuleMap + @{$ID_Kernel_Sha1Authenticode=$FlatHashComment}
+            }
+
+            $ResultUserMode_Sha1Authenticode.Id = $ID_User_Sha1Authenticode
+            $ResultKernel_Sha1Authenticode.Id = $ID_Kernel_Sha1Authenticode
+            $ResultUserMode_Sha1Authenticode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$Sha1AuthenticodeHash);
+            $ResultKernel_Sha1Authenticode.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$Sha1AuthenticodeHash);
+            
+            if ($RuleInfo.Blocked -eq $true) {
+                $result += $ResultKernel_Sha1Authenticode
+                $result += $ResultUserMode_Sha1Authenticode
+            } else {
+                if ($RuleInfo.TrustedDriver -eq $true) {
+                    $result += $ResultKernel_Sha1Authenticode
+                } 
+                if ($RuleInfo.TrustedUserMode -eq $true) {
+                    $result += $ResultUserMode_Sha1Authenticode
+                }
+            }   
+        }
+
+        #Sha1 Page Hash
+        if ($RuleInfo.SHA1PageHash) {
+            $SHA1PageHash = $RuleInfo.SHA1PageHash
+            if ($RuleInfo.Blocked -eq $true) {
+                $ResultUserMode_SHA1PageHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Page Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+                $ResultKernel_SHA1PageHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Page Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+            } else {
+                $ResultUserMode_SHA1PageHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Page Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+                $ResultKernel_SHA1PageHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Page Sha1", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+            }
+            $ID_User_SHA1PageHash = IncrementDenyID -RuleMap $RuleMap
+            $RuleMap = $RuleMap + @{$ID_User_SHA1PageHash=$true}
+            $ID_Kernel_SHA1PageHash = IncrementDenyID -RuleMap $RuleMap
+            if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
+                $RuleMap[$ID_User_SHA1PageHash] = $RuleInfo.Comment
+                $RuleMap = $RuleMap + @{$ID_Kernel_SHA1PageHash=$RuleInfo.Comment}
+            } else {
+                $FlatHashComment = "SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)"
+                $RuleMap[$ID_User_SHA1PageHash] = $FlatHashComment
+                $RuleMap = $RuleMap + @{$ID_Kernel_SHA1PageHash=$FlatHashComment}
+            }
+
+            $ResultUserMode_SHA1PageHash.Id = $ID_User_SHA1PageHash
+            $ResultKernel_SHA1PageHash.Id = $ID_Kernel_SHA1PageHash
+            $ResultUserMode_SHA1PageHash.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$SHA1PageHash);
+            $ResultKernel_SHA1PageHash.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$SHA1PageHash);
+            if ($RuleInfo.Blocked -eq $true) {
+                $result += $ResultKernel_SHA1PageHash
+                $result += $ResultUserMode_SHA1PageHash
+            } else {
+                if ($RuleInfo.TrustedDriver -eq $true) {
+                    $result += $ResultKernel_SHA1PageHash
+                }
+                if ($RuleInfo.TrustedUserMode -eq $true) {
+                    $result += $ResultUserMode_SHA1PageHash
+                }
+            }
+        }
+
+        #Sha256 Page Hash
+        if ($RuleInfo.SHA256PageHash) {
+            $SHA256PageHash = $RuleInfo.SHA256PageHash
+            if ($RuleInfo.Blocked -eq $true) {
+                $ResultUsermode_sha256pageHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Page Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+                $ResultKernel_SHA256PageHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Deny", "Page Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+            } else {
+                $ResultUsermode_sha256pageHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $true} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Page Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+                $ResultKernel_SHA256PageHash = New-Object -TypeName "Microsoft.SecureBoot.UserConfig.Rule" -Property @{UserMode = $false} -ArgumentList ([Microsoft.SecureBoot.UserConfig.DriverFile]$TemporaryFile, [Microsoft.SecureBoot.UserConfig.RuleLevel]"Hash", [Microsoft.SecureBoot.UserConfig.RuleType]"Allow", "Page Sha256", [Microsoft.SecureBoot.UserConfig.FileNameLevel]"OriginalFileName")
+            }
+            $ID_User_SHA256PageHash = IncrementDenyID -RuleMap $RuleMap
+            $RuleMap = $RuleMap + @{$ID_User_SHA256PageHash=$true}
+            $ID_Kernel_SHA256PageHash = IncrementDenyID -RuleMap $RuleMap
+            if (($null -ne $RuleInfo.Comment) -and ("" -ne $RuleInfo.Comment)) {
+                $RuleMap[$ID_User_SHA256PageHash] = $RuleInfo.Comment
+                $RuleMap = $RuleMap + @{$ID_Kernel_SHA256PageHash=$RuleInfo.Comment}
+            } else {
+                $FlatHashComment = "SHA256 Flat Hash: $($RuleInfo.SHA256FlatHash)"
+                $RuleMap[$ID_User_SHA256PageHash] = $FlatHashComment
+                $RuleMap = $RuleMap + @{$ID_Kernel_SHA256PageHash=$FlatHashComment}
+            }
+
+            $ResultUsermode_sha256pageHash.Id = $ID_User_SHA256PageHash
+            $ResultKernel_SHA256PageHash.Id = $ID_Kernel_SHA256PageHash
+            $ResultUsermode_sha256pageHash.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$SHA256PageHash);
+            $ResultKernel_SHA256PageHash.SetAttribute([Microsoft.SecureBoot.UserConfig.RuleAttribute]"Hash",$SHA256PageHash);
+            if ($RuleInfo.Blocked -eq $true) {
+                $result += $ResultKernel_SHA256PageHash
+                $result += $ResultUsermode_sha256pageHash
+            } else {
+                if ($RuleInfo.TrustedDriver -eq $true) {
+                    $result += $ResultKernel_SHA256PageHash
+                }
+                if ($RuleInfo.TrustedUserMode -eq $true) {
+                    $result += $ResultUsermode_sha256pageHash
+                }
+            }
         }
     }
 
