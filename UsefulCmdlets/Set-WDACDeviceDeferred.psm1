@@ -62,6 +62,9 @@ function Set-WDACDeviceDeferred {
         $Comment = "Device was deferred using Set-WDACDeviceDeferred cmdlet."
     }
 
+    $Connection = $null
+    $Transaction = $null
+
     try {
 
         $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -89,11 +92,22 @@ function Set-WDACDeviceDeferred {
         }
 
         $Transaction.Commit()
+        $Connection.Close()
     } catch {
+
+        if ($Transaction -and $Connection) {
+            if ($Connection.AutoCommit -eq $false) {
+                $Transaction.Rollback()
+            }
+        }
+
+        if ($Connection) {
+            $Connection.Close()
+        }
+
         Write-Verbose ($_ | Format-List -Property * | Out-String)
         throw $_
     }
 }
-
 
 Export-ModuleMember -Function Set-WDACDeviceDeferred
