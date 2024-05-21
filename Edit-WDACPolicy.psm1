@@ -441,6 +441,8 @@ function Edit-WDACPolicy {
     $OldPolicyPath = (Get-FullPolicyPath -PolicyGUID $PolicyGUID -ErrorAction Stop)
     $TempPolicyPath = $null
     $HVCIOption = $null
+    $Connection = $null
+    $Transaction = $null
 
     try {
         $RandomGUID = New-Guid
