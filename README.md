@@ -197,6 +197,9 @@ Note: You have to invoke the workaround script with `pwsh` rather than using dot
 
 - Additionally, I haven't yet implemented a way to successfully implement custom comments for file-publisher rules. 
 
+- Additionally, WDAC-Framework currently only handles cases for when the `Enabled:Update Policy No Reboot` option is set in a WDAC policy. When deploying, the
+refresh tool is used (unless a signed policy is being removed, or a signed policy is deployed for the first time.)
+
 ## Interesting Problems I ran into when making this project
 - For some reason, when creating a new Microsoft.SecureBoot.UserConfig.Rule object for a publisher or certificate rule, it doesn't let you create the object without the relevant X509Certificate2 object, even when you already know the TBS hash of the certificate, so I created a workaround which uses temporary publisher / certificate placeholders (.XML files), and using the `Get-CIPolicy` cmdlet on these files, after replacing placeholder information with the correct TBS hashes and publisher names
 
