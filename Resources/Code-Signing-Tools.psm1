@@ -140,6 +140,11 @@ function Invoke-SignTool {
     )
     
     try {
+        if ($DestinationDirectory[-1] -eq "\") {
+            #You will get an error if the trailing backslash isn't cut off
+            $DestinationDirectory = $DestinationDirectory.Substring(0,$DestinationDirectory.Length-1)
+        }
+
         $WDACCodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
         $WDACCodeSigningCert2 = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate2"
         $WDACCodeSigningCert = [string](Select-WDACCertificateToUse -WDACCodeSigningCert $WDACCodeSigningCert -WDACCodeSigningCert2 $WDACCodeSigningCert2 -PartialPrompt "to sign this WDAC policy")
@@ -168,7 +173,7 @@ function Invoke-SignTool {
             throw "WDACCodeSigningCert subject name not in the correct format. Example: CN=WDACSigningCertificate "
         }
 
-        Start-Process $SignTool -ArgumentList 'sign', '/v' , '/n', "`"$cert_subject`"", '/p7', "`"$DestinationDirectory`"", '/p7co', '1.3.6.1.4.1.311.79.1', '/sha1', $thumbprint, '/fd', 'sha256', "`"$CIPPolicyPath`"" -Wait -NoNewWindow -ErrorAction Stop | Out-Null
+        Start-Process $SignTool -ArgumentList 'sign', '/v' , '/n', "`"$cert_subject`"", '/fd', 'sha256', '/p7co', '1.3.6.1.4.1.311.79.1', '/p7', "`"$DestinationDirectory`"", '/sha1', $thumbprint, "`"$CIPPolicyPath`"" -Wait -NoNewWindow -ErrorAction Stop | Out-Null
         
         $ResultSignedPath = ( (Join-Path $DestinationDirectory -ChildPath (Split-Path $CIPPolicyPath -Leaf)) + ".p7")
 
