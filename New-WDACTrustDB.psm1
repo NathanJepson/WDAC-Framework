@@ -329,14 +329,14 @@ function New-WDACTrustDB {
 
     CREATE TABLE ad_hoc_policy_assignments (
         PolicyGUID Text NOT NULL COLLATE NOCASE,
-        DeviceName Text NOT NULL,
+        DeviceName Text NOT NULL COLLATE NOCASE,
         PRIMARY KEY(PolicyGUID,DeviceName),
         FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE CASCADE,
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE RESTRICT
     );
 
     CREATE TABLE devices (
-        DeviceName Text PRIMARY KEY,
+        DeviceName Text COLLATE NOCASE PRIMARY KEY,
         AllowedGroup Text,
         UpdateDeferring Integer DEFAULT 0,
         processor_architecture Text,
@@ -352,7 +352,7 @@ function New-WDACTrustDB {
 
     CREATE TABLE deferred_policies_assignments (
         DeferredPolicyIndex Integer NOT NULL,
-        DeviceName Text NOT NULL,
+        DeviceName Text NOT NULL COLLATE NOCASE,
         comment Text,
         FOREIGN KEY(DeferredPolicyIndex) REFERENCES deferred_policies(DeferredPolicyIndex) ON DELETE RESTRICT,
         FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE RESTRICT,
@@ -361,7 +361,7 @@ function New-WDACTrustDB {
 
     CREATE TABLE first_signed_policy_deployments (
         PolicyGUID Text NOT NULL COLLATE NOCASE,
-        DeviceName Text NOT NULL,
+        DeviceName Text NOT NULL COLLATE NOCASE,
         PRIMARY KEY(PolicyGUID,DeviceName),
         FOREIGN KEY(DeviceName) REFERENCES devices(DeviceName) ON DELETE CASCADE,
         FOREIGN KEY(PolicyGUID) REFERENCES policies(PolicyGUID) ON DELETE CASCADE
