@@ -203,6 +203,7 @@ function Register-WDACWorkstation {
        
         $Connection = New-SQLiteConnection -ErrorAction Stop
         $Transaction = $Connection.BeginTransaction()
+        $ThrownWarning = $false
 
         foreach ($Name in $WorkstationName) {
             try {
@@ -219,6 +220,7 @@ function Register-WDACWorkstation {
                     }
                 }
             } catch {
+                $ThrownWarning = $true
                 Write-Warning $_
             }
         }
@@ -227,7 +229,9 @@ function Register-WDACWorkstation {
         $Connection.Close()
         Remove-Variable Transaction, Connection -ErrorAction SilentlyContinue
 
-        Write-Host "Workstations successfully instantiated and assigned to group $GroupName"
+        if (-not $ThrownWarning) {
+            Write-Host "Workstations successfully instantiated and assigned to group $GroupName" -ForegroundColor Green
+        }
 
     } catch {
         $theError = $_
