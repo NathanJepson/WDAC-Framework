@@ -217,3 +217,5 @@ function Update-RemoteModules {
         throw ($_ | Format-List -Property * | Out-String)
     }
 }
+
+Export-ModuleMember -Function Update-RemoteModules
