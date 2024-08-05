@@ -45,6 +45,8 @@ function Get-BootStartDrivers {
     .DESCRIPTION
     The ntbtlog.txt file (or whatever boot-log file you specify) will be parsed to extract every directory used in the bootstart process. 
     Then, a scan will parse every one of those file directories (this takes a while unfortunately.).
+    Files that are not in the boot log file will then be removed before returning the final result (use the -Verbose parameter to figure out what files
+    were not included in the final result.)
     The cmdlet will attempt to deduce which subdirectories will not be needed and provide them to the "OmitFilePaths" parameter when scanning
     for drivers. For some reason, OmitFilePaths never excludes " C:\WINDOWS\Installer" and "C:\WINDOWS\BitLockerDiscoveryVolumeContents" 
     and "C:\WINDOWS\ELAMBKUP" despite trying.
