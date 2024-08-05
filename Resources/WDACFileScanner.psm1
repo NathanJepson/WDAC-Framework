@@ -156,7 +156,7 @@ function Get-SystemDriversModified {
     )
 
     try {
-        $DateTime = Get-Date -Format "dd/mm/yyyy h:mm:ss tt"
+        $DateTime = Get-Date -Format "MM/dd/yyyy h:mm:ss tt"
         $Drivers = Get-SystemDriver -Audit:$Audit -NoScript:$NoScript -NoShadowCopy:$NoShadowCopy -OmitPaths $OmitPaths -PathToCatroot $PathToCatroot -ScanPath $ScanPath -ScriptFileNames:$ScriptFileNames -UserPEs:$UserPEs -ErrorAction Stop
 
         $DriversMSI = $Drivers | Where-Object {$_.isPE -eq $false}
