@@ -4,7 +4,7 @@
     RootModule = 'WDAC-Framework.psm1'
     
     # Version number of this module.
-    ModuleVersion = '1.0.0.0'
+    ModuleVersion = '1.0.0.1'
     
     # Supported PSEditions
     CompatiblePSEditions = @("Core")
@@ -90,7 +90,8 @@
                         'Get-MiscWDACEvents',
                         'Set-WDACDeviceDeferred',
                         'Convert-CIToolVersion',
-                        'Update-RemoteModules'
+                        'Update-RemoteModules',
+                        'Get-BootStartDrivers'
                         
     # Cmdlets to export from this module, for best performance, do not use wildcards and do not delete the entry, use an empty array if there are no cmdlets to export.
     # CmdletsToExport = '*'
