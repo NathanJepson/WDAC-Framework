@@ -778,7 +778,7 @@ function Read-WDACConferredTrust {
         #Add publishers to the database if they are not already present
             $ShouldAddPublishers = $false
             foreach ($Signer in $CertInfoAndMisc.CertsAndPublishers) {
-                $Publisher = $Signer | Select-Object Publisher
+                $Publisher = ($Signer | Select-Object Publisher).Publisher
                 if (-not $Publisher) {
                     $ShouldAddPublishers = $true
                     break
