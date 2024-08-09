@@ -383,9 +383,6 @@ function Deploy-WDACPolicies {
                 Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
                 $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
                 
-                #Copy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active
-                    Copy-item -Path $SignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
-
                 #Copy to EFI Mount
                 #Put the signed WDAC policy into the UEFI partition 
                     #Instructions Provided by Microsoft:
@@ -448,7 +445,7 @@ function Deploy-WDACPolicies {
                 }
 
                 #Copy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active
-                    Copy-item -Path $UnsignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
+                Copy-item -Path $UnsignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
 
                 #Use Refresh Tool
                 if ($RefreshToolPath) {
@@ -902,9 +899,9 @@ function Deploy-WDACPolicies {
 
                 if ($VerbosePreference) {
                     if ($SignedToUnsigned) {
-                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart,UEFIRemoveSuccess | Format-List -Property *
+                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,RefreshCompletedSuccessfully,UEFIRemoveSuccess | Format-List -Property *
                     } elseif ($PolicyInfo.IsSigned -eq $true) {
-                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
                     } else {
                         $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,RefreshCompletedSuccessfully | Format-List -Property *
                     }
@@ -1529,10 +1526,10 @@ function Restore-WDACWorkstations {
 
                     if ($VerbosePreference) {
                         if ($restartNeededResults) {
-                            $restartNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                            $restartNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,ReadyForARestart | Format-List -Property *
                         }
                         if ($restartNotNeededResults) {
-                            $restartNotNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                            $restartNotNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully | Format-List -Property *
                         }
                     }
 
@@ -1597,6 +1594,8 @@ function Restore-WDACWorkstations {
                     }
 
                 } else {
+                #Policy is not signed
+                
                     #Copy to Machine(s)
                     Copy-StagedWDACPolicies -CIPolicyPath $UnsignedStagedPolicyPath -ComputerMap $CustomPSObjectComputerMap -FixDeferred -X86_Path $X86_Path -AMD64_Path $AMD64_Path -ARM64_Path $ARM64_Path -RemoteStagingDirectory $RemoteStagingDirectory -SkipSetup:$SkipSetup
 
@@ -1604,7 +1603,7 @@ function Restore-WDACWorkstations {
                     $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $Machines -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
                     if ($VerbosePreference -and ($results.Count -ge 1)) {
-                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart | Format-List -Property *
+                        $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,RefreshCompletedSuccessfully | Format-List -Property *
                     }
 
                     $results | ForEach-Object {
@@ -1662,7 +1661,7 @@ function Restore-WDACWorkstations {
             $results = Invoke-ActivateAndRefreshWDACPolicy -Machines $SuccessfulMachinesFinalRemove -CIPolicyFileName (Split-Path $UnsignedStagedPolicyPath -Leaf) -X86_RefreshToolName $X86_RefreshToolName -AMD64_RefreshToolName $AMD64_RefreshToolName -ARM64_RefreshToolName $ARM64_RefreshToolName -RemoteStagingDirectory $RemoteStagingDirectory -RemoveUEFI -LocalMachineName $LocalDeviceName -ErrorAction Stop
 
             if ($VerbosePreference -and ($results.Count -ge 1)) {
-                $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully,ReadyForARestart,UEFIRemoveSuccess | Format-List -Property *
+                $results | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,RefreshCompletedSuccessfully,UEFIRemoveSuccess | Format-List -Property *
             }
 
             $FailToRemoveEFIPolicy = @()
