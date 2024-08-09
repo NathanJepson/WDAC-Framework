@@ -65,15 +65,12 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         $ReadyForARestart = $false
         $UEFIRemoveSuccess = $false
         $Windows11 = $false
-        $SysDrive = $null
         $Hostname = HOSTNAME.EXE
         $Architecture = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
         if ($PSVersionTable.PSEdition -eq "Core") {
             $Windows11 = (Get-CimInstance -Class Win32_OperatingSystem -Property Caption -ErrorAction Stop | Select-Object -ExpandProperty Caption) -Match "Windows 11"
-            $SysDrive =  (Get-CimInstance -Class Win32_OperatingSystem -ComputerName localhost -Property SystemDrive -ErrorAction Stop | Select-Object -ExpandProperty SystemDrive)
         } elseif ($PSVersionTable.PSEdition -eq "Desktop") {
             $Windows11 = (Get-WmiObject Win32_OperatingSystem -ErrorAction Stop).Caption -Match "Windows 11"
-            $SysDrive = (Get-WmiObject Win32_OperatingSystem -ErrorAction Stop).SystemDrive
         }
         $RefreshToolPath = $null
         
@@ -102,10 +99,6 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                 }
             }
         }
-
-        if (($null -eq $SysDrive) -and $Signed) {
-            $ResultMessage = "Unable to retrieve sys drive -- for mounting the UEFI partition."
-        }
         
         elseif ( ($null -ne $RefreshToolPath) -or $Windows11) {
             if (Test-Path (Join-Path $RemoteStagingDirectory -ChildPath $CIPolicyFileName)) {
@@ -129,7 +122,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
 
                             #Instructions Provided by Microsoft:
                             #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/deploy-wdac-policies-with-script
-                            $MountPoint = "$SysDrive\EFIMount"
+                            $MountPoint = "$env:SystemDrive\EFIMount"
                             $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
                             #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
                             $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
@@ -151,7 +144,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                             #Part of the functionallity is pulled from this Microsoft help page:
                             #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/disable-wdac-policies
 
-                            $MountPoint = "$SysDrive\EFIMount"
+                            $MountPoint = "$env:SystemDrive\EFIMount"
                             $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
 
                             #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
