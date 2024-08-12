@@ -65,6 +65,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         $ReadyForARestart = $false
         $UEFIRemoveSuccess = $false
         $Windows11 = $false
+        $ValidSignature = $false
         $Hostname = HOSTNAME.EXE
         $Architecture = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
         $CIPolicyPath = (Join-Path $RemoteStagingDirectory -ChildPath $CIPolicyFileName)
@@ -105,13 +106,32 @@ function Invoke-ActivateAndRefreshWDACPolicy {
             }
         }
 
-        if ( (Test-Path $CIPolicyPath) -and (($null -ne $RefreshToolPath) -or $CiToolPresent)) {
+        if ( (Test-Path $CIPolicyPath) -and ((Test-Path $RefreshToolPath) -or $CiToolPresent)) {
             $RefreshToolAndPolicyPresent = $true
+
+            if ($Signed) {
+            #If policy is signed, then start to verify that it has a valid signature
+                try {
+                    if (Test-Path "$env:ProgramFiles\WindowsPowerShell\Modules\Test-ValidWDACSignedPolicySignature\Test-ValidWDACSignedPolicySignature.psm1") {
+                        Import-Module "Test-ValidWDACSignedPolicySignature"
+                        if (Test-ValidWDACSignedPolicySignature -CISignedPolicyFile $CIPolicyPath) {
+                            $ValidSignature = $true
+                        } else {
+                            throw "Invalid signature for the signed WDAC policy, is invalid for this device."
+                        }
+                    } else {
+                        $ResultMessage += "Signed WDAC policy signature verification checker not present."
+                    }
+                } catch {
+                    $ResultMessage += $_.Exception.Message
+                }
+            }
         } else {
             $ResultMessage = "No WDAC / CodeIntegrity policy of name $CIPolicyFileName in remote staging directory."
         }
 
-        if ($RefreshToolAndPolicyPresent -and $Signed -and (($null -ne $RefreshToolPath) -or $CiToolPresent)) {
+
+        if ($RefreshToolAndPolicyPresent -and $Signed -and $ValidSignature -and (($null -ne $RefreshToolPath) -or $CiToolPresent)) {
         #Policy is a signed policy (and policy and refresh tool are available)
 
             if ($CiToolPresent) {

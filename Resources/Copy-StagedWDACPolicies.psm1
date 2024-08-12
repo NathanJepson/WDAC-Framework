@@ -1,3 +1,9 @@
+if ((Split-Path ((Get-Item $PSScriptRoot).Parent) -Leaf) -eq "SignedModules") {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\..\"
+} else {
+    $PSModuleRoot = Join-Path $PSScriptRoot -ChildPath "..\"
+}
+
 function Copy-StagedWDACPolicies {
     [cmdletbinding()]
     param(
@@ -15,13 +21,20 @@ function Copy-StagedWDACPolicies {
         $RemoteStagingDirectory,
         [switch]$Test,
         [switch]$FixDeferred,
-        [switch]$SkipSetup
+        [switch]$SkipSetup,
+        [switch]$Signed
     )
 
     if (($null -eq $X86_Path) -and ($null -eq $AMD64_Path) -and ($null -eq $ARM64_Path)) {
         throw "No paths for refresh policy .exe tools provided to function."
     }
-   
+
+    if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Test-ValidWDACSignedPolicySignature.psm1")) {
+        $TestValidWDACSignedPolicySignature_FilePath = Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Test-ValidWDACSignedPolicySignature.psm1"
+    } else {
+        $TestValidWDACSignedPolicySignature_FilePath = (Join-Path $PSModuleRoot -ChildPath "Resources\Test-ValidWDACSignedPolicySignature.psm1")
+    }
+    
     if (-not $FixDeferred) {
         if ($Test) {
             $Machines = ($ComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($_.TestMachine -eq $true) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
@@ -114,8 +127,46 @@ function Copy-StagedWDACPolicies {
         }
     }
 
+    $CopySignatureChecker_ScriptBlock = {
+        Param(
+            $PSComputerName,
+            $TestValidWDACSignedPolicySignature_FilePath,
+            $RemoteModulePath
+        )
+
+        function Convert-ToSMBPath {
+            Param (
+                $Path,
+                $ComputerName
+            )
+
+            $Root = (Split-Path -Qualifier $Path)
+            if (($Root.Length -eq 2) -and ($Root[1] -eq ":")) {
+                $Letter = $Root.Substring(0,1).ToLower()
+                return (Join-Path "\\$ComputerName\$Letter`$\" -ChildPath (Split-Path -NoQualifier $Path))
+            } else {
+                return (Join-Path "\\$ComputerName\" -ChildPath $Path)
+            }
+        }
+
+        try {
+            Copy-Item -Path $TestValidWDACSignedPolicySignature_FilePath -Destination (Convert-ToSMBPath -Path $RemoteModulePath -ComputerName $PSComputerName) -Force -ErrorAction Stop
+        } catch {
+            try {
+                $sess = New-PSSession -ComputerName $PSComputerName -ErrorAction Stop; 
+                Copy-Item -ToSession $sess -Path $CIPolicyPath -Destination $RemoteModulePath -Force -ErrorAction Stop
+                $sess | Remove-PSSession
+            } catch {
+                #FIXME / TODO
+                ##TODO: UseConstrainedLanguageMode workaround 
+                #In other words: Provide an alternate method to copy files to remote when SMB isn't available and Constrained Language is enabled on remote.
+            }
+        }
+    }
+
     $copyRefresh = $false; #Used to denote when a notice of refresh tool file copying should be written. (Verbose only.)
     $jobs = @()
+    $sigVerificationToolCopyJobs = @()
 
     if (-not $SkipSetup) {
         #################################
@@ -127,17 +178,19 @@ function Copy-StagedWDACPolicies {
             throw "Unable to establish remote powershell sessions with any designated device."
         }
 
-        $Result = Invoke-Command -Session $sess -ArgumentList $RemoteStagingDirectory,$X86_Path,$AMD64_Path,$ARM64_Path -ScriptBlock {
+        $Result = Invoke-Command -Session $sess -ArgumentList $RemoteStagingDirectory,$X86_Path,$AMD64_Path,$ARM64_Path,$Signed.ToBool() -ScriptBlock {
             Param (
                 $RemoteStagingDirectory,
                 $X86_Path,
                 $AMD64_Path,
-                $ARM64_Path
+                $ARM64_Path,
+                $Signed
             )
 
             $IsDirectoryPresent = $null
             $DirectoryPlacingError = $null
             $RefreshToolPresent = $null
+            $TestValidWDACSignedPolicySignaturePresent = $null
             if (-not (Test-Path $RemoteStagingDirectory)) {
                 try {
                     #Slash needs to be added to end of the qualifier \ drive name or else it gets put in the Documents folder
@@ -166,8 +219,21 @@ function Copy-StagedWDACPolicies {
                 }
             }
 
+            if ($Signed) {
+                if (-not (Test-Path "$env:ProgramFiles\WindowsPowerShell\Modules\Test-ValidWDACSignedPolicySignature\")) {
+                    New-Item -ItemType Directory -Path "$env:ProgramFiles\WindowsPowerShell\Modules" -Name "Test-ValidWDACSignedPolicySignature" -Force -ErrorAction SilentlyContinue
+                    $TestValidWDACSignedPolicySignaturePresent = $false
+                } else {
+                    if (-not (Test-Path "$env:ProgramFiles\WindowsPowerShell\Modules\Test-ValidWDACSignedPolicySignature\Test-ValidWDACSignedPolicySignature.psm1")) {
+                        $TestValidWDACSignedPolicySignaturePresent = $false
+                    } else {
+                        $TestValidWDACSignedPolicySignaturePresent = $true
+                    }
+                }
+            }
+
             $Result = @()
-            $Result += @{IsDirectoryPresent = $IsDirectoryPresent; DirectoryPlacingError = $DirectoryPlacingError; RefreshToolPresent = $RefreshToolPresent}
+            $Result += @{IsDirectoryPresent = $IsDirectoryPresent; DirectoryPlacingError = $DirectoryPlacingError; RefreshToolPresent = $RefreshToolPresent; TestValidWDACSignedPolicySignaturePresent = $TestValidWDACSignedPolicySignaturePresent; RemoteModulePath = "$env:ProgramFiles\WindowsPowerShell\Modules\Test-ValidWDACSignedPolicySignature\"}
             return ($Result | ForEach-Object {New-Object -TypeName pscustomobject | Add-Member -NotePropertyMembers $_ -PassThru})
         } -ErrorAction SilentlyContinue
 
@@ -205,11 +271,28 @@ function Copy-StagedWDACPolicies {
                 }
                 $copyRefresh = $true
             }
+
+            if ($Signed) {
+                if ($_.TestValidWDACSignedPolicySignaturePresent -eq $false) {
+                    $RemoteModulePath = $_.RemoteModulePath
+                    $sigVerificationToolCopyJobs += (Start-Job -Name ("CopySignatureVerificationTool_" + $_.PSComputerName) -ScriptBlock $CopySignatureChecker_ScriptBlock -ArgumentList $_.PSComputerName,$TestValidWDACSignedPolicySignature_FilePath,$RemoteModulePath)
+                }
+            }
         }
 
         Write-Verbose ("Refresh tool copy job count: " + $jobs.Count)
 
         foreach ($job in $jobs) { 
+            $job | Wait-Job | Out-Null
+        }
+
+        if ($sigVerificationToolCopyJobs.Count -ge 1) {
+            Write-Verbose "Copying signature verify tool to machines which don't have it"
+        }
+
+        Write-Verbose ("Signature verify tool copy job count: " + $sigVerificationToolCopyJobs.Count)
+
+        foreach ($job in $sigVerificationToolCopyJobs) {
             $job | Wait-Job | Out-Null
         }
     }
