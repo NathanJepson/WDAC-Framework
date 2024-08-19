@@ -299,46 +299,13 @@ function Set-UpdatedWDACPolicyContent {
         $namespaceManager = New-Object System.Xml.XmlNamespaceManager($SourcePolicyContent.NameTable)
         $namespaceManager.AddNamespace("ns", $namespaceUri)
 
-        $CiSignersSource = $SourcePolicyContent.SelectSingleNode("//ns:CiSigners", $namespaceManager)
-        if ($CiSignersSource -and ("" -ne $CiSignersSource.InnerXml.Trim())) {
-            $CiSignersDestination = $DestinationPolicyContent.SelectSingleNode("//ns:CiSigners", $namespaceManager)
-            if ($CiSignersDestination) {
-                $CiSignersDestination.ParentNode.RemoveChild($CiSignersDestination)
+        $EKUsSource = $SourcePolicyContent.SelectSingleNode("//ns:EKUs", $namespaceManager)
+        if ($EKUsSource -and ("" -ne $EKUsSource.InnerXml.Trim())) {
+            $EKUsDestination = $DestinationPolicyContent.SelectSingleNode("//ns:EKUs",$namespaceManager)
+            if ($EKUsDestination) {
+                $EKUsDestination.ParentNode.RemoveChild($EKUsDestination)
             }
-            $importedNode = $DestinationPolicyContent.ImportNode($CiSignersSource,$true)
-            $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
-            $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
-        }
-
-        $SignersSource = $SourcePolicyContent.SelectSingleNode("//ns:Signers", $namespaceManager)
-        if ($SignersSource -and ("" -ne $SignersSource.InnerXml.Trim())) {
-            $SignersDestination = $DestinationPolicyContent.SelectSingleNode("//ns:Signers",$namespaceManager)
-            if ($SignersDestination) {
-                $SignersDestination.ParentNode.RemoveChild($SignersDestination)
-            }
-            $importedNode = $DestinationPolicyContent.ImportNode($SignersSource,$true)
-            $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
-            $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
-        }
-
-        $SupplementalPolicySignersSource = $SourcePolicyContent.SelectSingleNode("//ns:SupplementalPolicySigners", $namespaceManager)
-        if ($SupplementalPolicySignersSource -and ("" -ne $SupplementalPolicySignersSource.InnerXml.Trim())) {
-            $SupplementalPolicySignersDestination = $DestinationPolicyContent.SelectSingleNode("//ns:SupplementalPolicySigners",$namespaceManager)
-            if ($SupplementalPolicySignersDestination) {
-                $SupplementalPolicySignersDestination.ParentNode.RemoveChild($SupplementalPolicySignersDestination)
-            }
-            $importedNode = $DestinationPolicyContent.ImportNode($SupplementalPolicySignersSource,$true)
-            $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
-            $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
-        }
-
-        $UpdatePolicySignersSource = $SourcePolicyContent.SelectSingleNode("//ns:UpdatePolicySigners", $namespaceManager)
-        if ($UpdatePolicySignersSource -and ("" -ne $UpdatePolicySignersSource.InnerXml.Trim())) {
-            $UpdatePolicySignersDestination = $DestinationPolicyContent.SelectSingleNode("//ns:UpdatePolicySigners",$namespaceManager)
-            if ($UpdatePolicySignersDestination) {
-                $UpdatePolicySignersDestination.ParentNode.RemoveChild($UpdatePolicySignersDestination)
-            }
-            $importedNode = $DestinationPolicyContent.ImportNode($UpdatePolicySignersSource,$true)
+            $importedNode = $DestinationPolicyContent.ImportNode($EKUsSource,$true)
             $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
             $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
         }
@@ -354,17 +321,17 @@ function Set-UpdatedWDACPolicyContent {
             $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
         }
 
-        $EKUsSource = $SourcePolicyContent.SelectSingleNode("//ns:EKUs", $namespaceManager)
-        if ($EKUsSource -and ("" -ne $EKUsSource.InnerXml.Trim())) {
-            $EKUsDestination = $DestinationPolicyContent.SelectSingleNode("//ns:EKUs",$namespaceManager)
-            if ($EKUsDestination) {
-                $EKUsDestination.ParentNode.RemoveChild($EKUsDestination)
+        $SignersSource = $SourcePolicyContent.SelectSingleNode("//ns:Signers", $namespaceManager)
+        if ($SignersSource -and ("" -ne $SignersSource.InnerXml.Trim())) {
+            $SignersDestination = $DestinationPolicyContent.SelectSingleNode("//ns:Signers",$namespaceManager)
+            if ($SignersDestination) {
+                $SignersDestination.ParentNode.RemoveChild($SignersDestination)
             }
-            $importedNode = $DestinationPolicyContent.ImportNode($EKUsSource,$true)
+            $importedNode = $DestinationPolicyContent.ImportNode($SignersSource,$true)
             $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
             $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
         }
-
+        
         $SigningScenariosSource = $SourcePolicyContent.SelectSingleNode("//ns:SigningScenarios", $namespaceManager)
         if ($SigningScenariosSource -and ("" -ne $SigningScenariosSource.InnerXml.Trim())) {
             $SigningScenariosDestination = $DestinationPolicyContent.SelectSingleNode("//ns:SigningScenarios",$namespaceManager)
@@ -372,6 +339,39 @@ function Set-UpdatedWDACPolicyContent {
                 $SigningScenariosDestination.ParentNode.RemoveChild($SigningScenariosDestination)
             }
             $importedNode = $DestinationPolicyContent.ImportNode($SigningScenariosSource,$true)
+            $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
+            $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
+        }
+
+        $UpdatePolicySignersSource = $SourcePolicyContent.SelectSingleNode("//ns:UpdatePolicySigners", $namespaceManager)
+        if ($UpdatePolicySignersSource -and ("" -ne $UpdatePolicySignersSource.InnerXml.Trim())) {
+            $UpdatePolicySignersDestination = $DestinationPolicyContent.SelectSingleNode("//ns:UpdatePolicySigners",$namespaceManager)
+            if ($UpdatePolicySignersDestination) {
+                $UpdatePolicySignersDestination.ParentNode.RemoveChild($UpdatePolicySignersDestination)
+            }
+            $importedNode = $DestinationPolicyContent.ImportNode($UpdatePolicySignersSource,$true)
+            $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
+            $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
+        }
+                
+        $SupplementalPolicySignersSource = $SourcePolicyContent.SelectSingleNode("//ns:SupplementalPolicySigners", $namespaceManager)
+        if ($SupplementalPolicySignersSource -and ("" -ne $SupplementalPolicySignersSource.InnerXml.Trim())) {
+            $SupplementalPolicySignersDestination = $DestinationPolicyContent.SelectSingleNode("//ns:SupplementalPolicySigners",$namespaceManager)
+            if ($SupplementalPolicySignersDestination) {
+                $SupplementalPolicySignersDestination.ParentNode.RemoveChild($SupplementalPolicySignersDestination)
+            }
+            $importedNode = $DestinationPolicyContent.ImportNode($SupplementalPolicySignersSource,$true)
+            $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
+            $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
+        }
+
+        $CiSignersSource = $SourcePolicyContent.SelectSingleNode("//ns:CiSigners", $namespaceManager)
+        if ($CiSignersSource -and ("" -ne $CiSignersSource.InnerXml.Trim())) {
+            $CiSignersDestination = $DestinationPolicyContent.SelectSingleNode("//ns:CiSigners", $namespaceManager)
+            if ($CiSignersDestination) {
+                $CiSignersDestination.ParentNode.RemoveChild($CiSignersDestination)
+            }
+            $importedNode = $DestinationPolicyContent.ImportNode($CiSignersSource,$true)
             $DestinationPolicyContent.DocumentElement.AppendChild($importedNode)
             $DestinationPolicyContent.Save($DestinationPolicyPath) | Out-Null
         }
