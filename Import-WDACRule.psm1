@@ -30,64 +30,40 @@ if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Worki
     Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\WorkingPolicies-and-DB-IO.psm1")
 }
 
-function Add-LineBeforeSpecificLine {
-    [CmdletBinding()]
-    param (
-        $Line,
-        $LineNumber,
-        $FilePath
-    )
-
-    if ($LineNumber -le 1) {
-        throw "Cannot append line at this location."
-    }
-
-    $FileContent = Get-Content -Path $FilePath
-    $result = @()
-    for ($i=0; $i -lt $FileContent.Count; $i++) {
-        $result += $FileContent[$i]
-        if ($i -eq ($LineNumber - 2)) {
-        #The reason we subtract 2 here instead of 1 is because the count starts at 0 while the line numbers start at 1
-            $result += $Line
-        }
-    }
-
-    $result | Set-Content -Path $FilePath -Force
-}
-
-function Add-WDACRuleComments {
+function Add-WDACRuleCommentsv2 {
+#This function adds the comments associated with specific rule IDs back
     [CmdletBinding()]
     param (
         $IDsAndComments,
         $FilePath
     )
 
-    foreach ($Entry in $IDsAndComments.GetEnumerator()) {
+    $FileContent = Get-Content -Path $FilePath
+    $ContentAndLineNumbers = @()
+    foreach ($entry in $IDsAndComments.GetEnumerator()) {
         if (($Entry.Value) -and ($Entry.Value -ne $true)) {
-
             $ID = "`"" + $Entry.Key + "`""
             $Comment = ("<!--" + $Entry.Value + "-->")
             $IDInstances = Select-String -Path $FilePath -Pattern $ID
-
-            for ($i=0; $i -lt $IDInstances.Count; $i++) {
-                #The reason we grab a second time for each instance is that line numbers are all changed once a line is appended to a location
-                $IDInstances2 = Select-String -Path $FilePath -Pattern $ID
-                foreach ($IDInstance in $IDInstances2) {
-                    if (($IDInstances[$i]).Line -eq $IDInstance.Line) {
-                        if ( ($IDInstance.LineNumber) -gt 1) {
-                            if (-not (((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "<!--") -or ((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "-->"))) {
-                            #If there is not already a comment above the line where the ID appears
-                                Add-LineBeforeSpecificLine -Line $Comment -LineNumber $IDInstance.LineNumber -FilePath $FilePath -ErrorAction Stop
-                                break;
-                            } else {
-                                continue;
-                            }
-                        }
-                    }
+            foreach ($Instance in $IDInstances) {
+                $lineNumber = $Instance.LineNumber
+                if (-not (($FileContent[$lineNumber-2] -match "<!--") -or ($FileContent[$lineNumber-2] -match "-->"))) {
+                    $ContentAndLineNumbers += @{ LineNumber = $lineNumber; Comment = $Comment}
                 }
             }
         }
     }
+
+    $ContentAndLineNumbers = $ContentAndLineNumbers | Sort-Object -Property LineNumber -Descending
+
+    foreach ($entry in $ContentAndLineNumbers) {
+        $lineNumber = $entry.LineNumber
+        $comment = $entry.Comment
+
+        $FileContent = $FileContent[0..($lineNumber - 2)] + $comment + $FileContent[($lineNumber - 1)..($FileContent.Length - 1)]
+    }
+
+    $FileContent | Set-Content -Path $FilePath -Force
 }
 
 function Import-WDACRule {
@@ -117,6 +93,9 @@ function Import-WDACRule {
     .PARAMETER ReferencePolicyGUID
     The policy designated by the GUID which you want to look in for the referenced rules.
 
+    .PARAMETER RetainBackup
+    Keep the backup of the previous policy before merging the rules.
+
     .EXAMPLE
     Import-WDACRule -RuleID "ID_DENY_WSL" -ReferenceFile "C:\Windows\schemas\CodeIntegrity\ExamplePolicies\AllowMicrosoft.xml" -DestinationPolicy "fd3ea102-c502-4875-9d5c-42f92f9944da"
 
@@ -139,7 +118,8 @@ function Import-WDACRule {
         [ValidateNotNullOrEmpty()]
         [Alias("ReferenceXML")]
         [string]$ReferenceFile,
-        [string]$ReferencePolicyGUID
+        [string]$ReferencePolicyGUID,
+        [switch]$RetainBackup
     )
 
     $TempPolicyPath = $null
@@ -283,7 +263,7 @@ function Import-WDACRule {
             throw "Some designated rule(s) not present in this policy."
         }
 
-        Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $TempPolicyPath -ErrorAction Stop
+        Add-WDACRuleCommentsv2 -IDsAndComments $IDsAndComments -FilePath $TempPolicyPath -ErrorAction Stop
         Receive-FileAsPolicy -FilePath $TempPolicyPath -PolicyGUID $DestinationPolicyGUID -Connection $Connection -ErrorAction Stop
         
         if (-not $DontIncrementVersion) {
@@ -319,7 +299,7 @@ function Import-WDACRule {
         if (Test-Path $TempPolicyPath) {
             Remove-Item -Path $TempPolicyPath -Force -ErrorAction SilentlyContinue
         }
-        if (Test-Path $BackupOldPolicy) {
+        if ((Test-Path $BackupOldPolicy) -and (-not $RetainBackup)) {
             Remove-Item -Path $BackupOldPolicy -Force -ErrorAction SilentlyContinue
         }
     } catch {

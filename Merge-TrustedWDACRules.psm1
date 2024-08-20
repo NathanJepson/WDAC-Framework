@@ -92,65 +92,40 @@ function Remove-UnderscoreDigits {
     $FileContent | Set-Content -Path $FilePath -Force -ErrorAction Stop
 }
 
-function Add-LineBeforeSpecificLine {
-    [CmdletBinding()]
-    param (
-        $Line,
-        $LineNumber,
-        $FilePath
-    )
-
-    if ($LineNumber -le 1) {
-        throw "Cannot append line at this location."
-    }
-
-    $FileContent = Get-Content -Path $FilePath
-    $result = @()
-    for ($i=0; $i -lt $FileContent.Count; $i++) {
-        $result += $FileContent[$i]
-        if ($i -eq ($LineNumber - 2)) {
-        #The reason we subtract 2 here instead of 1 is because the count starts at 0 while the line numbers start at 1
-            $result += $Line
-        }
-    }
-
-    $result | Set-Content -Path $FilePath -Force
-}
-
-function Add-WDACRuleComments {
-    [CmdletBinding()]
-    param (
-        $IDsAndComments,
-        $FilePath
-    )
-
-    foreach ($Entry in $IDsAndComments.GetEnumerator()) {
-        if (($Entry.Value) -and ($Entry.Value -ne $true)) {
-            $ID = "`"" + $Entry.Key + "`""
-            $Comment = ("<!--" + $Entry.Value + "-->")
-            $IDInstances = Select-String -Path $FilePath -Pattern $ID
-
-            for ($i=0; $i -lt $IDInstances.Count; $i++) {
-                #The reason we grab a second time for each instance is that line numbers are all changed once a line is appended to a location
-                $IDInstances2 = Select-String -Path $FilePath -Pattern $ID
-
-                foreach ($IDInstance in $IDInstances2) {
-                    if (($IDInstances[$i]).Line -eq $IDInstance.Line) {
-                        if ( ($IDInstance.LineNumber) -gt 1) {
-                            if (-not (((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "<!--") -or ((Get-Content $FilePath -TotalCount ($IDInstance.LineNumber -1))[-1] -match "-->"))) {
-                            #If there is not already a comment above the line where the ID appears
-                            
-                                Add-LineBeforeSpecificLine -Line $Comment -LineNumber $IDInstance.LineNumber -FilePath $FilePath -ErrorAction Stop
-                                break;
-                            } else {
-                                continue;
-                            }
-                        }
+function Add-WDACRuleCommentsv2 {
+    #This function adds the comments associated with specific rule IDs back
+        [CmdletBinding()]
+        param (
+            $IDsAndComments,
+            $FilePath
+        )
+    
+        $FileContent = Get-Content -Path $FilePath
+        $ContentAndLineNumbers = @()
+        foreach ($entry in $IDsAndComments.GetEnumerator()) {
+            if (($Entry.Value) -and ($Entry.Value -ne $true)) {
+                $ID = "`"" + $Entry.Key + "`""
+                $Comment = ("<!--" + $Entry.Value + "-->")
+                $IDInstances = Select-String -Path $FilePath -Pattern $ID
+                foreach ($Instance in $IDInstances) {
+                    $lineNumber = $Instance.LineNumber
+                    if (-not (($FileContent[$lineNumber-2] -match "<!--") -or ($FileContent[$lineNumber-2] -match "-->"))) {
+                        $ContentAndLineNumbers += @{ LineNumber = $lineNumber; Comment = $Comment}
                     }
                 }
             }
         }
-    }
+    
+        $ContentAndLineNumbers = $ContentAndLineNumbers | Sort-Object -Property LineNumber -Descending
+    
+        foreach ($entry in $ContentAndLineNumbers) {
+            $lineNumber = $entry.LineNumber
+            $comment = $entry.Comment
+    
+            $FileContent = $FileContent[0..($lineNumber - 2)] + $comment + $FileContent[($lineNumber - 1)..($FileContent.Length - 1)]
+        }
+    
+        $FileContent | Set-Content -Path $FilePath -Force
 }
 
 function Get-YesOrNoPrompt {
@@ -565,7 +540,7 @@ function Merge-TrustedWDACRules {
                 Merge-CIPolicy -PolicyPaths $FullPolicyPath -Rules $RulesToMerge -OutputFilePath $TempFilePath -ErrorAction Stop | Out-Null
                 #Since we've already checked for duplicate IDs, we can remove the _0 and _1 that Merge-CIPolicy puts at the end of each ID
                 Remove-UnderscoreDigits -FilePath $TempFilePath -ErrorAction Stop
-                Add-WDACRuleComments -IDsAndComments $IDsAndComments -FilePath $TempFilePath -ErrorAction Stop
+                Add-WDACRuleCommentsv2 -IDsAndComments $IDsAndComments -FilePath $TempFilePath -ErrorAction Stop
                 Receive-FileAsPolicy -FilePath $TempFilePath -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop
 
                 $PolicyVersion = (Get-PolicyVersionNumber -PolicyGUID $Policy -Connection $Connection -ErrorAction Stop).PolicyVersion
