@@ -954,11 +954,19 @@ function Deploy-WDACPolicies {
 
                         } else {
                             #Defer
+                            if ($_.CouldNotRemoveSystem32PolicyFlag -eq $true) {
+                                Write-Warning "Couldn't remove unsigned policy from System32 location on $($_.PSComputerName) and so signed policy was not deployed. The device will not be restarted. `
+                                Try removing the policy from the system32 locaiton manually before attempting to deploy the signed policy again."
+                            }
                             Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                         }
                     } else {
                         if (-not ($_.RefreshCompletedSuccessfully -eq $true)) {
                             #Defer
+                            if ($_.CouldNotRemoveSystem32PolicyFlag -eq $true) {
+                                Write-Warning "Unsuccessfully removed unsigned policy from System32 location on $($_.PSComputerName) and so refresh action was not performed. `
+                                It is recommended to remove the unsigned policy from the System32 location manually before attempting deployment again."
+                            }
                             Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                         }
                     }
@@ -1528,10 +1536,10 @@ function Restore-WDACWorkstations {
 
                     if ($VerbosePreference) {
                         if ($restartNeededResults) {
-                            $restartNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,ReadyForARestart | Format-List -Property *
+                            $restartNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToEFIMount,ReadyForARestart | Format-List -Property *
                         }
                         if ($restartNotNeededResults) {
-                            $restartNotNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToCIPoliciesActiveSuccessfull,CopyToEFIMount,RefreshCompletedSuccessfully | Format-List -Property *
+                            $restartNotNeededResults | Select-Object PSComputerName,ResultMessage,WinRMSuccess,RefreshToolAndPolicyPresent,CopyToEFIMount,RefreshCompletedSuccessfully | Format-List -Property *
                         }
                     }
 
@@ -1543,6 +1551,11 @@ function Restore-WDACWorkstations {
                             Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
                             [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
                             $GeneralSuccess = $true
+                        } else {
+                            if ($_.CouldNotRemoveSystem32PolicyFlag -eq $true) {
+                                Write-Warning "Couldn't remove unsigned policy from System32 location on $($_.PSComputerName) and so signed policy was not deployed. The device will not be restarted. `
+                                Try removing the policy from the system32 locaiton manually before attempting to deploy the signed policy again."
+                            }
                         }
                     }
 
@@ -1592,6 +1605,11 @@ function Restore-WDACWorkstations {
                             Remove-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Connection $Connection -ErrorAction Stop
                             [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')]
                             $GeneralSuccess = $true
+                        } else {
+                            if ($_.CouldNotRemoveSystem32PolicyFlag -eq $true) {
+                                Write-Warning "Unsuccessfully removed unsigned policy from System32 location on $($_.PSComputerName) and so refresh action was not performed. `
+                                It is recommended to remove the unsigned policy from the System32 location manually before attempting deployment again."
+                            }
                         }
                     }
 

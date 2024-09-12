@@ -56,7 +56,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
             $LocalMachineName
         )
 
-        $ResultMessage = $null
+        $ResultMessage = ""
         $WinRMSuccess = $true
         $RefreshToolAndPolicyPresent = $false
         $CopyToCIPoliciesActiveSuccessfull = $false
@@ -66,6 +66,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         $UEFIRemoveSuccess = $false
         $Windows11 = $false
         $ValidSignature = $false
+        $CouldNotRemoveSystem32PolicyFlag = $false
         $Hostname = HOSTNAME.EXE
         $Architecture = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
         $CIPolicyPath = (Join-Path $RemoteStagingDirectory -ChildPath $CIPolicyFileName)
@@ -85,7 +86,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                 $RefreshToolPath = (Join-Path $RemoteStagingDirectory -ChildPath $X86_RefreshToolName)
             } else {
                 if (-not $Windows11) {
-                    $ResultMessage = "No refresh tool present for $Architecture CPU Architecture."
+                    $ResultMessage += "No refresh tool present for $Architecture CPU Architecture."
                 }
             }
         } elseif ($Architecture -eq "AMD64") {
@@ -93,7 +94,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                 $RefreshToolPath = (Join-Path $RemoteStagingDirectory -ChildPath $AMD64_RefreshToolName)
             } else {
                 if (-not $Windows11) {
-                    $ResultMessage = "No refresh tool present for $Architecture CPU Architecture."
+                    $ResultMessage += "No refresh tool present for $Architecture CPU Architecture."
                 }
             }
         } elseif ($Architecture -eq "ARM64") {
@@ -101,7 +102,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                 $RefreshToolPath = (Join-Path $RemoteStagingDirectory -ChildPath $ARM64_RefreshToolName)
             } else {
                 if (-not $Windows11) {
-                    $ResultMessage = "No refresh tool present for $Architecture CPU Architecture."
+                    $ResultMessage += "No refresh tool present for $Architecture CPU Architecture."
                 }
             }
         }
@@ -120,14 +121,14 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                             throw "Invalid signature for the signed WDAC policy, is invalid for this device."
                         }
                     } else {
-                        $ResultMessage += "Signed WDAC policy signature verification checker not present."
+                        $ResultMessage += " Signed WDAC policy signature verification checker not present."
                     }
                 } catch {
                     $ResultMessage += $_.Exception.Message
                 }
             }
         } else {
-            $ResultMessage = "No WDAC / CodeIntegrity policy of name $CIPolicyFileName in remote staging directory."
+            $ResultMessage += " No WDAC / CodeIntegrity policy of name $CIPolicyFileName in remote staging directory."
         }
 
 
@@ -139,13 +140,13 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                     CiTool --update-policy $CIPolicyPath | Out-Null
                     $CopyToEFIMount = $true
                 } catch {
-                    $ResultMessage = "Unable to copy the signed WDAC / code integrity policy to the UEFI partition."
+                    $ResultMessage += " Unable to copy the signed WDAC / code integrity policy to the EFI partition."
                 }
             } else {
             #CiTool not present on machine
 
                 try {
-                #Put the signed WDAC policy into the UEFI partition 
+                #Put the signed WDAC policy into the EFI partition 
 
                     #Instructions Provided by Microsoft:
                     #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/deploy-wdac-policies-with-script
@@ -156,14 +157,41 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                     if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
                     mountvol $MountPoint $EFIPartition | Out-Null
                     if (-Not (Test-Path $EFIDestinationFolder)) { New-Item -Path $EFIDestinationFolder -Type Directory -Force -ErrorAction Stop | Out-Null }
-
+                    #Remove from System32 location first if it exists
+                    if (Test-Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName)) {
+                        Remove-Item -Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop
+                    }
                     Copy-Item -Path $CIPolicyPath -Destination $EFIDestinationFolder -Force -ErrorAction Stop
+
                     mountvol $MountPoint /D | Out-Null
                     $CopyToEFIMount = $true
                 } catch {
-                    $ResultMessage = "Unable to copy the signed WDAC / code integrity policy to the UEFI partition."
+                    $ResultMessage += " Unable to copy the signed WDAC / code integrity policy to the EFI partition."
                 }
             }
+
+            #Remove the unsigned version of the policy from the System32 location (usually this happens if a policy was unsigned first)
+            if (Test-Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName)) {
+                #Only remove from System32 location if signed policy successfully copied to EFI mount.
+                if ($CopyToEFIMount) {
+                    try {
+                        Remove-Item -Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop
+                    } catch {
+                        $ResultMessage += " !!!!!!!!!!!!! `n ERROR: Unable to remove unsigned policy from System32 location. This might result in a blue-screen! `n !!!!!!!!!!!!!!!!!!!!!!!!!!!!!!"
+                        $CouldNotRemoveSystem32PolicyFlag = $true
+                        try {
+                            Set-Location $RemoteStagingDirectory
+                            Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop | Out-Null
+                        } catch {
+                            $ResultMessage += " Trouble with deleting previous .CIP files in WDAC staging directory."
+                        }
+                        $Result = @()
+                        $Result += @{WinRMSuccess = $WinRMSuccess; ResultMessage = $ResultMessage; RefreshToolAndPolicyPresent = $RefreshToolAndPolicyPresent; CopyToEFIMount = $CopyToEFIMount; CouldNotRemoveSystem32PolicyFlag = $CouldNotRemoveSystem32PolicyFlag}
+                        return ($Result | ForEach-Object {New-Object -TypeName pscustomobject | Add-Member -NotePropertyMembers $_ -PassThru})
+                    }
+                }
+            }
+
         } elseif ($RefreshToolAndPolicyPresent -and (($null -ne $RefreshToolPath) -or $CiToolPresent)) {
         #Policy is NOT a signed policy (and policy and refresh tool are available)
 
@@ -172,14 +200,14 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                     CiTool --update-policy $CIPolicyPath | Out-Null
                     $CopyToCIPoliciesActiveSuccessfull = $true
                 } catch {
-                    $ResultMessage = "Unable to copy WDAC / Code integrity policy to $($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active\"
+                    $ResultMessage += " Unable to copy WDAC / Code integrity policy to $($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active\"
                 }
             } else {
                 try {
                     Copy-item -Path $CIPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
                     $CopyToCIPoliciesActiveSuccessfull = $true
                 } catch {
-                    $ResultMessage = "Unable to copy WDAC / Code integrity policy to $($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active\"
+                    $ResultMessage += " Unable to copy WDAC / Code integrity policy to $($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active\"
                 }
             }
 
@@ -195,24 +223,28 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                     #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
                     $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
 
-                    if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
+                    if (-not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
                     mountvol $MountPoint $EFIPartition | Out-Null
 
-                    if ((-not $CiToolPresent) -and (Test-Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName))) {
+                    if (Test-Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName)) {
+                        if ($CiToolPresent) {
+                            $ResultMessage += " CiTool didn't remove the policy from the EFI partition when deploying the unsigned policy."
+                        }
                         Remove-Item -Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop | Out-Null
                         mountvol $MountPoint /D | Out-Null
                         $UEFIRemoveSuccess = $true
-                    } elseif ($CiToolPresent -and (-not (Test-Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName)))) {
-                        mountvol $MountPoint /D | Out-Null
-                        #This means that the CiTool was able to remove the policy from the EFI partition successfully 
-                        $UEFIRemoveSuccess = $true
-                    } elseif ($CiToolPresent -and (Test-Path (Join-Path $EFIDestinationFolder -ChildPath $CIPolicyFileName))) {
-                        $ResultMessage += " CiTool didn't remove policy from EFI correctly."
                     } else {
-                        $ResultMessage += " UEFI-partitioned policy file not in the expected place for some reason."
+                        if (-not $CiToolPresent) {
+                            #This means that we expected a signed policy to be in the EFI partition based on all previous history, and it isn't there and it should be.
+                            $ResultMessage += " UEFI-partitioned policy file not in the expected place for some reason."
+                        } else {
+                            #If the CiTool is on the machine, we'll assume that CiTool was able to successfully remove it.
+                            $UEFIRemoveSuccess = $true
+                        }
+                        mountvol $MountPoint /D | Out-Null
                     }
                 } catch {
-                    $ResultMessage += ("Unable to remove signed WDAC policy from the UEFI partition: " + $_)
+                    $ResultMessage += ("Unable to remove signed WDAC policy from the EFI partition: " + $_)
                 }
             }
         }
@@ -261,9 +293,9 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                         }
 
                         $ReadyForARestart = $true
-                        $ResultMessage = "Device will need to be restarted to apply policy; users logged out and device is ready for a restart."
+                        $ResultMessage += " Device will need to be restarted to apply policy; users logged out and device is ready for a restart."
                     } catch {                                   
-                        $ResultMessage = ("Error while logging users out to prep device for restart to activate policy: " + $_)
+                        $ResultMessage += ("Error while logging users out to prep device for restart to activate policy: " + $_)
                         try {
                             Set-Location $RemoteStagingDirectory
                             Get-ChildItem * -Include *.cip | Remove-Item -ErrorAction Stop | Out-Null
@@ -276,7 +308,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                     }
                 } else {
                     $ReadyForARestart = $true
-                    $ResultMessage = "Device will need to be restarted to apply policy."
+                    $ResultMessage += " Device will need to be restarted to apply policy."
                 }
 
 
@@ -287,16 +319,16 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                     if ($CiToolPresent) {
                         CiTool --refresh | Out-Null
                         $RefreshCompletedSuccessfully = $true
-                        $ResultMessage = "Refresh completed successfully."
+                        $ResultMessage += " Refresh completed successfully."
                     } elseif ($null -ne $RefreshToolPath) {
                         Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
                         $RefreshCompletedSuccessfully = $true
-                        $ResultMessage = "Refresh completed successfully."
+                        $ResultMessage += " Refresh completed successfully."
                     } else {
-                        $ResultMessage = "Unable to find the wherewithal to run a refresh on WDAC policies."
+                        $ResultMessage += " Unable to find the wherewithal to run a refresh on WDAC policies."
                     }
                 } catch {
-                    $ResultMessage = "Refresh job was unsuccessful."
+                    $ResultMessage += " Refresh job was unsuccessful."
                 }
             }
         }
