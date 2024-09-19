@@ -69,6 +69,11 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         $CouldNotRemoveSystem32PolicyFlag = $false
         $Hostname = HOSTNAME.EXE
         $Architecture = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
+        #LegacyBIOS means that it is a "non-UEFI" device
+        $LegacyBIOS = $false
+        if ($env:firmware_type -eq "Legacy") {
+            $LegacyBIOS = $true
+        }
         $CIPolicyPath = (Join-Path $RemoteStagingDirectory -ChildPath $CIPolicyFileName)
         if ($PSVersionTable.PSEdition -eq "Core") {
             $Windows11 = (Get-CimInstance -Class Win32_OperatingSystem -Property Caption -ErrorAction Stop | Select-Object -ExpandProperty Caption) -Match "Windows 11"
@@ -145,29 +150,38 @@ function Invoke-ActivateAndRefreshWDACPolicy {
             } else {
             #CiTool not present on machine
 
-                try {
-                #Put the signed WDAC policy into the EFI partition 
-
-                    #Instructions Provided by Microsoft:
-                    #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/deploy-wdac-policies-with-script
-                    $MountPoint = "$env:SystemDrive\EFIMount"
-                    $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
-                    #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
-                    $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
-                    if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
-                    mountvol $MountPoint $EFIPartition | Out-Null
-                    if (-Not (Test-Path $EFIDestinationFolder)) { New-Item -Path $EFIDestinationFolder -Type Directory -Force -ErrorAction Stop | Out-Null }
-                    #Remove from System32 location first if it exists
-                    if (Test-Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName)) {
-                        Remove-Item -Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop
-                    }
-                    Copy-Item -Path $CIPolicyPath -Destination $EFIDestinationFolder -Force -ErrorAction Stop
-
-                    mountvol $MountPoint /D | Out-Null
+                if ($LegacyBIOS) {
+                #If this device is not UEFI-enabled, copy to the System32 location instead
+                    Copy-item -Path $CIPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
+                    #We set this variable to true even though the device does not have UEFI. It just makes things easier when parsing 
+                    #...the results in Deploy-WDACAPolicies
                     $CopyToEFIMount = $true
-                } catch {
-                    $ResultMessage += " Unable to copy the signed WDAC / code integrity policy to the EFI partition."
+                } else {
+                    try {
+                        #Put the signed WDAC policy into the EFI partition 
+        
+                            #Instructions Provided by Microsoft:
+                            #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/deploy-wdac-policies-with-script
+                            $MountPoint = "$env:SystemDrive\EFIMount"
+                            $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
+                            #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
+                            $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
+                            if (-Not (Test-Path $MountPoint)) { New-Item -Path $MountPoint -Type Directory -Force -ErrorAction Stop | Out-Null }
+                            mountvol $MountPoint $EFIPartition | Out-Null
+                            if (-Not (Test-Path $EFIDestinationFolder)) { New-Item -Path $EFIDestinationFolder -Type Directory -Force -ErrorAction Stop | Out-Null }
+                            #Remove from System32 location first if it exists
+                            if (Test-Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName)) {
+                                Remove-Item -Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName) -Force -ErrorAction Stop
+                            }
+                            Copy-Item -Path $CIPolicyPath -Destination $EFIDestinationFolder -Force -ErrorAction Stop
+        
+                            mountvol $MountPoint /D | Out-Null
+                            $CopyToEFIMount = $true
+                        } catch {
+                            $ResultMessage += " Unable to copy the signed WDAC / code integrity policy to the EFI partition."
+                        }
                 }
+                
             }
 
             #Remove the unsigned version of the policy from the System32 location (usually this happens if a policy was unsigned first)
