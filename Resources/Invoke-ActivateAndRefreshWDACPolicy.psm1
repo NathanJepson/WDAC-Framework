@@ -185,7 +185,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
             }
 
             #Remove the unsigned version of the policy from the System32 location (usually this happens if a policy was unsigned first)
-            if (Test-Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName)) {
+            if ((-not $LegacyBIOS) -and (Test-Path (Join-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -ChildPath $CIPolicyFileName))) {
                 #Only remove from System32 location if signed policy successfully copied to EFI mount.
                 if ($CopyToEFIMount) {
                     try {
