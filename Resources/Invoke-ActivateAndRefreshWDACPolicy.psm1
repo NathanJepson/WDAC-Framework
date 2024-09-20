@@ -142,9 +142,14 @@ function Invoke-ActivateAndRefreshWDACPolicy {
 
             if ($CiToolPresent) {
                 try {
-                    CiTool --update-policy $CIPolicyPath | Out-Null
+                    $CiToolUpdateResult = (CiTool --update-policy $CIPolicyPath -json)
+                    $UpdateJSON = $CiToolUpdateResult | ConvertFrom-Json
+                    if ($UpdateJSON.OperationResult -ne 0) {
+                        throw "CiTool returned error $('0x{0:x}' -f [int32]($UpdateJSON).OperationResult)"
+                    }
                     $CopyToEFIMount = $true
                 } catch {
+                    $ResultMessage += ($_ | Format-List -Property * | Out-String)
                     $ResultMessage += " Unable to copy the signed WDAC / code integrity policy to the EFI partition."
                 }
             } else {
@@ -211,9 +216,14 @@ function Invoke-ActivateAndRefreshWDACPolicy {
 
             if ($CiToolPresent) {
                 try {
-                    CiTool --update-policy $CIPolicyPath | Out-Null
+                    $CiToolUpdateResult = (CiTool --update-policy $CIPolicyPath -json)
+                    $UpdateJSON = $CiToolUpdateResult | ConvertFrom-Json
+                    if ($UpdateJSON.OperationResult -ne 0) {
+                        throw "CiTool returned error $('0x{0:x}' -f [int32]($UpdateJSON).OperationResult)"
+                    }
                     $CopyToCIPoliciesActiveSuccessfull = $true
                 } catch {
+                    $ResultMessage += ($_ | Format-List -Property * | Out-String)
                     $ResultMessage += " Unable to copy WDAC / Code integrity policy to $($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active\"
                 }
             } else {
@@ -331,7 +341,11 @@ function Invoke-ActivateAndRefreshWDACPolicy {
 
                 try {
                     if ($CiToolPresent) {
-                        CiTool --refresh | Out-Null
+                        $CiToolRefreshResult = (CiTool --refresh -json)
+                        $RefreshJSON = $CiToolRefreshResult | ConvertFrom-Json
+                        if ($RefreshJSON.OperationResult -ne 0) {
+                            throw "CiTool returned error $('0x{0:x}' -f [int32]($RefreshJSON).OperationResult)"
+                        }
                         $RefreshCompletedSuccessfully = $true
                         $ResultMessage += " Refresh completed successfully."
                     } elseif ($null -ne $RefreshToolPath) {
@@ -342,6 +356,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                         $ResultMessage += " Unable to find the wherewithal to run a refresh on WDAC policies."
                     }
                 } catch {
+                    $ResultMessage += ($_ | Format-List -Property * | Out-String)
                     $ResultMessage += " Refresh job was unsuccessful."
                 }
             }
