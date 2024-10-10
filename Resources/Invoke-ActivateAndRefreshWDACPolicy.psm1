@@ -82,7 +82,7 @@ function Invoke-ActivateAndRefreshWDACPolicy {
         }
         $RefreshToolPath = $null
         $CiToolPresent = $false
-        if ($Windows11 -and (Test-Path "C:\Windows\System32\CiTool.exe")) {
+        if ($Windows11 -and (Test-Path "$env:windir\System32\CiTool.exe")) {
             $CiToolPresent = $true
         }
         
