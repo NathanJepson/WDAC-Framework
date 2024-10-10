@@ -2051,6 +2051,11 @@ function Add-WDACCertificate {
             $NoConnectionProvided = $true
         }
 
+        if (($CommonName[-1] -eq '"') -and ($CommonName[0] -eq '"')) {
+        #Matching behavior of ConfigCI which removes wrapping double-quotes from around common names / subject names.
+            $CommonName = $CommonName.Substring(1,$CommonName.Length-2)
+        }
+
         $Command = $Connection.CreateCommand()
         $Command.Commandtext = "INSERT INTO certificates (TBSHash,CommonName,ParentCertTBSHash,NotValidBefore,NotValidAfter) values (@TBSHash,@CommonName,@ParentCertTBSHash,@NotValidBefore,@NotValidAfter)"
             $Command.Parameters.AddWithValue("TBSHash",$TBSHash) | Out-Null
@@ -3592,6 +3597,12 @@ function Add-WDACPublisher {
             $Connection = New-SQLiteConnection -ErrorAction Stop
             $NoConnectionProvided = $true
         }
+
+        if (($LeafCertCN[-1] -eq '"') -and ($LeafCertCN[0] -eq '"')) {
+        #Matching behavior of ConfigCI which removes wrapping double-quotes from around common names / subject names.
+            $LeafCertCN = $LeafCertCN.Substring(1,$LeafCertCN.Length-2)
+        }
+
         $Command = $Connection.CreateCommand()
 
         $Command.Commandtext = "INSERT INTO publishers (LeafCertCN,PcaCertTBSHash,Untrusted,TrustedDriver,TrustedUserMode,Staged,Revoked,Deferred,Blocked,AllowedPolicyID,DeferredPolicyIndex,Comment,BlockingPolicyID,PublisherIndex) values (@LeafCertCN,@PcaCertTBSHash,@Untrusted,@TrustedDriver,@TrustedUserMode,@Staged,@Revoked,@Deferred,@Blocked,@AllowedPolicyID,@DeferredPolicyIndex,@Comment,@BlockingPolicyID,(SELECT IFNULL(Max(PublisherIndex), 0) + 1 FROM publishers))"
