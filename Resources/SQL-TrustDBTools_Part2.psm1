@@ -148,6 +148,7 @@ function Set-HashRuleStaged {
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
         [string]$SHA256FlatHash,
+        [switch]$Unset,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
@@ -160,10 +161,18 @@ function Set-HashRuleStaged {
         $Command = $Connection.CreateCommand()
 
         if (Find-WDACApp -SHA256FlatHash $SHA256FlatHash -Connection $Connection) {
-            $Command.Commandtext = "UPDATE apps SET Staged = 1 WHERE SHA256FlatHash = @SHA256FlatHash"
+            if ($Unset) {
+                $Command.Commandtext = "UPDATE apps SET Staged = 0 WHERE SHA256FlatHash = @SHA256FlatHash"
+            } else {
+                $Command.Commandtext = "UPDATE apps SET Staged = 1 WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
         }
         elseif (Find-MSIorScript -SHA256FlatHash $SHA256FlatHash -Connection $Connection) {
-            $Command.Commandtext = "UPDATE msi_or_script SET Staged = 1 WHERE SHA256FlatHash = @SHA256FlatHash"
+            if ($Unset) {
+                $Command.Commandtext = "UPDATE msi_or_script SET Staged = 0 WHERE SHA256FlatHash = @SHA256FlatHash"
+            } else {
+                $Command.Commandtext = "UPDATE msi_or_script SET Staged = 1 WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
         } else {
             if ($NoConnectionProvided -and $Connection) {
                 $Connection.close()

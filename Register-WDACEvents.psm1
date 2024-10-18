@@ -16,6 +16,12 @@ if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-T
     Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools.psm1")
 }
 
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools_Part2.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\SQL-TrustDBTools_Part2.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\SQL-TrustDBTools_Part2.psm1")
+}
+
 $PreferredOrganizationRuleLevel = $null
 $PreferredOrganizationRuleFallbacks = $null
 $TempJSONInitial = (Get-LocalStorageJSON -ErrorAction SilentlyContinue)
@@ -175,6 +181,34 @@ function Register-PEEvent {
                     throw "One of these signing scenarios is unrecognized: $($WDACEvent.SigningScenario)  or  $AppSigningScenario"
                 }
             }
+
+            #If this app is already in the database with no Sha1 authenticode hash, or no page hashes -- but the WDACEvent contains that information
+            #...if that is the case, then we set the app to no longer deployed so the new hash rules can also be merged with our WDAC policies.
+            #...The reason this is needed is because page hashes are usually not included in event logs, but they are included in file scans.
+            $ShouldUnsetDeployed = $false
+            if ( ($null -ne $WDACEvent.SHA1AuthenticodeHash) -and ($null -eq (Get-WDACAppAlternateHashesGivenFlatHash -SHA256FlatHash $WDACEvent.SHA256FileHash -HashType "SHA1AuthenticodeHash" -Connection $Connection -ErrorAction Stop))) {
+                $ShouldUnsetDeployed = $true
+                if (-not (Set-WDACAppAlternateHashes -SHA256FlatHash $WDACEvent.SHA256FileHash -HashType "SHA1AuthenticodeHash" -HashValue ($WDACEvent.SHA1AuthenticodeHash) -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update SHA1AuthenticodeHash for app with flat hash $($WDACEvent.SHA256FileHash)"
+                }
+            }
+            if ( ($null -ne $WDACEvent.PageHash256) -and ($null -eq (Get-WDACAppAlternateHashesGivenFlatHash -SHA256FlatHash $WDACEvent.SHA256FileHash -HashType "SHA256PageHash" -Connection $Connection -ErrorAction Stop))) {
+                $ShouldUnsetDeployed = $true
+                if (-not (Set-WDACAppAlternateHashes -SHA256FlatHash $WDACEvent.SHA256FileHash -HashType "SHA256PageHash" -HashValue ($WDACEvent.PageHash256) -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update SHA256PageHash for app with flat hash $($WDACEvent.SHA256FileHash)"
+                }
+            }
+            if ( ($null -ne $WDACEvent.PageHash) -and ($null -eq (Get-WDACAppAlternateHashesGivenFlatHash -SHA256FlatHash $WDACEvent.SHA256FileHash -HashType "SHA1PageHash" -Connection $Connection -ErrorAction Stop))) {
+                $ShouldUnsetDeployed = $true
+                if (-not (Set-WDACAppAlternateHashes -SHA256FlatHash $WDACEvent.SHA256FileHash -HashType "SHA1PageHash" -HashValue ($WDACEvent.PageHash) -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update SHA1PageHash for app with flat hash $($WDACEvent.SHA256FileHash)"
+                }
+            }
+            #And -- currently SIP hashes are only used for MSIs and Scripts, so we don't set that here.
+
+            if ($ShouldUnsetDeployed) {
+                Set-HashRuleStaged -SHA256FlatHash $WDACEvent.SHA256FileHash -Unset -Connection $Connection -ErrorAction Stop | Out-Null
+            }
         }
     } catch {
         throw $_
@@ -210,6 +244,16 @@ function Register-MSIorScriptEvent {
                 foreach ($signer in $WDACEvent.SignerInfo) {
                     Register-Signer -SignerDetails $signer -AppIndex ((Get-MsiorScript -SHA256FlatHash $WDACEvent.SHA256FileHash -Connection $Connection -ErrorAction Stop).AppIndex) -MSI -Connection $Connection -ErrorAction Stop
                 }
+            }
+        } else {
+            #If this app is already in the database with no SIP Hash 256 -- but the WDACEvent contains that information
+            #...if that is the case, then we set the MSI or Script to no longer deployed so the new hash rules can also be merged with our WDAC policies.
+            #...The reason this is needed is because SIP hashes are usually not included in event logs, but they are included in file scans.
+            if ( ($null -ne $WDACEvent.SIPHash256) -and ($null -eq (Get-MsiorScriptAlternateHashesGivenFlatHash -SHA256FlatHash $WDACEvent.SHA256FileHash -HashType "SHA256SipHash" -Connection $Connection -ErrorAction Stop))) {
+                if (-not (Set-MsiorScriptAlternateHashes -SHA256FlatHash $WDACEvent.SHA256FileHash -HashType "SHA256SipHash" -HashValue ($WDACEvent.SIPHash256) -Connection $Connection -ErrorAction Stop)) {
+                    throw "Unable to update SipHash256 for MSI or Script with flat hash $($WDACEvent.SHA256FileHash)"
+                }
+                Set-HashRuleStaged -SHA256FlatHash $WDACEvent.SHA256FileHash -Unset -Connection $Connection -ErrorAction Stop | Out-Null
             }
         }
     } catch {

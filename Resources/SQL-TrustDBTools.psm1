@@ -695,6 +695,130 @@ function Get-MsiorScriptSignersByFlatHash {
     }
 }
 
+function Get-MsiorScriptAlternateHashesGivenFlatHash {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("SHA1FlatHash","SHA256AuthenticodeHash","SHA256SipHash")]
+        [string]$HashType, 
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        switch ($HashType) {
+            "SHA1FlatHash" {
+                $Command.Commandtext = "Select SHA1FlatHash from msi_or_script WHERE SHA256FlatHash = @FlatHash"
+            } 
+            "SHA256AuthenticodeHash" {
+                $Command.Commandtext = "Select SHA256AuthenticodeHash from msi_or_script WHERE SHA256FlatHash = @FlatHash"
+            }
+            "SHA256SipHash" {
+                $Command.Commandtext = "Select SHA256SipHash from msi_or_script WHERE SHA256FlatHash = @FlatHash"
+            }
+        }
+        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                switch ($HashType) {
+                    "SHA1FlatHash" {
+                        $Result = $Reader["SHA1FlatHash"];
+                    } 
+                    "SHA256AuthenticodeHash" {
+                        $Result = $Reader["SHA256AuthenticodeHash"];
+                    }
+                    "SHA256SipHash" {
+                        $Result = $Reader["SHA256SipHash"];
+                    }
+                    
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return (Format-SQLResult $result)
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Set-MsiorScriptAlternateHashes {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("SHA1FlatHash","SHA256AuthenticodeHash","SHA256SipHash")]
+        [string]$HashType,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$HashValue, 
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        switch ($HashType) {
+            "SHA1FlatHash" {
+                $Command.Commandtext = "UPDATE msi_or_script SET SHA1FlatHash = @HashValue WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+            "SHA256AuthenticodeHash" {
+                $Command.Commandtext = "UPDATE msi_or_script SET SHA256AuthenticodeHash = @HashValue WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+            "SHA256SipHash" {
+                $Command.Commandtext = "UPDATE msi_or_script SET SHA256SipHash = @HashValue WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+        }
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.Parameters.AddWithValue("HashValue",$HashValue) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
+    }
+}
+
 function Add-MsiOrScriptSigner {
     [cmdletbinding()]
     Param ( 
@@ -1324,6 +1448,147 @@ function Get-WDACAppSignersByFlatHash {
         if ($Reader) {
             $Reader.Close()
         }
+        throw $theError
+    }
+}
+
+function Get-WDACAppAlternateHashesGivenFlatHash {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("SHA256AuthenticodeHash","SHA1AuthenticodeHash","SHA256PageHash","SHA1PageHash","SHA256SipHash")]
+        [string]$HashType, 
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    $result = $null
+    $NoConnectionProvided = $false
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        switch ($HashType) {
+            "SHA256AuthenticodeHash" {
+                $Command.Commandtext = "Select SHA256AuthenticodeHash from apps WHERE SHA256FlatHash = @FlatHash"
+            } 
+            "SHA1AuthenticodeHash" {
+                $Command.Commandtext = "Select SHA1AuthenticodeHash from apps WHERE SHA256FlatHash = @FlatHash"
+            }
+            "SHA256PageHash" {
+                $Command.Commandtext = "Select SHA256PageHash from apps WHERE SHA256FlatHash = @FlatHash"
+            }
+            "SHA1PageHash" {
+                $Command.Commandtext = "Select SHA1PageHash from apps WHERE SHA256FlatHash = @FlatHash"
+            } 
+            "SHA256SipHash" {
+                $Command.Commandtext = "Select SHA256SipHash from apps WHERE SHA256FlatHash = @FlatHash"
+            }
+        }
+        $Command.Parameters.AddWithValue("FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.CommandType = [System.Data.CommandType]::Text
+        $Reader = $Command.ExecuteReader()
+        $Reader.GetValues() | Out-Null
+
+        while($Reader.HasRows) {
+            if($Reader.Read()) {
+                switch ($HashType) {
+                    "SHA256AuthenticodeHash" {
+                        $Result = $Reader["SHA256AuthenticodeHash"];
+                    } 
+                    "SHA1AuthenticodeHash" {
+                        $Result = $Reader["SHA1AuthenticodeHash"];
+                    }
+                    "SHA256PageHash" {
+                        $Result = $Reader["SHA256PageHash"];
+                    }
+                    "SHA1PageHash" {
+                        $Result = $Reader["SHA1PageHash"];
+                    } 
+                    "SHA256SipHash" {
+                        $Result = $Reader["SHA256SipHash"];
+                    }
+                }
+            }
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        return (Format-SQLResult $result)
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+        if ($Reader) {
+            $Reader.Close()
+        }
+        throw $theError
+    }
+}
+
+function Set-WDACAppAlternateHashes {
+    [cmdletbinding()]
+    Param (
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$SHA256FlatHash,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [ValidateSet("SHA256AuthenticodeHash","SHA1AuthenticodeHash","SHA256PageHash","SHA1PageHash","SHA256SipHash")]
+        [string]$HashType,
+        [ValidateNotNullOrEmpty()]
+        [Parameter(Mandatory=$true)]
+        [string]$HashValue, 
+        [System.Data.SQLite.SQLiteConnection]$Connection
+    )
+
+    try {
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
+        }
+        $Command = $Connection.CreateCommand()
+        switch ($HashType) {
+            "SHA256AuthenticodeHash" {
+                $Command.Commandtext = "UPDATE apps SET SHA256AuthenticodeHash = @HashValue WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+            "SHA1AuthenticodeHash" {
+                $Command.Commandtext = "UPDATE apps SET SHA1AuthenticodeHash = @HashValue WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+            "SHA256PageHash" {
+                $Command.Commandtext = "UPDATE apps SET SHA256PageHash = @HashValue WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+            "SHA1PageHash" {
+                $Command.Commandtext = "UPDATE apps SET SHA1PageHash = @HashValue WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+            "SHA256SipHash" {
+                $Command.Commandtext = "UPDATE apps SET SHA256SipHash = @HashValue WHERE SHA256FlatHash = @SHA256FlatHash"
+            }
+        }
+        $Command.Parameters.AddWithValue("SHA256FlatHash",$SHA256FlatHash) | Out-Null
+        $Command.Parameters.AddWithValue("HashValue",$HashValue) | Out-Null
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+    } catch {
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
         throw $theError
     }
 }
