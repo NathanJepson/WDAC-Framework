@@ -46,7 +46,7 @@ It's recommended that you obtain a PowerShell code signing certificate. You can 
 __For Signing Policies__
 If you want to sign your WDAC policies (which provides the maximum protection for WDAC), then you will need to obtain a policy signing certificate as well as the Microsoft "signtool". 
 Instructions for creating a WDAC policy signing certificate are here:
-https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/create-code-signing-cert-for-wdac 
+https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/deployment/create-code-signing-cert-for-appcontrol 
 
 __For Signing Policies (2)__ For obtaining the SignTool.exe file, you will need to install the [Windows SDK](https://developer.microsoft.com/windows/downloads/windows-sdk).
 The SignTool should be located in "the \Bin folder of the Microsoft Windows Software Development Kit (SDK) installation path, for example: C:\Program Files (x86)\Windows Kits\10\bin\10.0.19041.0\x64\signtool.exe." [Source](https://learn.microsoft.com/en-us/windows/win32/seccrypto/signtool)
@@ -147,11 +147,11 @@ Get-WDACFiles -RemoteMachine PC1 -NoShadowCopy -ScanPath "C:\Program Files (x86)
 ```
 
 ## What even is Windows Defender Application Control?
-Windows Defender Application Control (or WDAC) is an application control solution which is meant to work with your ["enterprise antivirus solution for a well-rounded enterprise security portfolio"](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac).
+Windows Defender Application Control (or App Control for Business) is an application control solution which is meant to work with your ["enterprise antivirus solution for a well-rounded enterprise security portfolio"](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/appcontrol).
 
 "Application control is often cited as one of the most effective means of defending against malware." ([Source](https://www.microsoft.com/en-us/security/blog/2023/09/21/new-microsoft-security-tools-to-protect-families-and-businesses/))
  
-"Application control is a crucial line of defense for protecting enterprises given today's threat landscape, and it has an inherent advantage over traditional antivirus solutions. Specifically, application control moves away from an application trust model where all applications are assumed trustworthy to one where applications must earn trust in order to run." ([Source](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac))
+"Application control is a crucial line of defense for protecting enterprises given today's threat landscape, and it has an inherent advantage over traditional antivirus solutions. Specifically, application control moves away from an application trust model where all applications are assumed trustworthy to one where applications must earn trust in order to run." ([Source](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/appcontrol))
 
 Basically, WDAC can block untrusted code, or apps which may violate company policy.
 For, example, if you decide that the XBox Windows Gaming App (a packaged app or Windows Store app) is not appropriate for company computers,
@@ -166,13 +166,13 @@ And -- if you digitally sign your WDAC policy and put it in a specific place in 
 a clever adversary will have difficulty removing the policy even with admin permissions (unless they can obtain the private key).
 
 Sys Admins can use WDAC in BlockList or AllowList varieties.
-A BlockList WDAC policy will only block specific apps, DLLs, MSIs, etc. that you _want_ to block.
-An Allowlist WDAC policy will block _everything_ except for things you specifically allow.
+A BlockList app control policy will only block specific apps, DLLs, MSIs, etc. that you _want_ to block.
+An Allowlist app control policy will block _everything_ except for things you specifically allow.
 
-WDAC only applies to [very specific file types](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/feature-availability). WDAC cannot control files such as Java files and Python scripts, but you
+App Control for Business only applies to [very specific file types](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/feature-availability). App Control for Business cannot control files such as Java files and Python scripts, but you
 still have control over whether Java or Python itself can run on a workstation.
 
-And, Microsoft has promised us that WDAC will receive many more improvements compared with AppLocker, which ["isn't getting new feature improvements."](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/wdac-and-applocker-overview)
+And, Microsoft has promised us that App Control for Business will receive many more improvements compared with AppLocker, which ["isn't getting new feature improvements."](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/appcontrol-and-applocker-overview)
 
 ## Why create this module in the first place?
 Microsoft does create and maintain the "ConfigCI" suite of PowerShell cmdlets, which you can use to create WDAC policies, and merge WDAC rules. There are a few problems with it though. 
@@ -209,7 +209,7 @@ refresh tool is used (unless a signed policy is being removed, or a signed polic
 
 - There were several uses of ConfigCI which only work in PowerShell 5. For example, when creating new Microsoft.SecureBoot.UserConfig.Rule objects ($rules), and merging them into a WDAC policy with `Merge-CIPolicy -Rules $rules`, this does not work in PowerShell 7. (ConfigCI has [yet to be certified for PowerShell 7](https://learn.microsoft.com/en-us/powershell/windows/module-compatibility?view=windowsserver2022-ps).) As a workaround, there are several places where I wrapped things in PowerShell 5 blocks. In some cases, this does look ugly, but it works.
 
-- When deploying a signed base policy to a device for the first time, it's important to restart it without using the refresh tool. (Or, at least, [when memory integrity is enabled on the device](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/wdac-deployment-guide), see note labeled "Important".) Then, supsequent updates to the policy can use the refresh tool without a restart. Additionally, you will need to restart devices after removing a signed policy. Knowing how to keep track of whether a device needs to be restarted or not, or received its initial restart for a particular policy, was another interesting problem. I created a SQL table to track "first_signed_policy_deployments" to solve the first problem, and I also have functions to check whether a signed policy is being removed to address the second problem.
+- When deploying a signed base policy to a device for the first time, it's important to restart it without using the refresh tool. (Or, at least, [when memory integrity is enabled on the device](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/deployment/appcontrol-deployment-guide), see note labeled "Important".) Then, supsequent updates to the policy can use the refresh tool without a restart. Additionally, you will need to restart devices after removing a signed policy. Knowing how to keep track of whether a device needs to be restarted or not, or received its initial restart for a particular policy, was another interesting problem. I created a SQL table to track "first_signed_policy_deployments" to solve the first problem, and I also have functions to check whether a signed policy is being removed to address the second problem.
 
 - Another interesting problem I ran into is this: when using `Copy-Item` to copy a file to a remote machine, this won't work if Constrained Language Mode is enabled on the remote machine (so, if basically any WDAC policy is deployed on the remote machine.) You can get around this by copying files with using the UNC path of a remote directory (for example, `\\RemoteMachine\c$\RemoteFolder`). Using this format of a remote file path will allow you to copy files using SMB, rather than using Windows Remote Management (`Copy-Item` to remote machines using WinRM doesn't work in constrained language mode environments)
 
