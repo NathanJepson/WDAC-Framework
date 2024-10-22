@@ -67,10 +67,10 @@ function Get-DriverBlockRules {
         
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md"))) {
             Write-Verbose "Retrieving driver block rules from Github.com."
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/windows-itpro-docs/public/windows/security/application-security/application-control/windows-defender-application-control/design/microsoft-recommended-driver-block-rules.md" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md") -ErrorAction Stop 
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/windows-itpro-docs/refs/heads/public/windows/security/application-security/application-control/app-control-for-business/design/microsoft-recommended-driver-block-rules.md" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md") -ErrorAction Stop 
         }
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml"))) {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/main/WDAC-Policy-Wizard/app/MSIX/Recommended_Driver_Blocklist.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml") -ErrorAction Stop
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/refs/heads/main/WDAC-Policy-Wizard/app/MSIX/Templates/Recommended_Driver_Blocklist.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml") -ErrorAction Stop
         }
     } catch {
         throw "Trouble retrieving recommended driver block rules from github.com"
@@ -114,10 +114,10 @@ function Get-UserModeBlockRules {
         
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md"))) {
             Write-Verbose "Retrieving user mode block rules from Github.com."
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/windows-itpro-docs/public/windows/security/application-security/application-control/windows-defender-application-control/design/applications-that-can-bypass-wdac.md" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md") -ErrorAction Stop 
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/windows-itpro-docs/refs/heads/public/windows/security/application-security/application-control/app-control-for-business/design/applications-that-can-bypass-appcontrol.md" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md") -ErrorAction Stop 
         }
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-wdacwizard.xml"))) {
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/main/WDAC-Policy-Wizard/app/MSIX/Recommended_UserMode_Blocklist.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-wdacwizard.xml") -ErrorAction Stop
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/refs/heads/main/WDAC-Policy-Wizard/app/MSIX/Templates/Recommended_UserMode_Blocklist.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-wdacwizard.xml") -ErrorAction Stop
         }
     } catch {
         throw "Trouble retrieving recommended user mode block rules from github.com"
