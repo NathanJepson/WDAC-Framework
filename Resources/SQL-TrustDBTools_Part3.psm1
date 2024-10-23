@@ -929,6 +929,7 @@ function Get-WDACWorkstationsByDeferredPolicyIndex {
     Param ( 
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
+        [Alias("Index","PolicyIndex")]
         [string]$DeferredPolicyIndex,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
