@@ -37,6 +37,8 @@ function Update-RemoteModules {
         [switch]$WDACAuditing,
         [Alias("FileScanner")]
         [switch]$WDACFileScanner,
+        [Alias("TestValidWDACSignedPolicySignature","Test-ValidWDACSignedPolicySignature","SignatureCheck")]
+        [switch]$TestValidSignature,
         [Alias("Computer","Computers","PC","PCs","Device","Devices")]
         [string[]]$RemoteMachines
     )
@@ -47,7 +49,7 @@ function Update-RemoteModules {
 
     try {
 
-        if ($WDACAuditing -or (-not ($WDACAuditing -or $WDACFileScanner))) {
+        if ($WDACAuditing -or (-not ($WDACAuditing -or $WDACFileScanner -or $TestValidSignature))) {
             if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\WDACAuditing\WDACAuditing.psm1")) {
                 $ModulePath = (Join-Path $PSModuleRoot -ChildPath "SignedModules\WDACAuditing\WDACAuditing.psm1")
                 Write-Verbose "WDAC Auditing module is signed."
@@ -86,7 +88,6 @@ function Update-RemoteModules {
             $jobs = @()
             $Result | ForEach-Object {
                 if ($_.SysDrive) {
-                #Case: Module WDACAuditing.psm1 is not yet installed on the remote machine
                     if ($iterator -eq 0) {
                         Write-Host "Copying WDAC auditing module to remote machines..."
                     }
@@ -103,11 +104,11 @@ function Update-RemoteModules {
                         )
         
                         try {
-                            Copy-Item -Path $ModulePath -Destination "\\$PSComputerName\$TempDrive`$\Program Files\WindowsPowerShell\Modules\WDACAuditing\" -ErrorAction Stop
+                            Copy-Item -Path $ModulePath -Destination "\\$PSComputerName\$TempDrive`$\Program Files\WindowsPowerShell\Modules\WDACAuditing\" -Force -ErrorAction Stop
                         } catch {
                             try {
                                 $sess = New-PSSession -ComputerName $PSComputerName -ErrorAction Stop; 
-                                Copy-Item -ToSession $sess -Path $ModulePath -Destination "$TempDrive`:\Program Files\WindowsPowerShell\Modules\WDACAuditing\" -ErrorAction Stop
+                                Copy-Item -ToSession $sess -Path $ModulePath -Destination "$TempDrive`:\Program Files\WindowsPowerShell\Modules\WDACAuditing\" -Force -ErrorAction Stop
                                 $sess | Remove-PSSession
                             } catch {
                                 #FIXME / TODO
@@ -129,7 +130,7 @@ function Update-RemoteModules {
             }
         }
 
-        if ($WDACFileScanner -or (-not ($WDACAuditing -or $WDACFileScanner))) {
+        if ($WDACFileScanner -or (-not ($WDACAuditing -or $WDACFileScanner -or $TestValidSignature))) {
             
 
             if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\WDACFileScanner.psm1")) {
@@ -170,7 +171,6 @@ function Update-RemoteModules {
             $jobs = @()
             $Result | ForEach-Object {
                 if ($_.SysDrive) {
-                #Case: Module WDACAuditing.psm1 is not yet installed on the remote machine
                     if ($iterator -eq 0) {
                         Write-Host "Copying WDAC file scanner module to remote machines..."
                     }
@@ -187,11 +187,11 @@ function Update-RemoteModules {
                         )
         
                         try {
-                            Copy-Item -Path $ModulePath -Destination "\\$PSComputerName\$TempDrive`$\Program Files\WindowsPowerShell\Modules\WDACFileScanner\" -ErrorAction Stop
+                            Copy-Item -Path $ModulePath -Destination "\\$PSComputerName\$TempDrive`$\Program Files\WindowsPowerShell\Modules\WDACFileScanner\" -Force -ErrorAction Stop
                         } catch {
                             try {
                                 $sess = New-PSSession -ComputerName $PSComputerName -ErrorAction Stop; 
-                                Copy-Item -ToSession $sess -Path $ModulePath -Destination "$TempDrive`:\Program Files\WindowsPowerShell\Modules\WDACFileScanner\" -ErrorAction Stop
+                                Copy-Item -ToSession $sess -Path $ModulePath -Destination "$TempDrive`:\Program Files\WindowsPowerShell\Modules\WDACFileScanner\" -Force -ErrorAction Stop
                                 $sess | Remove-PSSession
                             } catch {
                                 #FIXME / TODO
@@ -202,6 +202,87 @@ function Update-RemoteModules {
                     }
                     
                     $jobs += (Start-Job -Name ("CopyWDACFileScanner_" + $_.PSComputerName) -ScriptBlock $ScriptBlock -ArgumentList $_.PSComputerName,$TempDrive,$ModulePath)
+                    $iterator += 1;
+                }
+            }
+        
+            Write-Verbose ("Copy job count: " + $jobs.Count)
+        
+            foreach ($job in $jobs) {
+                $job | Wait-Job | Out-Null
+            }
+        }
+
+        if ($TestValidSignature -or (-not ($WDACAuditing -or $WDACFileScanner -or $TestValidSignature))) {
+            if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Test-ValidWDACSignedPolicySignature.psm1")) {
+                $ModulePath = (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Test-ValidWDACSignedPolicySignature.psm1")
+                Write-Verbose "The Test-ValidWDACSignedPolicySignature module is signed."
+            } else {
+                $ModulePath = Join-Path $PSModuleRoot -ChildPath "Resources\Test-ValidWDACSignedPolicySignature.psm1"
+            }
+            
+            $sess = New-PSSession $RemoteMachines -ErrorAction SilentlyContinue
+
+            if (-not $sess) {
+                throw New-Object System.Management.Automation.Remoting.PSRemotingTransportException
+            }
+
+            $Result = Invoke-Command -ErrorAction SilentlyContinue -Session $sess -ScriptBlock {
+                $IsModulePresent = Test-Path "$($Env:Programfiles)\WindowsPowerShell\Modules\Test-ValidWDACSignedPolicySignature"
+                if (-not ($IsModulePresent)) {
+                    New-Item -ItemType Directory -Name "Test-ValidWDACSignedPolicySignature" -Path "$($Env:Programfiles)\WindowsPowerShell\Modules\" -ErrorAction SilentlyContinue | Out-Null
+                }
+                $SysDrive = $null
+                if ($PSVersionTable.PSEdition -eq "Core") {
+                    $SysDrive =  (Get-CimInstance -Class Win32_OperatingSystem -ComputerName localhost -Property SystemDrive | Select-Object -ExpandProperty SystemDrive)
+                } elseif ($PSVersionTable.PSEdition -eq "Desktop") {
+                    $SysDrive = (Get-WmiObject Win32_OperatingSystem).SystemDrive
+                } else {
+                #Otherwise, attempt to probe C:\ as the primary Windows drive in the rest of the script (failing if needed)
+                    $SysDrive = "C:"
+                }
+        
+                $Result = @()
+                $Result += @{SysDrive = $SysDrive}
+                return ($Result | ForEach-Object {New-Object -TypeName pscustomobject | Add-Member -NotePropertyMembers $_ -PassThru})
+            }
+            $sess | Remove-PSSession
+
+            $iterator = 0; #Used to denote when a notice of file copying should be written.
+            $jobs = @()
+            $Result | ForEach-Object {
+                if ($_.SysDrive) {
+                    if ($iterator -eq 0) {
+                        Write-Host "Copying policy signature checker module to remote machines..."
+                    }
+        
+                    $TempDrive = ( ($_.SysDrive -split '\:')[0])
+                    
+                    $ScriptBlock = {
+                    #This script block uses SMB as the first try and PowerShell remoting (WinRM) as the second try
+                    #Note: PowerShell remoting will fail if a non-audit WDAC policy is on the remote machine (due to Constrained Language Mode)
+                        Param(
+                            $PSComputerName,
+                            $TempDrive,
+                            $ModulePath
+                        )
+        
+                        try {
+                            Copy-Item -Path $ModulePath -Destination "\\$PSComputerName\$TempDrive`$\Program Files\WindowsPowerShell\Modules\Test-ValidWDACSignedPolicySignature\" -Force -ErrorAction Stop
+                        } catch {
+                            try {
+                                $sess = New-PSSession -ComputerName $PSComputerName -ErrorAction Stop; 
+                                Copy-Item -ToSession $sess -Path $ModulePath -Destination "$TempDrive`:\Program Files\WindowsPowerShell\Modules\Test-ValidWDACSignedPolicySignature\" -Force -ErrorAction Stop
+                                $sess | Remove-PSSession
+                            } catch {
+                                #FIXME / TODO
+                                ##TODO: UseConstrainedLanguageMode workaround 
+                                #In other words: Provide an alternate method to copy files to remote when SMB isn't available and Constrained Language is enabled on remote.
+                            }
+                        }
+                    }
+                    
+                    $jobs += (Start-Job -Name ("CopyTestValidSignedPolicy_" + $_.PSComputerName) -ScriptBlock $ScriptBlock -ArgumentList $_.PSComputerName,$TempDrive,$ModulePath)
                     $iterator += 1;
                 }
             }
