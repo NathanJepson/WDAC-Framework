@@ -443,6 +443,8 @@ function Deploy-WDACPolicies {
                     } elseif ($RefreshToolPath) {
                         Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
                         Write-Host "Refresh completed successfully."
+                    } else {
+                        Write-Warning "No way found to refresh the policy."
                     }
                 } elseif (Get-YesOrNoPrompt -Prompt "If this is the first time this signed base policy has been deployed locally, select `"Y`" to restart your device, otherwise select `"N`" to use the refresh tool.") {
                     Restart-Computer -Force
@@ -457,6 +459,8 @@ function Deploy-WDACPolicies {
                     } elseif ($RefreshToolPath) {
                         Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
                         Write-Host "Refresh completed successfully."
+                    } else {
+                        Write-Warning "No way found to refresh the policy."
                     }
                 }
 
@@ -492,14 +496,16 @@ function Deploy-WDACPolicies {
                 Copy-item -Path $UnsignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
 
                 #Use Refresh Tool
-                if ($RefreshToolPath) {
-                    Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
-                } elseif ($Windows11) {
+                if ($CiToolPresent) {
                     $CiToolRefreshResult = (CiTool --refresh -json)
                     $RefreshJSON = $CiToolRefreshResult | ConvertFrom-Json
                     if ($RefreshJSON.OperationResult -ne 0) {
                         throw "Refresh unsuccessful. CiTool returned error $('0x{0:x}' -f [int32]($RefreshJSON).OperationResult)"
                     }
+                } elseif ($RefreshToolPath) {
+                    Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
+                } else {
+                    Write-Warning "No way found to refresh the policy."
                 }
 
                 if ($UnsignedStagedPolicyPath) {
