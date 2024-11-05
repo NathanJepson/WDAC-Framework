@@ -54,6 +54,12 @@ if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Code-
     Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\Code-Signing-Tools.psm1")
 }
 
+if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Test-ValidWDACSignedPolicySignature.psm1")) {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Test-ValidWDACSignedPolicySignature.psm1")
+} else {
+    Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\Test-ValidWDACSignedPolicySignature.psm1")
+}
+
 function Get-X86Path {
     $X86_Path = (Get-LocalStorageJSON -ErrorAction Stop)."RefreshTool_x86"
     if (-not $X86_Path -or ("" -eq $X86_Path)) {
@@ -354,14 +360,20 @@ function Deploy-WDACPolicies {
             ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
             $CPU = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
             $Windows11 = $false
-            $SysDrive = $null
             $RefreshToolPath = $null
             if ($PSVersionTable.PSEdition -eq "Core") {
                 $Windows11 = (Get-CimInstance -Class Win32_OperatingSystem -Property Caption -ErrorAction Stop | Select-Object -ExpandProperty Caption) -Match "Windows 11"
-                $SysDrive =  (Get-CimInstance -Class Win32_OperatingSystem -ComputerName localhost -Property SystemDrive -ErrorAction Stop | Select-Object -ExpandProperty SystemDrive)
             } elseif ($PSVersionTable.PSEdition -eq "Desktop") {
                 $Windows11 = (Get-WmiObject Win32_OperatingSystem -ErrorAction Stop).Caption -Match "Windows 11"
-                $SysDrive = (Get-WmiObject Win32_OperatingSystem -ErrorAction Stop).SystemDrive
+            }
+            $LegacyBIOS = $false
+            if ($env:firmware_type -eq "Legacy") {
+                $LegacyBIOS = $true
+            }
+
+            $CiToolPresent = $false
+            if ($Windows11 -and (Test-Path "$env:windir\System32\CiTool.exe")) {
+                $CiToolPresent = $true
             }
 
             if ($CPU -eq "X86") {
@@ -379,15 +391,21 @@ function Deploy-WDACPolicies {
             if ($PolicyInfo.IsSigned -eq $true) {
                 #Get Signed
                 $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
+                
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
                 Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
                 $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
+
+                if (-not (Test-ValidWDACSignedPolicySignature -CISignedPolicyFile $SignedStagedPolicyPath)) {
+                    throw "Invalid signature for the signed WDAC policy, is invalid for this device."
+                }
                 
                 #Copy to EFI Mount
                 #Put the signed WDAC policy into the UEFI partition 
+                if (-not $LegacyBIOS) {
                     #Instructions Provided by Microsoft:
                     #https://learn.microsoft.com/en-us/windows/security/application-security/application-control/windows-defender-application-control/deployment/deploy-wdac-policies-with-script
-                    $MountPoint = "$SysDrive\EFIMount"
+                    $MountPoint = "$env:SystemDrive\EFIMount"
                     $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
                     #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
                     $EFIPartition = (Get-Partition | Where-Object IsSystem).AccessPaths[0]
@@ -396,11 +414,31 @@ function Deploy-WDACPolicies {
                     if (-Not (Test-Path $EFIDestinationFolder)) { New-Item -Path $EFIDestinationFolder -Type Directory -Force -ErrorAction Stop | Out-Null }
 
                     Copy-Item -Path $SignedStagedPolicyPath -Destination $EFIDestinationFolder -Force -ErrorAction Stop
+                    if (Test-Path "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active\{$($PolicyInfo.PolicyGUID)}.cip") {
+                    #Remove from System32 location to prevent blue-screens
+                        try {
+                            Remove-Item "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active\{$($PolicyInfo.PolicyGUID)}.cip" -Force -ErrorAction Stop
+                        } catch {
+                            throw "CRITICAL: Unable to remove policy from System32 location. This means there is a policy in both the EFI partition `
+                            and System32 locations, which might lead to a blue-screen. Please remove the policy from the System32 location as soon as you are able!"
+                        }
+                    }
+
+                    mountvol $MountPoint /D | Out-Null
+                } else {
+                #Legacy BIOS
+                    Write-Warning "Legacy BIOS detected, so putting signed policy in System32 location instead of EFI partition."
+                    Copy-item -Path $SignedStagedPolicyPath -Destination "$($Env:Windir)\System32\CodeIntegrity\CiPolicies\Active" -Force -ErrorAction Stop
+                }
 
                 #Either Restart Device or Use Refresh Tool
                 if ($PolicyInfo.BaseOrSupplemental -eq $true) {
-                    if ($Windows11) {
-                        CiTool --refresh
+                    if ($CiToolPresent) {
+                        $CiToolRefreshResult = (CiTool --refresh -json)
+                        $RefreshJSON = $CiToolRefreshResult | ConvertFrom-Json
+                        if ($RefreshJSON.OperationResult -ne 0) {
+                            throw "Refresh unsuccessful. CiTool returned error $('0x{0:x}' -f [int32]($RefreshJSON).OperationResult)"
+                        }
                         Write-Host "Refresh completed successfully."
                     } elseif ($RefreshToolPath) {
                         Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
@@ -409,8 +447,12 @@ function Deploy-WDACPolicies {
                 } elseif (Get-YesOrNoPrompt -Prompt "If this is the first time this signed base policy has been deployed locally, select `"Y`" to restart your device, otherwise select `"N`" to use the refresh tool.") {
                     Restart-Computer -Force
                 } else {
-                    if ($Windows11) {
-                        CiTool --refresh
+                    if ($CiToolPresent) {
+                        $CiToolRefreshResult = (CiTool --refresh -json)
+                        $RefreshJSON = $CiToolRefreshResult | ConvertFrom-Json
+                        if ($RefreshJSON.OperationResult -ne 0) {
+                            throw "Refresh unsuccessful. CiTool returned error $('0x{0:x}' -f [int32]($RefreshJSON).OperationResult)"
+                        }
                         Write-Host "Refresh completed successfully."
                     } elseif ($RefreshToolPath) {
                         Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
@@ -426,9 +468,9 @@ function Deploy-WDACPolicies {
 
             } else {
 
-                if ($RemoveUEFISignedLocal) {
+                if ($RemoveUEFISignedLocal -and (-not $LegacyBIOS)) {
                     $CIPolicyFileName = Split-Path $UnsignedStagedPolicyPath -Leaf
-                    $MountPoint = "$SysDrive\EFIMount"
+                    $MountPoint = "$env:SystemDrive\EFIMount"
                     $EFIDestinationFolder = "$MountPoint\EFI\Microsoft\Boot\CiPolicies\Active"
 
                     #Note: For devices that don't have an EFI System Partition, this will just return the C: drive usually
@@ -442,6 +484,8 @@ function Deploy-WDACPolicies {
                     } else {
                         Write-Warning "No policy file with name $CIPolicyFileName located in the EFI partition."
                     }
+
+                    mountvol $MountPoint /D | Out-Null
                 }
 
                 #Copy to C:\Windows\System32\CodeIntegrity\CiPolicies\Active
@@ -451,7 +495,11 @@ function Deploy-WDACPolicies {
                 if ($RefreshToolPath) {
                     Start-Process $RefreshToolPath -NoNewWindow -Wait -ErrorAction Stop
                 } elseif ($Windows11) {
-                    CiTool --refresh
+                    $CiToolRefreshResult = (CiTool --refresh -json)
+                    $RefreshJSON = $CiToolRefreshResult | ConvertFrom-Json
+                    if ($RefreshJSON.OperationResult -ne 0) {
+                        throw "Refresh unsuccessful. CiTool returned error $('0x{0:x}' -f [int32]($RefreshJSON).OperationResult)"
+                    }
                 }
 
                 if ($UnsignedStagedPolicyPath) {
