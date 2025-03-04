@@ -1753,9 +1753,9 @@ function Restore-WDACWorkstations {
                         if (-not $_.ResultMessage) {
                             Write-Warning "No valid result message for device $($_.PSComputerName)"
                             Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment "WinRM Failure: No valid result message for device $($_.PSComputerName)" -Connection $Connection -ErrorAction Stop
-                            continue
+                        } else {
+                            Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                         }
-                        Set-MachineDeferred -PolicyGUID $PolicyGUID -DeviceName $_.PSComputerName -Comment $_.ResultMessage -Connection $Connection -ErrorAction Stop
                     }
                 }
     

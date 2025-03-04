@@ -260,16 +260,15 @@ function Copy-StagedWDACPolicies {
                     $resultRefreshToolPath = $ARM64_Path
                 } elseif ($CPUArchitecture -eq "X86") {
                     $resultRefreshToolPath = $X86_Path
-                } else {
-                    #Other CPU Architectures not supported
-                    continue
                 }
 
-                $jobs += (Start-Job -Name ("CopyRefreshTool_" + $_.PSComputerName) -ScriptBlock $CopyRefreshTool_ScriptBlock -ArgumentList $_.PSComputerName,$RemoteStagingDirectory,$resultRefreshToolPath)
-                if (-not $copyRefresh) {
-                    Write-Verbose "Copying refresh tool to machines which don't have it."
+                if ($null -ne $resultRefreshToolPath) {
+                    $jobs += (Start-Job -Name ("CopyRefreshTool_" + $_.PSComputerName) -ScriptBlock $CopyRefreshTool_ScriptBlock -ArgumentList $_.PSComputerName,$RemoteStagingDirectory,$resultRefreshToolPath)
+                    if (-not $copyRefresh) {
+                        Write-Verbose "Copying refresh tool to machines which don't have it."
+                    }
+                    $copyRefresh = $true
                 }
-                $copyRefresh = $true
             }
 
             if ($Signed) {

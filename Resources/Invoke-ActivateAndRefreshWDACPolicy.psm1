@@ -306,12 +306,9 @@ function Invoke-ActivateAndRefreshWDACPolicy {
                                 try {
                                     Start-Process logoff -ArgumentList "$_" -Wait -ErrorAction Stop
                                 } catch {
-                                    if ($_.Exception.Message -match 'No user exists') {
-                                        #The user is not logged in
-                                        continue
-                                    } else {
+                                    if (-not ($_.Exception.Message -match 'No user exists')) {
                                         throw $_
-                                    }
+                                    }  #else the user is not logged in, continue
                                 }
                             }
                         }
