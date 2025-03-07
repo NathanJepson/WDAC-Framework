@@ -116,6 +116,10 @@ function Get-WDACFiles {
             $ModulePath = ".\Resources\WDACFileScanner.psm1"
         }
 
+        if (-not $NoShadowCopy) {
+            Write-Warning "It is always recommended to use the `"NoShadowCopy`" parameter."
+        }
+
         $PEFilesResults = @()
         $MSIorScriptFilesResults = @()
 
