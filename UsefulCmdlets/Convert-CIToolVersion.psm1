@@ -1,9 +1,13 @@
 function Convert-CIToolVersion {
     <#
     .SYNOPSIS
+    NOTE: Microsoft fixed the CiTool in 24H2 to use human readable versions.
+
     Convert version numbers from CiTool to human-readable version numbers.
 
     .DESCRIPTION
+    NOTE: Microsoft fixed the CiTool in 24H2 to use human readable versions. Might remove this cmdlet at some point.
+    
     The CiTool will output large numbers for policy versions which have no resemblence to the "normal" version numbers with dots
     within a WDAC policy. Input that "large" number into this cmdlet to get the human-readable equivalent. 
 
