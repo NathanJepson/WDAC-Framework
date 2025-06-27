@@ -508,6 +508,7 @@ function Read-WDACConferredTrust {
         [switch]$ApplyVersioningToEntirePolicy,
         [switch]$MultiRuleMode,
         [switch]$ApplyRuleEachSigner,
+        [switch]$TrustEverything,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
@@ -588,7 +589,12 @@ function Read-WDACConferredTrust {
         }
         ### DO YOU TRUST IT? #######################################################
         
-        $IsTrusted = Get-WDACConferredTrust -Prompt "Do you trust the app $FileName with SHA256 Flat Hash $SHA256FlatHash ?" -AppInfo $AppInfo -CertInfoAndMisc $CertInfoAndMisc.CertsAndPublishers -AppTrustLevels $AppTrustLevels -SpecificFileNameLevelList $ResultingSpecificFileNameLevelList
+        if ($TrustEverything) {
+            $IsTrusted = $true
+        } else {
+            $IsTrusted = Get-WDACConferredTrust -Prompt "Do you trust the app $FileName with SHA256 Flat Hash $SHA256FlatHash ?" -AppInfo $AppInfo -CertInfoAndMisc $CertInfoAndMisc.CertsAndPublishers -AppTrustLevels $AppTrustLevels -SpecificFileNameLevelList $ResultingSpecificFileNameLevelList
+        }
+
         if ($AppsToSkip[$SHA256FlatHash]) {
             Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
             return;
@@ -888,6 +894,15 @@ filter Approve-WDACRulesFilter {
 
     .PARAMETER Events
     Pipeline input of WDAC events which are piped from Register-WDACEvents
+
+    .PARAMETER TrustEverything
+    If you are piping events from a trusted reference machine, then this will indicate to the cmdlet that you want trust "everything"
+    being piped in (i.e., to the extent that it can, this option will automatically set everything to be trusted and staged for the run of the cmdlet.)
+    (But you might still have to choose what signers to trust if "ApplyRuleEachSigner" is not set, and there still might be prompts you have to deal with
+    depending on what "VersioningType" you've set.)
+    
+    NOTE: If you are piping files from a trusted reference device using "Get-WDACFiles", it's also recommended to set -Purge when running this cmdlet
+    so your database isn't full of too many file-hash rules.
     #>
     [CmdletBinding()]
     Param (
@@ -916,7 +931,8 @@ filter Approve-WDACRulesFilter {
         [switch]$ApplyVersioningToEntirePolicy,
         [Alias("MultiMode","MultiLevel","MultiLevelMode")]
         [switch]$MultiRuleMode,
-        [switch]$ApplyRuleEachSigner
+        [switch]$ApplyRuleEachSigner,
+        [switch]$TrustEverything
     )
 
     if ($Fallbacks -and -not $Level) {
@@ -1103,7 +1119,7 @@ filter Approve-WDACRulesFilter {
                             }
                             if ($MiscLevels.Count -ge 1) {
                                 Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
-                                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop;
+                                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -Connection $Connection -ErrorAction Stop;
                                 $Transaction.Commit()
                                 continue;
                             }
@@ -1128,7 +1144,7 @@ filter Approve-WDACRulesFilter {
                     }
                 }
 
-                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop
+                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -Connection $Connection -ErrorAction Stop
 
             } catch {
                 Write-Verbose ($_ | Format-List * -Force | Out-String)
