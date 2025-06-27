@@ -509,6 +509,7 @@ function Read-WDACConferredTrust {
         [switch]$MultiRuleMode,
         [switch]$ApplyRuleEachSigner,
         [switch]$TrustEverything,
+        [string]$CommentForEach,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
@@ -528,6 +529,10 @@ function Read-WDACConferredTrust {
             $FileName = $AppInfo.FirstDetectedPath
         } else {
             $FileName = ($AppInfo.FirstDetectedPath + "\" + $AppInfo.FileName)
+        }
+
+        if (($null -ne $CommentForEach) -and ("" -ne $CommentForEach)) {
+            $AppComments.Add($AppInfo.SHA256FlatHash,$CommentForEach)
         }
 
         if ($IsMSI) {
@@ -900,7 +905,7 @@ filter Approve-WDACRulesFilter {
     being piped in (i.e., to the extent that it can, this option will automatically set everything to be trusted and staged for the run of the cmdlet.)
     (But you might still have to choose what signers to trust if "ApplyRuleEachSigner" is not set, and there still might be prompts you have to deal with
     depending on what "VersioningType" you've set.)
-    
+
     NOTE: If you are piping files from a trusted reference device using "Get-WDACFiles", it's also recommended to set -Purge when running this cmdlet
     so your database isn't full of too many file-hash rules.
     #>
@@ -932,7 +937,9 @@ filter Approve-WDACRulesFilter {
         [Alias("MultiMode","MultiLevel","MultiLevelMode")]
         [switch]$MultiRuleMode,
         [switch]$ApplyRuleEachSigner,
-        [switch]$TrustEverything
+        [switch]$TrustEverything,
+        [Alias("Comment")]
+        [string]$CommentForEach
     )
 
     if ($Fallbacks -and -not $Level) {
@@ -1119,7 +1126,7 @@ filter Approve-WDACRulesFilter {
                             }
                             if ($MiscLevels.Count -ge 1) {
                                 Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
-                                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -Connection $Connection -ErrorAction Stop;
+                                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop;
                                 $Transaction.Commit()
                                 continue;
                             }
@@ -1144,7 +1151,7 @@ filter Approve-WDACRulesFilter {
                     }
                 }
 
-                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -Connection $Connection -ErrorAction Stop
+                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop
 
             } catch {
                 Write-Verbose ($_ | Format-List * -Force | Out-String)
@@ -1323,6 +1330,10 @@ function Approve-WDACRules {
     When this flag is set, anytime the user specifies that they want a WDAC rule level involving a certificate -- such a rule will be created for each signer automatically without prompting the user.
     (Applies to PcaCertificate, LeafCertificate, Publisher, and FilePublisher rules)
 
+    .PARAMETER CommentForEach
+    If you want to apply the same comment to every rule as you are piping in events / files, this will allow
+    you to specify what string you want as the comment.
+
     .INPUTS
     [PSCustomObject] Result of Register-WDACEvents (OPTIONAL)
 
@@ -1368,7 +1379,9 @@ function Approve-WDACRules {
         [switch]$MultiRuleMode,
         [Alias("Reset")]
         [switch]$ResetUntrusted,
-        [switch]$ApplyRuleEachSigner
+        [switch]$ApplyRuleEachSigner,
+        [Alias("Comment")]
+        [string]$CommentForEach
     )
 
     begin {
@@ -1595,7 +1608,7 @@ function Approve-WDACRules {
                                 }
                                 if ($MiscLevels.Count -ge 1) {
                                     Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
-                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop;
+                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop;
                                     $Transaction.Commit()
                                     continue;
                                 }
@@ -1620,7 +1633,7 @@ function Approve-WDACRules {
                         }
                     }
 
-                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -Connection $Connection -ErrorAction Stop
+                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop
 
                 } catch {
                     Write-Verbose ($_ | Format-List * -Force | Out-String)
