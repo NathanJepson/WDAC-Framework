@@ -901,6 +901,8 @@ filter Approve-WDACRulesFilter {
     Pipeline input of WDAC events which are piped from Register-WDACEvents
 
     .PARAMETER TrustEverything
+    WARNING: This could SERIOUSLY decrease security if this trusted reference machine has been compromised in any way, or if you accidentally pipe
+    in app information that shouldn't be trusted!
     If you are piping events from a trusted reference machine, then this will indicate to the cmdlet that you want trust "everything"
     being piped in (i.e., to the extent that it can, this option will automatically set everything to be trusted and staged for the run of the cmdlet.)
     (But you might still have to choose what signers to trust if "ApplyRuleEachSigner" is not set, and there still might be prompts you have to deal with
