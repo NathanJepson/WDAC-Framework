@@ -1029,13 +1029,13 @@ filter Approve-WDACRulesFilter {
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
 
-        foreach ($Event in $Events) {
+        foreach ($thisEvent in $Events) {
 
             $Transaction = $Connection.BeginTransaction()
 
             try {
-                $AppHash = $Event.SHA256FileHash
-                $FileName = $Event.FilePath
+                $AppHash = $thisEvent.SHA256FileHash
+                $FileName = $thisEvent.FilePath
 
                 $IsMSI = Test-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop
 
@@ -1108,14 +1108,14 @@ filter Approve-WDACRulesFilter {
                     continue;
                 }
 
-                $SigningScenario = $Event.SigningScenario
+                $SigningScenario = $thisEvent.SigningScenario
                 if ($SigningScenario) {
-                    if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
+                    if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                     #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
                         
                         if ($AllLevels -and $MultiRuleMode -and ($AllLevels.Count -ge 1)) {
                             $MiscLevels = @()
-                            $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
+                            $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
                             $AppTrustAllLevels = Restore-ProvidedLevelsOrder -Levels $AppTrustAllLevels -ProvidedLevels $AllLevels
                             #^This restores the original order the user provided the levels and fallbacks
                             foreach ($AppTrustLevel in $AppTrustAllLevels) {
@@ -1133,11 +1133,11 @@ filter Approve-WDACRulesFilter {
                                 continue;
                             }
                         }
-                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
+                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                         #The difference between this if statement and the one above is this one provides the AllLevels parameter
                             Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
-                            $HashRuleTrustedUserMode = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
-                            $HashRuleTrustedDriver = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
+                            $HashRuleTrustedUserMode = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
+                            $HashRuleTrustedDriver = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
                             if ((-not ($HashRuleTrustedUserMode -or $HashRuleTrustedDriver)) -and (-not $AppsToPurge[$AppHash])) {
                                 $AppsToPurge.Add($AppHash,$true)
                             }
@@ -1170,11 +1170,11 @@ filter Approve-WDACRulesFilter {
         }
 
         if ($Purge) {
-            foreach ($Event in $Events) {
+            foreach ($thisEvent in $Events) {
                 $Transaction = $Connection.BeginTransaction()
 
                 try {
-                    $AppHash = $Event.SHA256FileHash
+                    $AppHash = $thisEvent.SHA256FileHash
                         
                     if ($AppsToPurge[$AppHash]) {
                         if (Test-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
@@ -1521,7 +1521,7 @@ function Approve-WDACRules {
         try {
             $Connection = New-SQLiteConnection -ErrorAction Stop
 
-            foreach ($Event in $Events) {
+            foreach ($thisEvent in $Events) {
 
                 $Transaction = $Connection.BeginTransaction()
 
@@ -1530,11 +1530,11 @@ function Approve-WDACRules {
                 }
 
                 try {
-                    $AppHash = $Event.SHA256FlatHash
+                    $AppHash = $thisEvent.SHA256FlatHash
                     if ($MSIorScripts) {
-                        $FileName = $Event.FirstDetectedPath
+                        $FileName = $thisEvent.FirstDetectedPath
                     } else {
-                        $FileName = $Event.FileName
+                        $FileName = $thisEvent.FileName
                     }
                     
                     if ($AppsToSkip[$AppHash] -or $AppsToBlock[$AppHash]) {
@@ -1590,14 +1590,14 @@ function Approve-WDACRules {
                         continue;
                     }
 
-                    $SigningScenario = $Event.SigningScenario
+                    $SigningScenario = $thisEvent.SigningScenario
                     if ($SigningScenario) {
-                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
+                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                         #This indicates that the app is already trusted at a higher level (in general, not checking specifically, which is done in an if statement below)
                             
                             if ($AllLevels -and $MultiRuleMode -and $AllLevels.Count -ge 1) {
                                 $MiscLevels = @()
-                                $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
+                                $AppTrustAllLevels = ((Get-AppTrustedAllLevels -SHA256FlatHash $AppHash -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop).PSObject.Properties | Where-Object {$_.Value -eq $false} | Select-Object Name).Name
                                 $AppTrustAllLevels = Restore-ProvidedLevelsOrder -Levels $AppTrustAllLevels -ProvidedLevels $AllLevels
                                 #^This restores the original order the user provided the levels and fallbacks
                                 foreach ($AppTrustLevel in $AppTrustAllLevels) {
@@ -1615,11 +1615,11 @@ function Approve-WDACRules {
                                     continue;
                                 }
                             }
-                            if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
+                            if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                             #The difference between this if statement and the one above is this one provides the AllLevels parameter
                                 Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
-                                $HashRuleTrustedUserMode = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -UserMode:( ($Event.SigningScenario -eq "UserMode") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
-                                $HashRuleTrustedDriver = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -Driver:( ($Event.SigningScenario -eq "Driver") -or ($Event.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
+                                $HashRuleTrustedUserMode = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
+                                $HashRuleTrustedDriver = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
                                 if ((-not ($HashRuleTrustedUserMode -or $HashRuleTrustedDriver)) -and (-not $AppsToPurge[$AppHash])) {
                                     $AppsToPurge.Add($AppHash,$true)
                                 }
@@ -1653,14 +1653,14 @@ function Approve-WDACRules {
             }
 
             if ($Purge) {
-                foreach ($Event in $Events) {
+                foreach ($thisEvent in $Events) {
                     $Transaction = $Connection.BeginTransaction()
                     if ($ErrorCount -ge 4 -and -not $IgnoreErrors) {
                         throw "Error count exceeding acceptable amount. Terminating."
                     }
 
                     try {
-                        $AppHash = $Event.SHA256FlatHash
+                        $AppHash = $thisEvent.SHA256FlatHash
                             
                         if ($AppsToPurge[$AppHash]) {
                             if (Test-MSIorScript -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
