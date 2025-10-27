@@ -100,11 +100,11 @@ function Get-WDACDeployment {
     <#
     .SYNOPSIS
     For devices with the CiTool ONLY (e.g. Windows 11), get information on deployments
-    for policy or policies (i.e., the latest version number of the policy), 
+    for policy or policies (i.e., the latest version number of the policy, whether it's signed and enforced, etc.), 
     and will then fix whether the device is deferred or without a first_signed_policy_deployment entry.
     
     .DESCRIPTION
-    Uses CiTool on remote machine and turns result into a PSObject and returns.
+    Uses CiTool on remote machine and turns JSON result into a PSObject and returns.
     Upon returning, if a policy isn't in the database, that info is removed unless -verbose was specified.
     Based on the returned information, device deferment and first_Signed_policy_deployment flags will be fixed. (Unless
     -DoNotFix is specified, which has alias "PrintOnly.")
@@ -117,7 +117,7 @@ function Get-WDACDeployment {
     License: MIT License
 
     .PARAMETER RemoteMachine
-    The remote machine(s) to grab code integrity events from. Omit this parameter to grab events from just the local machine.
+    The remote machine(s) to grab CiTool information from.
 
     .PARAMETER DoNotFix
     And alias "PrintOnly" -- When this parameter is supplied, only the policy information is printed,
