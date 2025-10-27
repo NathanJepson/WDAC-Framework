@@ -294,6 +294,10 @@ filter Register-WDACEvents {
     .PARAMETER Fallbacks
     Backup preferred levels (see 'Level' parameter). If an app is trusted at the level of a fallback, the WDACEvent is not added to the apps table.
 
+    .PARAMETER DoNotCheckTrust
+    When this flag is set, the cmdlet doesn't check whether an app is already blocked or trusted at higher levels (such as publisher or file name), which
+    prevents specific app hashes from being skipped.
+
     .EXAMPLE
     Get-WDACEvents | Register-WDACEvents
 
@@ -320,7 +324,9 @@ filter Register-WDACEvents {
         [Parameter(ValueFromPipeline = $false)]
         [ValidateNotNullOrEmpty()]
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
-        [string[]]$Fallbacks
+        [string[]]$Fallbacks,
+        [Alias("DoNotCheck","DoNotSkip")]
+        [switch]$DoNotCheckTrust
     )
 
     $AllLevels = $null
@@ -359,7 +365,7 @@ filter Register-WDACEvents {
 
     if ( ($Level -or $Fallbacks) -and $AllLevels.Count -ge 1) {
     #If it is already trusted at a specified level, no need to add WDACEvent to the database
-        if (Get-AppTrustedNoAppEntry -WDACEvent $WDACEvent -AllPossibleLevels $AllLevels -Connection $Connection -ErrorAction Stop) {
+        if ((-not $DoNotCheckTrust) -and (Get-AppTrustedNoAppEntry -WDACEvent $WDACEvent -AllPossibleLevels $AllLevels -Connection $Connection -ErrorAction Stop)) {
             Write-Verbose "App $($WDACEvent.FilePath) with SHA-256 Flat Hash $($WDACEvent.SHA256FileHash) skipped registration due to meeting a higher level of trust."
             $Transaction.Rollback()
             $SkipRegister = $true
