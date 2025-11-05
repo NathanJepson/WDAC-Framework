@@ -958,8 +958,12 @@ filter Approve-WDACRulesFilter {
 
     if (-not ($Level -or $Fallbacks)) {
         #Only grab preferred rule level and preferred fallbacks if both aren't supplied to this cmdlet
-        $Level = $PreferredOrganizationRuleLevel
-        $Fallbacks = $PreferredOrganizationRuleFallbacks
+        if (("" -ne $PreferredOrganizationRuleLevel) -and ($null -ne $PreferredOrganizationRuleLevel)) {
+            $Level = $PreferredOrganizationRuleLevel
+        }
+        if (("" -ne $PreferredOrganizationRuleFallbacks) -and ($null -ne $PreferredOrganizationRuleFallbacks)) {
+            $Fallbacks = $PreferredOrganizationRuleFallbacks
+        }
     }
 
     if ($Level -or $Fallbacks) {
@@ -1417,8 +1421,14 @@ function Approve-WDACRules {
         if (-not ($Level -or $Fallbacks)) {
         #Only grab preferred rule level and preferred fallbacks if both aren't supplied to this cmdlet
             $TempJSON = (Get-LocalStorageJSON -ErrorAction Stop)
-            $Level = $TempJSON."PreferredOrganizationRuleLevel"
-            $Fallbacks = $TempJSON."PreferredOrganizationRuleFallbacks"
+            $TempLevel = $TempJSON."PreferredOrganizationRuleLevel"
+            $TempFallbacks = $TempJSON."PreferredOrganizationRuleFallbacks"
+            if (("" -ne $TempLevel) -and ($null -ne $TempLevel)) {
+                $Level = $TempLevel
+            }
+            if (("" -ne $TempFallbacks) -and ($null -ne $TempFallbacks)) {
+                $Fallbacks = $TempFallbacks
+            }
         }
 
         if ($Level -or $Fallbacks) {
