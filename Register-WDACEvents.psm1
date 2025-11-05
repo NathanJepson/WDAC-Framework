@@ -325,6 +325,7 @@ filter Register-WDACEvents {
         [ValidateNotNullOrEmpty()]
         [ValidateSet("Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FilePath","FileName")]
         [string[]]$Fallbacks,
+        [Parameter(ValueFromPipeline = $false)]
         [Alias("DoNotCheck","DoNotSkip")]
         [switch]$DoNotCheckTrust
     )
