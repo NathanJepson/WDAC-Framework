@@ -154,10 +154,10 @@ Windows Defender Application Control (or App Control for Business) is an applica
 "Application control is a crucial line of defense for protecting enterprises given today's threat landscape, and it has an inherent advantage over traditional antivirus solutions. Specifically, application control moves away from an application trust model where all applications are assumed trustworthy to one where applications must earn trust in order to run." ([Source](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/appcontrol))
 
 Basically, WDAC can block untrusted code, or apps which may violate company policy.
-For, example, if you decide that the XBox Windows Gaming App (a packaged app or Windows Store app) is not appropriate for company computers,
-then you can just block it.
+For, example, if you decide that a packaged app or Windows Store app is not appropriate for company computers,
+then you can just block it. Or any .exe or .dll file. Lock-down PowerShell by putting everything into Constrained Language Mode (note: this will certainly add significant overhead, especially if you don't know how constrained language mode works.)
 
-![Screenshot of a message saying "Your organization used Windows Defender Application Control to block this app" with a subheading showing that it's for the Microsoft Gaming App.](Resources/WDACBasicMessage.png)
+![Screenshot of a message saying "Your organization used Windows Defender Application Control to block this app" with a subheading showing that it's for the Microsoft Gaming App.](Resources/WDACBasicMessage2.png)
 
 Alternatively, you can use WDAC to block almost any application, exe, dll, (and more), on a Windows workstation except for the apps you specifically trust.
 
