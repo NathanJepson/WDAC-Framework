@@ -288,12 +288,12 @@ function New-WDACTrustDB {
     );
 
     CREATE TABLE groups (
-        GroupName Text PRIMARY KEY
+        GroupName Text COLLATE NOCASE PRIMARY KEY
     );
 
     CREATE TABLE group_mirrors (
-        GroupName Text NOT NULL,
-        MirroredGroupName Text NOT NULL,
+        GroupName Text COLLATE NOCASE NOT NULL,
+        MirroredGroupName Text COLLATE NOCASE NOT NULL,
         PRIMARY KEY(GroupName,MirroredGroupName),
         FOREIGN KEY(MirroredGroupName) REFERENCES groups(GroupName) ON DELETE CASCADE,
         FOREIGN KEY(GroupName) REFERENCES groups(GroupName) ON DELETE CASCADE
@@ -320,7 +320,7 @@ function New-WDACTrustDB {
     );
 
     CREATE TABLE policy_assignments (
-        GroupName Text NOT NULL,
+        GroupName Text NOT NULL COLLATE NOCASE,
         PolicyGUID Text NOT NULL COLLATE NOCASE,
         PRIMARY KEY(GroupName,PolicyGUID),
         FOREIGN KEY(GroupName) REFERENCES groups(GroupName) ON DELETE RESTRICT,
