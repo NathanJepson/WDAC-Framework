@@ -39,7 +39,7 @@ function Test-ValidP7SignedFile {
         if ($CertUtilResult -match "(?<=CertUtil\:\s?(\-asn) command FAILED\:\s?).*") {
             $theError = $Matches[0]
         }
-        throw ($theError + ". Signed P7 file not encoded correctly, or some other error, or output of certutil has been modified since module release.")
+        throw ($theError + ". Signed P7 file not encoded correctly, certificate expired, or some other error, or output of certutil has been modified since module release.")
     }
 }
 
