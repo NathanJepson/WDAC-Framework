@@ -350,12 +350,12 @@ function Deploy-WDACPolicies {
             $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         }
 
-        if ($SignedCIPPolicyPath) {
+        if ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath)) {
             if (-not ($SignedCIPPolicyPath -match $PolicyGUID)) {
                 throw "The provided signed CIP policy path does not appear to be associated with the provided policy GUID. Please check that the file name of the CIP policy contains the policy GUID and try again."
             }
         }
-        if ($UnsignedCIPPolicyPath) {
+        if ($UnsignedCIPPolicyPath -and ("" -ne $UnsignedCIPPolicyPath)) {
             if (-not ($UnsignedCIPPolicyPath -match $PolicyGUID)) {
                 throw "The provided unsigned CIP policy path does not appear to be associated with the provided policy GUID. Please check that the file name of the CIP policy contains the policy GUID and try again."
             }
@@ -1362,12 +1362,12 @@ function Restore-WDACWorkstations {
         $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
     }
 
-    if ($SignedCIPPolicyPath) {
+    if ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath)) {
         if (-not ($SignedCIPPolicyPath -match $PolicyGUID)) {
             throw "The provided signed CIP policy path does not appear to be associated with the provided policy GUID. Please check that the file name of the CIP policy contains the policy GUID and try again."
         }
     }
-    if ($UnsignedCIPPolicyPath) {
+    if ($UnsignedCIPPolicyPath -and ("" -ne $UnsignedCIPPolicyPath)) {
         if (-not ($UnsignedCIPPolicyPath -match $PolicyGUID)) {
             throw "The provided unsigned CIP policy path does not appear to be associated with the provided policy GUID. Please check that the file name of the CIP policy contains the policy GUID and try again."
         }
