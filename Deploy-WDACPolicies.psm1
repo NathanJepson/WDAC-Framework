@@ -236,6 +236,18 @@ function Deploy-WDACPolicies {
     Once you can verify that a policy was successfully deployed on the test machines, then run the Restore-WDACWorkstations cmdlet to deploy the relevant policy
     to the remaining machines which have the policy assigned.
 
+    .PARAMETER UnsignedCIPPolicyPath
+    This parameter (and its signed variant) is used whenever you don't want to generate and deploy the policy from your WorkingPoliciesDirectory (place where your XML policy files are), 
+    which could be useful if you have a batch of signed CIP policy files and you know the certificate is going to expire in a few days 
+    (after which, you won't be able to sign unsigned CIP files using the SignTool with that specific certificate).
+    Another use for this parameter is if you want to deploy a version of a policy that is different than the one deployed to other machines
+    (for example, you want to temporarily deploy an unsigned version of a policy to one, specific machine, or a signed policy with <Option>Enabled:Unsigned System Integrity Policy</Option>
+    set, in preparation of deploying an unsigned policy -- before you are able to remove a policy.)
+    Note: the version number of the .CIP file you specify will not be used, the script will pretend that you deployed the version in your XML policy directory (i.e., WorkingPoliciesDirectory).
+
+    .PARAMETER SignedCIPPolicyPath
+    Same as above but if the CIP is signed.
+
     .PARAMETER TestForce
     Force deployment of policy to machines -- even if they are not assigned the relevant policy. (Only if "TestComputers" is provided.)
 
@@ -272,6 +284,12 @@ function Deploy-WDACPolicies {
         [switch]$RemoveUEFISignedLocal,
         [Alias("TestMachines","TestMachine","TestDevices","TestDevice","TestComputer")]
         [string[]]$TestComputers,
+        [ValidatePattern('\.cip$')]
+        [ValidateScript({Test-Path $_}, ErrorMessage = "Cannot find the the provided .CIP file.")]
+        [string]$UnsignedCIPPolicyPath,
+        [ValidatePattern('\.cip$')]
+        [ValidateScript({Test-Path $_}, ErrorMessage = "Cannot find the the provided .CIP file.")]
+        [string]$SignedCIPPolicyPath,
         [Alias("Force")]
         [switch]$TestForce,
         [switch]$SkipSetup,
@@ -285,6 +303,10 @@ function Deploy-WDACPolicies {
 
     if ($PolicyName -and $PolicyGUID) {
         throw "Cannot provide both a policy name and policy GUID."
+    }
+
+    if (($UnsignedCIPPolicyPath -and ("" -ne $UnsignedCIPPolicyPath)) -and ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath))) {
+        throw "Cannot provide both a signed and unsigned CIP policy path. Please provide only one or neither."
     }
 
     if ($TestForce -and (-not $TestComputers)) {
@@ -328,9 +350,20 @@ function Deploy-WDACPolicies {
             $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
         }
 
+        if ($SignedCIPPolicyPath) {
+            if (-not ($SignedCIPPolicyPath -match $PolicyGUID)) {
+                throw "The provided signed CIP policy path does not appear to be associated with the provided policy GUID. Please check that the file name of the CIP policy contains the policy GUID and try again."
+            }
+        }
+        if ($UnsignedCIPPolicyPath) {
+            if (-not ($UnsignedCIPPolicyPath -match $PolicyGUID)) {
+                throw "The provided unsigned CIP policy path does not appear to be associated with the provided policy GUID. Please check that the file name of the CIP policy contains the policy GUID and try again."
+            }
+        }
+
         $SignedToUnsigned = Test-MustRemoveSignedPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
 
-        if ( ($PolicyInfo.IsSigned -eq $true) -or $SignedToUnsigned) {
+        if (((-not $SignedCIPPolicyPath) -or ("" -eq $SignedCIPPolicyPath)) -and ((-not $UnsignedCIPPolicyPath) -or ("" -eq $UnsignedCIPPolicyPath)) -and (($PolicyInfo.IsSigned -eq $true) -or $SignedToUnsigned)) {
         #Check if all local variables are correctly set to be able to sign and deploy WDAC policies
             $WDACodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
             if (-not $WDACodeSigningCert -or "" -eq $WDACodeSigningCert) {
@@ -357,7 +390,13 @@ function Deploy-WDACPolicies {
         if ($Local) {
             $UnsignedStagedPolicyPath = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\{$($PolicyInfo.PolicyGUID)}.cip")
             $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-            ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+            if ($UnsignedCIPPolicyPath -and ("" -ne $UnsignedCIPPolicyPath)) {
+                Copy-Item -Path $UnsignedCIPPolicyPath -Destination $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+            } elseif ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath)) {
+                Copy-Item -Path $SignedCIPPolicyPath -Destination $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+            } else {
+                ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+            }
             $CPU = cmd.exe /c "echo %PROCESSOR_ARCHITECTURE%"
             $Windows11 = $false
             $RefreshToolPath = $null
@@ -388,12 +427,16 @@ function Deploy-WDACPolicies {
                 }
             }
 
-            if ($PolicyInfo.IsSigned -eq $true) {
+            if (($PolicyInfo.IsSigned -eq $true) -or ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath))) {
                 #Get Signed
-                $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
                 
-                Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
-                Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
+                if (-not $SignedCIPPolicyPath -or ("" -eq $SignedCIPPolicyPath)) {
+                #We assume the user already signed by policy if they provided the SignedCIPPolicyPath parameter.
+                    $SignedCIPPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
+                    Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                    Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
+                }
+                
                 $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
 
                 if (-not (Test-ValidWDACSignedPolicySignature -CISignedPolicyFile $SignedStagedPolicyPath)) {
@@ -446,7 +489,7 @@ function Deploy-WDACPolicies {
                     } else {
                         Write-Warning "No way found to refresh the policy."
                     }
-                } elseif (Get-YesOrNoPrompt -Prompt "If this is the first time this signed base policy has been deployed locally, select `"Y`" to restart your device, otherwise select `"N`" to use the refresh tool.") {
+                } elseif (Get-YesOrNoPrompt -Prompt "If you are NOT on Win 11 24h2 or later, or this is the first time this signed base policy has been deployed locally, select `"Y`" to restart your device, otherwise select `"N`" to use the refresh tool.") {
                     Restart-Computer -Force
                 } else {
                     if ($CiToolPresent) {
@@ -720,7 +763,13 @@ function Deploy-WDACPolicies {
                 Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
             }
             $SignedStagedPolicyPath = $null
-            ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+            if ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath)) {
+                Copy-Item -Path $SignedCIPPolicyPath -Destination $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+            } elseif ($UnsignedCIPPolicyPath -and ("" -ne $UnsignedCIPPolicyPath)) {
+                Copy-Item -Path $UnsignedCIPPolicyPath -Destination $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+            } else {
+                ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+            }
 
             ##Check if Restart is Required on Devices. If there is a mix of statuses, then defer the ones which haven't been deployed yet and set $RestartRequired to $false.
             $RestartRequired = $false
@@ -784,7 +833,7 @@ function Deploy-WDACPolicies {
 
             #Copy WDAC Policies and Refresh Tools
             ##======================================================================================
-            if ($SignedToUnsigned) {
+            if ($SignedToUnsigned -and (-not $SignedCIPPolicyPath -or ("" -eq $SignedCIPPolicyPath)) -and (-not $UnsignedCIPPolicyPath -or ("" -eq $UnsignedCIPPolicyPath))) {
                 if (-not (Get-YesOrNoPrompt -Prompt "Devices will require a restart to fully remove UEFI boot protection of old, signed policy. Continue with script execution?")) {
                     $Transaction.Rollback()
                     $Connection.Close()
@@ -922,11 +971,15 @@ function Deploy-WDACPolicies {
                 }
 
             } else {
-                if ($PolicyInfo.IsSigned -eq $true) {
+                if ( ($PolicyInfo.IsSigned -eq $true) -or ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath)) ) {
                     #Get Signed
-                    $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
-                    Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
-                    Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
+                    if (-not $SignedCIPPolicyPath -or ("" -eq $SignedCIPPolicyPath)) {
+                        $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData") -ErrorAction Stop
+                        Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+                        Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
+                    } else {
+                        Write-Warning "Signed CIPolicy path provided. Skipping signing of policy and signature check and using provided signed CIPolicy for deployment."
+                    }
                     $SignedStagedPolicyPath = $UnsignedStagedPolicyPath
 
                     #Copy to Machine(s)
@@ -1077,7 +1130,7 @@ function Deploy-WDACPolicies {
 
                     } else {
                         $DevicesWithComma = $DevicesToRestart -join ","
-                        if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
+                        if (Get-YesOrNoPrompt -Prompt "If devices are not on Windows 11 24h2 or later, they will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
                             Restart-WDACDevices -Devices $DevicesToRestart
                         
                         } else {
@@ -1218,6 +1271,18 @@ function Restore-WDACWorkstations {
     .PARAMETER WorkstationName
     Specify this parameter if you only want to restore particular workstations to the current WDAC policy.
 
+    .PARAMETER UnsignedCIPPolicyPath
+    This parameter (and its signed variant) is used whenever you don't want to generate and deploy the policy from your WorkingPoliciesDirectory (place where your XML policy files are), 
+    which could be useful if you have a batch of signed CIP policy files and you know the certificate is going to expire in a few days 
+    (after which, you won't be able to sign unsigned CIP files using the SignTool with that specific certificate).
+    Another use for this parameter is if you want to deploy a version of a policy that is different than the one deployed to other machines
+    (for example, you want to temporarily deploy an unsigned version of a policy to one, specific machine, or a signed policy with <Option>Enabled:Unsigned System Integrity Policy</Option>
+    set, in preparation of deploying an unsigned policy -- before you are able to remove a policy.)
+    Note: the version number of the .CIP file you specify will not be used, the script will pretend that you deployed the version in your XML policy directory (i.e., WorkingPoliciesDirectory).
+
+    .PARAMETER SignedCIPPolicyPath
+    Same as above but if the CIP is signed.
+
     .PARAMETER SkipSetup
     Cmdlet will not check whether staging directory or refresh tools are present on a device.
 
@@ -1246,6 +1311,12 @@ function Restore-WDACWorkstations {
         [ValidateNotNullOrEmpty()]
         [Alias("Workstations","Workstation","Device","Devices","PC","Computer","Computers")]
         [string[]]$WorkstationName,
+        [ValidatePattern('\.cip$')]
+        [ValidateScript({Test-Path $_}, ErrorMessage = "Cannot find the the provided .CIP file.")]
+        [string]$UnsignedCIPPolicyPath,
+        [ValidatePattern('\.cip$')]
+        [ValidateScript({Test-Path $_}, ErrorMessage = "Cannot find the the provided .CIP file.")]
+        [string]$SignedCIPPolicyPath,
         [switch]$SkipSetup,
         [switch]$ForceRestart,
         [int]$SleepTime=480
@@ -1257,6 +1328,10 @@ function Restore-WDACWorkstations {
 
     if ($PolicyName -and $PolicyGUID) {
         throw "Cannot provide both a policy name and policy GUID."
+    }
+
+    if (($UnsignedCIPPolicyPath -and ("" -ne $UnsignedCIPPolicyPath)) -and ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath))) {
+        throw "Cannot provide both a signed and unsigned CIP policy path. Please provide only one or neither."
     }
 
     $Connection = $null
@@ -1287,6 +1362,17 @@ function Restore-WDACWorkstations {
         $PolicyInfo = Get-WDACPolicy -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
     }
 
+    if ($SignedCIPPolicyPath) {
+        if (-not ($SignedCIPPolicyPath -match $PolicyGUID)) {
+            throw "The provided signed CIP policy path does not appear to be associated with the provided policy GUID. Please check that the file name of the CIP policy contains the policy GUID and try again."
+        }
+    }
+    if ($UnsignedCIPPolicyPath) {
+        if (-not ($UnsignedCIPPolicyPath -match $PolicyGUID)) {
+            throw "The provided unsigned CIP policy path does not appear to be associated with the provided policy GUID. Please check that the file name of the CIP policy contains the policy GUID and try again."
+        }
+    }
+
     try {
         $RemoteStagingDirectory = (Get-LocalStorageJSON -ErrorAction Stop)."RemoteStagingDirectory"
         if (-not $RemoteStagingDirectory -or ("" -eq $RemoteStagingDirectory)) {
@@ -1305,8 +1391,14 @@ function Restore-WDACWorkstations {
             Remove-Item -Path $UnsignedStagedPolicyPath -Force -ErrorAction Stop
         }
         $PolicyPath = Get-FullPolicyPath -PolicyGUID $PolicyGUID -Connection $Connection -ErrorAction Stop
-        ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
-    
+        if ($UnsignedCIPPolicyPath -and ("" -ne $UnsignedCIPPolicyPath)) {
+            Copy-Item -Path $UnsignedCIPPolicyPath -Destination $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+        } elseif ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath)) {
+            Copy-Item -Path $SignedCIPPolicyPath -Destination $UnsignedStagedPolicyPath -Force -ErrorAction Stop
+        } else {
+            ConvertFrom-CIPolicy -BinaryFilePath $UnsignedStagedPolicyPath -XmlFilePath $PolicyPath -ErrorAction Stop | Out-Null
+        }
+
         #Deferred flag is set here, unlike the above cmdlet
         if ($PolicyInfo.IsPillar -eq $true) {
             $ComputerMapTemp = Get-WDACDevicesAllNamesAndCPUInfo -Deferred -Connection $Connection -ErrorAction Stop
@@ -1377,7 +1469,7 @@ function Restore-WDACWorkstations {
                 }
             }
 
-            if (($PolicyInfo.IsSigned -eq $true) -or (($DeferredPolicy.IsSigned -eq $true) -and ($PolicyInfo.IsSigned -eq $false))) {
+            if ((($PolicyInfo.IsSigned -eq $true) -or (($DeferredPolicy.IsSigned -eq $true) -and ($PolicyInfo.IsSigned -eq $false))) -and (-not $SignedCIPPolicyPath -or ("" -eq $SignedCIPPolicyPath))) {
                 if (($null -eq $WDACodeSigningCert) -and ($null -eq $SignTool)) {
                     #Check if all local variables are correctly set to be able to sign and deploy WDAC policies
                     $WDACodeSigningCert = (Get-LocalStorageJSON -ErrorAction Stop)."WDACPolicySigningCertificate"
@@ -1476,7 +1568,7 @@ function Restore-WDACWorkstations {
             $Machines = ($CustomPSObjectComputerMap | Where-Object {($_.NewlyDeferred -eq $false) -and ($null -ne $_.CPU)} | Select-Object DeviceName).DeviceName
             $SignedToUnsigned = $false
 
-            if (($DeferredPolicy.IsSigned -eq $true) -and ($PolicyInfo.IsSigned -eq $false)) {
+            if (($DeferredPolicy.IsSigned -eq $true) -and ($PolicyInfo.IsSigned -eq $false) -and (-not $SignedCIPPolicyPath -or ("" -eq $SignedCIPPolicyPath)) -and (-not $UnsignedCIPPolicyPath -or ("" -eq $UnsignedCIPPolicyPath))) {
                 $SignedToUnsigned = $true
             }
 
@@ -1567,13 +1659,18 @@ function Restore-WDACWorkstations {
                 }
             } else {
 
-                if ($PolicyInfo.IsSigned -eq $true) {
+                if ($PolicyInfo.IsSigned -eq $true -or ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath))) {
                     #Get Signed
                     if ($null -eq $SignedStagedPolicyPath) {
                         $SignedPolicyDir = (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\Signed")
-                        $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory $SignedPolicyDir -ErrorAction Stop
-                        Rename-Item -Path $SignedStagedPolicyPath -NewName (Split-Path $UnsignedStagedPolicyPath -Leaf) -Force -ErrorAction Stop
-                        $SignedStagedPolicyPath = Join-Path ($SignedPolicyDir) -ChildPath (Split-Path $UnsignedStagedPolicyPath -Leaf)
+                        $SignedPolicyName = Split-Path $UnsignedStagedPolicyPath -Leaf
+                        if ($SignedCIPPolicyPath -and ("" -ne $SignedCIPPolicyPath)) {
+                            Copy-Item -Path $SignedCIPPolicyPath -Destination $SignedPolicyDir -Force -ErrorAction Stop
+                        } else {    
+                            $SignedStagedPolicyPath = Invoke-SignTool -CIPPolicyPath $UnsignedStagedPolicyPath -DestinationDirectory $SignedPolicyDir -ErrorAction Stop
+                            Rename-Item -Path $SignedStagedPolicyPath -NewName $SignedPolicyName -Force -ErrorAction Stop
+                        }
+                        $SignedStagedPolicyPath = Join-Path ($SignedPolicyDir) -ChildPath $SignedPolicyName
                     }
 
                     #Copy to Machine(s)
@@ -1634,7 +1731,7 @@ function Restore-WDACWorkstations {
                                 Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
                             } else {
                                 $DevicesWithComma = $SuccessfulMachinesToRestart -join ","
-                                if (Get-YesOrNoPrompt -Prompt "Some devices will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
+                                if (Get-YesOrNoPrompt -Prompt "If devices are not on Windows 11 24h2 or later, they will require a restart to fully deploy the signed policy. Restart these devices now? Users will lose unsaved work: $DevicesWithComma `n") {
                                     Restart-WDACDevices -Devices $SuccessfulMachinesToRestart
                                 } else {
                                     Write-Host "Please restart devices soon so that the new signed policy can take effect."
@@ -1823,7 +1920,7 @@ function Restore-WDACWorkstations {
         }
 
         if ($RestartLocalDevice) {
-            if (Get-YesOrNoPrompt -Prompt "Your device will need to be restarted to apply the new policy. Select `"Y`" once you've saved your work.") {
+            if (Get-YesOrNoPrompt -Prompt "If your device is not on Windows 11 24h2 or later, it will need to be restarted to apply the new policy. Select `"Y`" once you've saved your work.") {
                 Restart-Computer -Force
             }
         } elseif ($ClearUEFIBootLocalDevice) {
