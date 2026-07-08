@@ -65,39 +65,32 @@ function Get-DriverBlockRules {
 
     try {
         
-        if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md"))) {
+        if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\VulnerableDriverBlockList\DriverPolicy_Enforced.xml"))) {
             Write-Verbose "Retrieving driver block rules from Github.com."
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/windows-itpro-docs/refs/heads/public/windows/security/application-security/application-control/app-control-for-business/design/microsoft-recommended-driver-block-rules.md" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md") -ErrorAction Stop 
+            Invoke-WebRequest -Uri "https://aka.ms/VulnerableDriverBlockList" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block.zip") -ErrorAction Stop 
+            Expand-Archive -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block.zip") -DestinationPath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\") -Force -ErrorAction Stop
         }
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml"))) {
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/refs/heads/main/WDAC-Policy-Wizard/app/MSIX/Templates/Recommended_Driver_Blocklist.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml") -ErrorAction Stop
         }
     } catch {
-        throw "Trouble retrieving recommended driver block rules from github.com"
+        throw "Trouble retrieving recommended driver block rules from Microsoft Download Center or github.com"
     }
 
-    $linesMDFile = Get-Content (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md")
-    $XMLResult = Get-XMLFromMDFileParser -lines $linesMDFile
-    if ($XMLResult) {
-        Set-Content -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.xml") -Value $XMLResult -Force
-
-        [xml]$XML_ITProDocs = Get-Content -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.xml")
-        [xml]$XML_WDACWizard = Get-Content -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml")
-        $ITProDocsVersion = $XML_ITProDocs.SiPolicy.VersionEx
-        $WizardVersion = $XML_WDACWizard.SiPolicy.VersionEx
-        
-        if ( (Compare-Versions -Version1 $ITProDocsVersion -Version2 $WizardVersion) -eq 1) {
-            $rules = Get-CIPolicy -FilePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.xml")
-        } else {
-            $rules = Get-CIPolicy -FilePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml")
-        }
+    [xml]$XML_ITProDocs = Get-Content -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\VulnerableDriverBlockList\DriverPolicy_Enforced.xml")
+    [xml]$XML_WDACWizard = Get-Content -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml")
+    $ITProDocsVersion = $XML_ITProDocs.SiPolicy.VersionEx
+    $WizardVersion = $XML_WDACWizard.SiPolicy.VersionEx
+    
+    if ( (Compare-Versions -Version1 $ITProDocsVersion -Version2 $WizardVersion) -eq 1) {
+        $rules = Get-CIPolicy -FilePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\VulnerableDriverBlockList\DriverPolicy_Enforced.xml")
     } else {
         $rules = Get-CIPolicy -FilePath (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml")
     }
     
     if ($DoNotCacheRecommended) {
-        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.xml") -Force -ErrorAction SilentlyContinue
-        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-itprodocs.md") -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\VulnerableDriverBlockList\") -Recurse -Force -ErrorAction SilentlyContinue
+        Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block.zip") -Force -ErrorAction SilentlyContinue
         Remove-Item -Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\driv-block-wdacwizard.xml") -Force -ErrorAction SilentlyContinue
     }
 
@@ -114,7 +107,7 @@ function Get-UserModeBlockRules {
         
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md"))) {
             Write-Verbose "Retrieving user mode block rules from Github.com."
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/windows-itpro-docs/refs/heads/public/windows/security/application-security/application-control/app-control-for-business/design/applications-that-can-bypass-appcontrol.md" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md") -ErrorAction Stop 
+            Invoke-WebRequest -Uri "https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/design/applications-that-can-bypass-appcontrol" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-itprodocs.md") -ErrorAction Stop 
         }
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-wdacwizard.xml"))) {
             Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/refs/heads/main/WDAC-Policy-Wizard/app/MSIX/Templates/Recommended_UserMode_Blocklist.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\usermode-block-wdacwizard.xml") -ErrorAction Stop
@@ -161,7 +154,7 @@ function Get-AllowMicrosoftModeRules {
         
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml"))) {
             Write-Verbose "Retrieving AllowMicrosoft.xml policy from Github.com."
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/main/WDAC-Policy-Wizard/app/MSIX/AllowMicrosoft.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml") -ErrorAction Stop 
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/main/WDAC-Policy-Wizard/app/MSIX/Templates/AllowMicrosoft.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\allow-microsoft-wizard.xml") -ErrorAction Stop 
         }
     } catch {
         throw "Trouble retrieving AllowMicrosoft.xml policy from Github.com."
@@ -206,7 +199,7 @@ function Get-WindowsModeRules {
         
         if (-not (Test-Path (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml"))) {
             Write-Verbose "Retrieving DefaultWindows.xml policy from Github.com."
-            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/main/WDAC-Policy-Wizard/app/MSIX/DefaultWindows_Audit.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml") -ErrorAction Stop 
+            Invoke-WebRequest -Uri "https://raw.githubusercontent.com/MicrosoftDocs/WDAC-Toolkit/main/WDAC-Policy-Wizard/app/MSIX/Templates/DefaultWindows_Audit.xml" -OutFile (Join-Path -Path $PSModuleRoot -ChildPath ".\.WDACFrameworkData\windows-mode-wizard.xml") -ErrorAction Stop 
         }
     } catch {
         throw "Trouble retrieving DefaultWindows.xml policy from Github.com."

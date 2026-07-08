@@ -7,6 +7,8 @@ Resources/ProjectNotes.txt
 Resources/cipolicy.xsd
 .WDACFrameworkData/*.xml
 .WDACFrameworkData/*.md
+.WDACFrameworkData/*.zip
+.WDACFrameworkData/VulnerableDriverBlocklist/*
 Test-Script.ps1
 *.db
 *.xml
