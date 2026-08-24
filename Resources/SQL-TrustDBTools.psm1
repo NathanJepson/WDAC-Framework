@@ -194,6 +194,7 @@ function Find-WDACGroup {
 
     $result = $false
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -784,6 +785,7 @@ function Set-MsiorScriptAlternateHashes {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -1552,6 +1554,7 @@ function Set-WDACAppAlternateHashes {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -1818,6 +1821,7 @@ function Set-WDACAppSigningScenario {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -2416,6 +2420,7 @@ function Set-WDACCertificateNotValidBefore {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -2514,6 +2519,7 @@ function Set-WDACCertificateNotValidAfter {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -2612,6 +2618,7 @@ function Set-WDACCertificateParentCertTBSHash {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -3069,6 +3076,7 @@ function Set-WDACPolicyVersion {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -3157,6 +3165,7 @@ function Set-WDACPolicySigned {
         throw "Cannot set both `"set`" and `"unset`" flags for cmdlet Set-WDACPolicySigned"
     }
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -3203,6 +3212,7 @@ function Set-WDACPolicyEnforced {
         throw "Cannot set both `"set`" and `"unset`" flags for cmdlet Set-WDACPolicyEnforced"
     }
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -3250,6 +3260,7 @@ function Set-LastSignedUnsignedWDACPolicyVersion {
         throw "Signed or Unsigned flags not set for Set-LastSignedUnsignedWDACPolicyVersion."
     }
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -3856,6 +3867,7 @@ function Add-WDACPublisher {
         $BlockingPolicyID,
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
+
     $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
@@ -3922,6 +3934,7 @@ function Update-WDACFilePublisherMinimumAllowedVersion {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         
         if (-not $Connection) {
@@ -4842,6 +4855,7 @@ function Update-WDACFilePublisherByCriteria {
 
     $SpecificFileNameLevels = @("OriginalFileName","InternalName","FileDescription","ProductName","PackageFamilyName")
 
+    $NoConnectionProvided = $false
     try {
     ###### FIRST CHECK FOR FILE PUBLISHER ENTRIES WITH TRUST AND POLICY ID SET #################
         if (-not $Connection) {
@@ -4897,6 +4911,7 @@ function Set-WDACFilePublisherMinimumAllowedVersion {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         
         $tempFilePublishers = Get-WDACFilePublishers -PublisherIndex $PublisherIndex -FileName $FileName -MinimumAllowedVersion "0.0.0.0" -SpecificFileNameLevel $SpecificFileNameLevel -ErrorAction Stop
@@ -5528,6 +5543,7 @@ function Set-WDACSkipped {
         [switch]$UndoSkip
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -5583,6 +5599,7 @@ function Set-WDACUntrusted {
         [switch]$UndoUntrust
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
@@ -5634,27 +5651,29 @@ function Clear-AllWDACSkipped {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
-        $AllAppHashes = Get-WDACAppsAllHashes -Connection $Connection -ErrorAction Stop
-        $AllMSIorScriptHashes = Get-MSIorScriptAllHashes -Connection $Connection -ErrorAction Stop
-
-        foreach ($Hash in $AllAppHashes) {
-            if (Get-WDACAppSkippedStatus -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -ErrorAction Stop) {
-                if (-not (Set-WDACSkipped -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoSkip -ErrorAction Stop)) {
-                    throw "Coud not clear skipped status for $Hash "
-                }
-            }
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
         }
-        foreach ($Hash in $AllMSIorScriptHashes) {
-            if (Get-MSIorScriptSkippedStatus -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -ErrorAction Stop) {
-                if (-not (Set-WDACSkipped -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoSkip -ErrorAction Stop)) {
-                    throw "Could not clear skipped status for $Hash "
-                }
-            }
+        
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "UPDATE apps SET Skipped = 0; UPDATE msi_or_script SET Skipped = 0;"
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
         }
 
     } catch {
-        throw $_
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
     }
 }
 
@@ -5664,27 +5683,29 @@ function Clear-AllWDACUntrusted {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
-        $AllAppHashes = Get-WDACAppsAllHashes -Connection $Connection -ErrorAction Stop
-        $AllMSIorScriptHashes = Get-MSIorScriptAllHashes -Connection $Connection -ErrorAction Stop
-
-        foreach ($Hash in $AllAppHashes) {
-            if (Get-WDACAppUntrustedStatus -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -ErrorAction Stop) {
-                if (-not (Set-WDACUntrusted -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoUntrust -ErrorAction Stop)) {
-                    throw "Coud not clear skipped status for $Hash "
-                }
-            }
+        if (-not $Connection) {
+            $Connection = New-SQLiteConnection -ErrorAction Stop
+            $NoConnectionProvided = $true
         }
-        foreach ($Hash in $AllMSIorScriptHashes) {
-            if (Get-MSIorScriptUntrustedStatus -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -ErrorAction Stop) {
-                if (-not (Set-WDACUntrusted -SHA256FlatHash $Hash.Sha256FlatHash -Connection $Connection -UndoUntrust -ErrorAction Stop)) {
-                    throw "Could not clear skipped status for $Hash "
-                }
-            }
+        
+        $Command = $Connection.CreateCommand()
+
+        $Command.Commandtext = "UPDATE apps SET Untrusted = 0; UPDATE msi_or_script SET Untrusted = 0;"
+        $Command.ExecuteNonQuery()
+
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
         }
 
     } catch {
-        throw $_
+        $theError = $_
+        if ($NoConnectionProvided -and $Connection) {
+            $Connection.close()
+        }
+
+        throw $theError
     }
 }
 
@@ -6123,6 +6144,7 @@ function Update-WDACTrust {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (($Level -eq "FilePublisher") -and (-not $SpecificFileNameLevel)) {
             throw "Error in Function `"Update-WDACTrust`". SpecificFileNameLevel must be provided if FilePublisher level is specified."
@@ -6381,6 +6403,7 @@ function Update-WDACTrustPoliciesAndComment {
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
 
+    $NoConnectionProvided = $false
     try {
         if (-not $Connection) {
             $Connection = New-SQLiteConnection -ErrorAction Stop
