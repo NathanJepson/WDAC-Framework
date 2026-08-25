@@ -24,12 +24,14 @@ if (Test-Path (Join-Path $PSModuleRoot -ChildPath "SignedModules\Resources\Worki
     Import-Module (Join-Path $PSModuleRoot -ChildPath "Resources\WorkingPolicies-and-DB-IO.psm1")
 }
 
-$AppsToSkip = @{}
-$AppsToBlock = @{}
-$AppsToPurge = @{}
-$AppComments = @{}
-$AppSigningScenarios = @{}
-$SpecificFileNameLevels = @{}
+$global:AppsToSkip = @{}
+$global:AppsToBlock = @{}
+$global:AppsToPurge = @{}
+$global:AppComments = @{}
+$global:AppSigningScenarios = @{}
+$global:AppModifiedTrustLevel = @{}
+$global:SpecificFileNameLevels = @{}
+
 $PreferredOrganizationRuleLevel = $null
 $PreferredOrganizationRuleFallbacks = $null
 
@@ -129,10 +131,13 @@ function Get-WDACConferredTrust {
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         $AppTrustLevels,
-        $SpecificFileNameLevelList
+        $SpecificFileNameLevelList,
+        [Parameter(Mandatory=$true)]
+        [ValidateNotNullOrEmpty()]
+        $Levels
     )
 
-    $Options = "([Y] (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [/ or COMM] (Add a comment about the app); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher Info); [T] (View Trust for this App for Respective Rule Levels); [V] (Change Specific FileName Level))"
+    $Options = "([Y] (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [/ or COMM] (Add a comment about the app); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher Info); [T] (View Trust for this App for Respective Rule Levels); [L] (Change Level to Trust or Block at); [V] (Change Specific FileName Level))"
     $TrustedLevels = ($AppTrustLevels.PSObject.Properties | Where-Object {$_.Value -eq $true} | Select-Object Name).Name
 
     if ($TrustedLevels) {
@@ -186,6 +191,10 @@ function Get-WDACConferredTrust {
             }
             $TempComment = Read-Host -Prompt "Enter your comment about this app"
             $AppComments.Add($AppInfo.SHA256FlatHash,$TempComment)
+        } elseif ($InputString.ToLower() -eq "l") {
+            $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels $Levels
+            $AppModifiedTrustLevel[$AppInfo.SHA256FlatHash] = $LevelToTrustAt
+            Write-Host ($Prompt + ": " + $Options)
         } elseif ($InputString.ToLower() -eq "v") {
             if ($SpecificFileNameLevelList.Count -le 0 -or (-not $SpecificFileNameLevelList)) {
                 Write-Host "Unable to change SpecificFileNameLevel, as these properties of the app entry are not set: `"OriginalFileName`",`"InternalName`",`"FileDescription`",`"ProductName`",`"PackageFamilyName`""
@@ -510,10 +519,16 @@ function Read-WDACConferredTrust {
         [switch]$ApplyRuleEachSigner,
         [switch]$TrustEverything,
         [string]$CommentForEach,
+        [switch]$DoubleFallback,
         [Parameter(Mandatory=$true)]
         [ValidateNotNullOrEmpty()]
         [System.Data.SQLite.SQLiteConnection]$Connection
     )
+
+    #This variable doesn't reflect the user's provided "Level" or "Fallbacks" but is used to override those below if the user specifies they want to override
+    #...(using "L")
+    $AllPossibleLevels = "Hash","Publisher","FilePublisher","LeafCertificate","PcaCertificate","FileName"
+    $LevelsReplaced = $false
 
     try {
         $IsMSI = $false
@@ -540,11 +555,27 @@ function Read-WDACConferredTrust {
             $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
             $Levels = $Levels | Where-Object {$_ -ne "FileName"}
 
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FilePublisher"}
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FileName"}
+
             if ((-not $Levels) -or $Levels.Count -le 0) {
-                Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash ) at the specified levels. Skipping."
-                $AppsToSkip.Add($SHA256FlatHash,$true)
-                Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
-                return;
+                if ($DoubleFallback) {
+                    if ($AllPossibleLevels.Count -ge 1) {
+                        $Levels = $AllPossibleLevels
+                        $LevelsReplaced = $true
+                        Write-Verbose "Double fallback, these levels will be available: $($AllPossibleLevels)"
+                    } else {
+                        Write-Verbose "Double fallback not available. Cannot trust app $FileName (Hash $SHA256FlatHash ) at any level. Skipping."
+                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                        return;
+                    }
+                } else {
+                    Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash ) at any level OR your preferred levels and fallbacks. Skipping."
+                    $AppsToSkip.Add($SHA256FlatHash,$true)
+                    Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                    return;
+                }
             }
         }
 
@@ -555,22 +586,55 @@ function Read-WDACConferredTrust {
             $Levels = $Levels | Where-Object {$_ -ne "Publisher"}
             $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
 
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "LeafCertificate"}
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "PcaCertificate"}
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "Publisher"}
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FilePublisher"}
+
             if ((-not $Levels) -or $Levels.Count -le 0) {
-                Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash) at the specified levels. Skipping."
-                $AppsToSkip.Add($SHA256FlatHash,$true)
-                Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
-                return;
+                if ($DoubleFallback) {
+                    if ($AllPossibleLevels.Count -ge 1) {
+                        $Levels = $AllPossibleLevels
+                        $LevelsReplaced = $true
+                        Write-Verbose "Double fallback, these levels will be available: $($AllPossibleLevels)"
+                    } else {
+                        Write-Verbose "Double fallback not available. Cannot trust app $FileName (Hash $SHA256FlatHash) at any level. Skipping."
+                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                        return;
+                    }
+                } else {
+                    Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash) at any level OR your preferred levels and fallbacks. Skipping."
+                    $AppsToSkip.Add($SHA256FlatHash,$true)
+                    Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                    return;
+                }
             }
         }
 
         if ((-not ($AppInfo.FileVersion)) -and $Levels) {
             $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
 
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FilePublisher"}
+
             if ((-not $Levels) -or $Levels.Count -le 0) {
-                Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash) at the specified levels. Skipping."
-                $AppsToSkip.Add($SHA256FlatHash,$true)
-                Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
-                return;
+                if ($DoubleFallback) {
+                    if ($AllPossibleLevels.Count -ge 1) {
+                        $Levels = $AllPossibleLevels
+                        $LevelsReplaced = $true
+                        Write-Verbose "Double fallback, these levels will be available: $($AllPossibleLevels)"
+                    } else {
+                        Write-Verbose "Double fallback not available. Cannot trust app $FileName (Hash $SHA256FlatHash) at any level. Skipping."
+                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                        return;
+                    }
+                } else {
+                    Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash) at any level OR your preferred levels and fallbacks. Skipping."
+                    $AppsToSkip.Add($SHA256FlatHash,$true)
+                    Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                    return;
+                }
             }
         }
 
@@ -585,11 +649,27 @@ function Read-WDACConferredTrust {
             $Levels = $Levels | Where-Object {$_ -ne "FileName"}
             $Levels = $Levels | Where-Object {$_ -ne "FilePublisher"}
 
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FileName"}
+            $AllPossibleLevels = $AllPossibleLevels | Where-Object {$_ -ne "FilePublisher"}
+
             if ((-not $Levels) -or $Levels.Count -le 0) {
-                Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash ) at the specified levels. Skipping."
-                $AppsToSkip.Add($SHA256FlatHash,$true)
-                Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
-                return;
+                if ($DoubleFallback) {
+                    if ($AllPossibleLevels.Count -ge 1) {
+                        $Levels = $AllPossibleLevels
+                        $LevelsReplaced = $true
+                        Write-Verbose "Double fallback, these levels will be available: $($AllPossibleLevels)"
+                    } else {
+                        Write-Verbose "Double fallback not available. Cannot trust app $FileName (Hash $SHA256FlatHash ) at any level OR your preferred levels and fallbacks. Skipping."
+                        $AppsToSkip.Add($SHA256FlatHash,$true)
+                        Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                        return;
+                    }
+                } else {
+                    Write-Verbose "Cannot trust app $FileName (Hash $SHA256FlatHash ) at any level OR your preferred levels and fallbacks. Skipping."
+                    $AppsToSkip.Add($SHA256FlatHash,$true)
+                    Set-WDACSkipped -SHA256FlatHash $SHA256FlatHash -Connection $Connection -ErrorAction SilentlyContinue | Out-Null
+                    return;
+                }
             }
         }
         ### DO YOU TRUST IT? #######################################################
@@ -597,7 +677,7 @@ function Read-WDACConferredTrust {
         if ($TrustEverything) {
             $IsTrusted = $true
         } else {
-            $IsTrusted = Get-WDACConferredTrust -Prompt "Do you trust the app $FileName with SHA256 Flat Hash $SHA256FlatHash ?" -AppInfo $AppInfo -CertInfoAndMisc $CertInfoAndMisc.CertsAndPublishers -AppTrustLevels $AppTrustLevels -SpecificFileNameLevelList $ResultingSpecificFileNameLevelList
+            $IsTrusted = Get-WDACConferredTrust -Prompt "Do you trust the app $FileName with SHA256 Flat Hash $SHA256FlatHash ?" -AppInfo $AppInfo -CertInfoAndMisc $CertInfoAndMisc.CertsAndPublishers -AppTrustLevels $AppTrustLevels -SpecificFileNameLevelList $ResultingSpecificFileNameLevelList -Levels $AllPossibleLevels
         }
 
         if ($AppsToSkip[$SHA256FlatHash]) {
@@ -614,7 +694,10 @@ function Read-WDACConferredTrust {
 
         ### HOW DO YOU TRUST IT? (AT WHAT LEVEL) ###################################
         $LevelToTrustAt = $null
-        if ($Levels -and $MultiRuleMode -and ($Levels.Count -gt 1)) {
+
+        if ($AppModifiedTrustLevel[$SHA256FlatHash]) {
+            $LevelToTrustAt = $AppModifiedTrustLevel[$SHA256FlatHash]
+        } elseif (($LevelsReplaced) -or ($Levels -and $MultiRuleMode -and ($Levels.Count -gt 1))) {
             $LevelToTrustAt = Get-LevelPrompt -Prompt "Which level should this Trust (OR BLOCK) action be applied at?" -Levels $Levels
         } elseif (-not $Levels) {
             if (-not $CertInfoAndMisc.CertsAndPublishers) {
@@ -887,7 +970,9 @@ filter Approve-WDACRulesFilter {
     .DESCRIPTION
     This is basically the same functionallity as Approve-WDACRules, however, this is able to accept pipeline input from the Register-WDACEvents cmdlet.
     I originally tried to allow pipeline input on Approve-WDACRules so that they weren't two separate cmdlets, but it was running into serious bugs, so I made this one.
-    
+    NOTE: If you are piping files from a trusted reference device using "Get-WDACFiles", it's also recommended to set -Purge when running this cmdlet
+    so your database isn't full of too many file-hash rules.
+
     Author: Nathan Jepson
     License: MIT License
 
@@ -908,8 +993,24 @@ filter Approve-WDACRulesFilter {
     (But you might still have to choose what signers to trust if "ApplyRuleEachSigner" is not set, and there still might be prompts you have to deal with
     depending on what "VersioningType" you've set.)
 
-    NOTE: If you are piping files from a trusted reference device using "Get-WDACFiles", it's also recommended to set -Purge when running this cmdlet
-    so your database isn't full of too many file-hash rules.
+    .PARAMETER IgnoreCache
+    Alias: ClearCache
+    This will ignore whether an app is skipped (including if you already piped in an app with a specific hash during that session already.)
+    This will also clear the arrays such as "$AppModifiedTrustLevel" as well as "$AppsToSkip".
+    Will also clear all "skipped" flags on apps in the database.
+    WARNING: It will do this before every piped-in app. You would likely want to use this when briefly piping in the same file hash to trust or block
+    on additional levels (such as multi-rule mode), since your PowerShell session "remembers" if an app is skipped unless you reopen your PowerShell window
+    and reimport the WDAC-Framework module.
+
+    .PARAMETER DoNotCheckTrust
+    Do not check whether an app is already blocked or trusted at a higher level (this means that file hashes will be skipped less often.)
+    If you've specifically untrusted a specific file hash, those will still be skipped.
+
+    .PARAMETER DoubleFallback
+    Allows you to manually select another trust level fallback if your "Level" and "Fallbacks" aren't matched by a particular app. 
+    This paramater is not necessary if "Level" or "Fallbacks" aren't set when running the cmdlet (since you can manually select a level
+    to trust at when level or fallbacks aren't provided.)
+   
     #>
     [CmdletBinding()]
     Param (
@@ -941,7 +1042,12 @@ filter Approve-WDACRulesFilter {
         [switch]$ApplyRuleEachSigner,
         [switch]$TrustEverything,
         [Alias("Comment")]
-        [string]$CommentForEach
+        [string]$CommentForEach,
+        [Alias("ClearCache")]
+        [switch]$IgnoreCache,
+        [Alias("DoNotCheckBlocked")]
+        [switch]$DoNotCheckTrust,
+        [switch]$DoubleFallback
     )
 
     if ($Fallbacks -and -not $Level) {
@@ -957,6 +1063,9 @@ filter Approve-WDACRulesFilter {
     }
 
     if (-not ($Level -or $Fallbacks)) {
+        if ($DoubleFallback) {
+            throw "You cannot set double-fallback if Level and Fallbacks are not set."
+        }
         #Only grab preferred rule level and preferred fallbacks if both aren't supplied to this cmdlet
         if (("" -ne $PreferredOrganizationRuleLevel) -and ($null -ne $PreferredOrganizationRuleLevel)) {
             $Level = $PreferredOrganizationRuleLevel
@@ -1020,6 +1129,7 @@ filter Approve-WDACRulesFilter {
         }
     }
 
+
     try {
         $TempVersioningNum = (Get-LocalStorageJSON -ErrorAction Stop)."GlobalVersioningType"
         if ($TempVersioningNum -and (-not $VersioningType)) {
@@ -1032,8 +1142,29 @@ filter Approve-WDACRulesFilter {
 
     try {
         $Connection = New-SQLiteConnection -ErrorAction Stop
-
+        
         foreach ($thisEvent in $Events) {
+            
+            if ($IgnoreCache) {
+                
+                $global:AppsToSkip = @{}
+                $global:AppSigningScenarios = @{}
+                $global:AppsToBlock = @{}
+                $global:AppsToPurge = @{}
+                [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')] 
+                $global:AppComments = @{}
+                $global:AppModifiedTrustLevel = @{}
+                [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')] 
+                $global:SpecificFileNameLevels = @{}
+
+                try {
+                #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
+                    Clear-AllWDACSkipped -ErrorAction Stop | Out-Null
+                } catch {
+                    Write-Verbose ($_ | Format-List * -Force | Out-String)
+                    Write-Warning "Could not clear all the `"Skipped`" attribute on all apps."
+                }
+            }
 
             $Transaction = $Connection.BeginTransaction()
 
@@ -1069,9 +1200,9 @@ filter Approve-WDACRulesFilter {
                         continue;
                     }
                 }
-
+                
                 if ((Get-WDACAppUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) -or (Get-MSIorScriptUntrustedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
-                #Case the user has already set an untrust action on this app
+                    #Case the user has already set an untrust action on this app
                     if (-not ($AppsToSkip[$AppHash])) {
                         $AppsToSkip.Add($AppHash,$true)
                         $Transaction.Rollback()
@@ -1081,6 +1212,7 @@ filter Approve-WDACRulesFilter {
                     $Transaction.Rollback()
                     continue;
                 }
+                
 
                 if ( (Get-MSIorScriptSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue) -or (Get-WDACAppSkippedStatus -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction SilentlyContinue)) {
                     if (-not ($AppsToSkip[$AppHash])) {
@@ -1099,7 +1231,7 @@ filter Approve-WDACRulesFilter {
                 #This commit() statement is so that changes made by Update-WDACFilePublisherByCriteria can be applied regardless of whether a trust action is successfully made
                 $Transaction = $Connection.BeginTransaction()
 
-                if (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
+                if ((-not $DoNotCheckTrust) -and (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                     if (-not ($AppsToSkip[$AppHash])) {
                         $AppsToSkip.Add($AppHash,$true)
                         $Transaction.Rollback()
@@ -1132,12 +1264,14 @@ filter Approve-WDACRulesFilter {
                             }
                             if ($MiscLevels.Count -ge 1) {
                                 Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
-                                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop;
+                                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -DoubleFallback:$DoubleFallback -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop;
                                 $Transaction.Commit()
                                 continue;
+                            } else {
+                                Write-Warning "No remaining levels to set trust at for Multi-Rule Mode for app with hash $($AppHash)."
                             }
                         }
-                        if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
+                        if ((-not $DoNotCheckTrust) -and (Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                         #The difference between this if statement and the one above is this one provides the AllLevels parameter
                             Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
                             $HashRuleTrustedUserMode = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
@@ -1157,7 +1291,7 @@ filter Approve-WDACRulesFilter {
                     }
                 }
 
-                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop
+                Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -TrustEverything:$TrustEverything -DoubleFallback:$DoubleFallback -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop
 
             } catch {
                 Write-Verbose ($_ | Format-List * -Force | Out-String)
@@ -1340,6 +1474,15 @@ function Approve-WDACRules {
     If you want to apply the same comment to every rule as you are piping in events / files, this will allow
     you to specify what string you want as the comment.
 
+    .PARAMETER DoNotCheckTrust
+    Do not check whether an app is already blocked or trusted at a higher level (this means that file hashes will be skipped less often.)
+    If you've specifically untrusted a specific file hash, those will still be skipped.
+
+    .PARAMETER DoubleFallback
+    Allows you to manually select another trust level fallback if your "Level" and "Fallbacks" aren't matched by a particular app. 
+    This paramater is not necessary if "Level" or "Fallbacks" aren't set when running the cmdlet (since you can manually select a level
+    to trust at when level or fallbacks aren't provided.)
+
     .INPUTS
     [PSCustomObject] Result of Register-WDACEvents (OPTIONAL)
 
@@ -1387,7 +1530,10 @@ function Approve-WDACRules {
         [switch]$ResetUntrusted,
         [switch]$ApplyRuleEachSigner,
         [Alias("Comment")]
-        [string]$CommentForEach
+        [string]$CommentForEach,
+        [Alias("DoNotCheckBlocked")]
+        [switch]$DoNotCheckTrust,
+        [switch]$DoubleFallback
     )
 
     begin {
@@ -1396,6 +1542,8 @@ function Approve-WDACRules {
         $global:AppsToPurge = @{}
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')] 
         $global:AppComments = @{}
+        $global:AppSigningScenarios = @{}
+        $global:AppModifiedTrustLevel = @{}
         [Diagnostics.CodeAnalysis.SuppressMessageAttribute('PSUserDeclaredVarsMoreThanAssignments', '', Scope='Function')] 
         $global:SpecificFileNameLevels = @{}
 
@@ -1419,7 +1567,12 @@ function Approve-WDACRules {
 
         $AllLevels = $null
         if (-not ($Level -or $Fallbacks)) {
-        #Only grab preferred rule level and preferred fallbacks if both aren't supplied to this cmdlet
+
+            if ($DoubleFallback) {
+                throw "You cannot set double-fallback if Level and Fallbacks are not set."
+            }
+
+            #Only grab preferred rule level and preferred fallbacks if both aren't supplied to this cmdlet
             $TempJSON = (Get-LocalStorageJSON -ErrorAction Stop)
             $TempLevel = $TempJSON."PreferredOrganizationRuleLevel"
             $TempFallbacks = $TempJSON."PreferredOrganizationRuleFallbacks"
@@ -1449,7 +1602,7 @@ function Approve-WDACRules {
         if ($ResetUntrusted) {
             #Resets all Untrusted flags of apps or msi_or_script entries to 0
             try {
-                Clear-AllWDACUntrusted -ErrorAction Stop
+                Clear-AllWDACUntrusted -ErrorAction Stop | Out-Null
             } catch {
                 Write-Verbose ($_ | Format-List * -Force | Out-String)
                 throw "Could not clear all the `"Untrusted`" flags on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
@@ -1461,7 +1614,7 @@ function Approve-WDACRules {
 
         #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0
         try {
-            Clear-AllWDACSkipped -ErrorAction Stop
+            Clear-AllWDACSkipped -ErrorAction Stop | Out-Null
         } catch {
             Write-Verbose ($_ | Format-List * -Force | Out-String)
             throw "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
@@ -1587,7 +1740,7 @@ function Approve-WDACRules {
                     #This commit() statement is so that changes made by Update-WDACFilePublisherByCriteria can be applied regardless of whether a trust action is successfully made
                     $Transaction = $Connection.BeginTransaction()
 
-                    if (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop) {
+                    if ((-not $DoNotCheckTrust) -and (Test-AppBlocked -SHA256FlatHash $AppHash -Connection $Connection -ErrorAction Stop)) {
                         if (-not ($AppsToSkip[$AppHash])) {
                             $AppsToSkip.Add($AppHash,$true)
                             $Transaction.Rollback()
@@ -1620,12 +1773,14 @@ function Approve-WDACRules {
                                 }
                                 if ($MiscLevels.Count -ge 1) {
                                     Write-Verbose "Multi-Rule Mode Initiated for this app: $FileName ";
-                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop;
+                                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $MiscLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -MultiRuleMode -ApplyRuleEachSigner:$ApplyRuleEachSigner -DoubleFallback:$DoubleFallback -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop;
                                     $Transaction.Commit()
                                     continue;
+                                } else {
+                                    Write-Warning "No remaining levels to set trust at for Multi-Rule Mode for app with hash $($AppHash)."
                                 }
                             }
-                            if ((Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
+                            if ((-not $DoNotCheckTrust) -and (Test-AppTrusted -SHA256FlatHash $AppHash -Levels $AllLevels -Driver:( ($thisEvent.SigningScenario -eq "Driver") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop)) {
                             #The difference between this if statement and the one above is this one provides the AllLevels parameter
                                 Write-Verbose "Skipping app which already satisfies a level of trust: $FileName with hash $AppHash"
                                 $HashRuleTrustedUserMode = Test-AppTrusted -SHA256FlatHash $AppHash -Levels "Hash" -UserMode:( ($thisEvent.SigningScenario -eq "UserMode") -or ($thisEvent.SigningScenario -eq "DriverAndUserMode")) -Connection $Connection -ErrorAction Stop
@@ -1645,7 +1800,7 @@ function Approve-WDACRules {
                         }
                     }
 
-                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop
+                    Read-WDACConferredTrust -SHA256FlatHash $AppHash -RequireComment:$RequireComment -Levels $AllLevels -GroupName $GroupName -PolicyName $PolicyName -PolicyGUID $PolicyGUID -PolicyID $PolicyID -OverrideUserorKernelDefaults:$OverrideUserorKernelDefaults -VersioningType $VersioningType -ApplyVersioningToEntirePolicy:$ApplyVersioningToEntirePolicy -ApplyRuleEachSigner:$ApplyRuleEachSigner -DoubleFallback:$DoubleFallback -CommentForEach $CommentForEach -Connection $Connection -ErrorAction Stop
 
                 } catch {
                     Write-Verbose ($_ | Format-List * -Force | Out-String)
@@ -1708,7 +1863,7 @@ function Approve-WDACRules {
 
             try {
             #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
-                Clear-AllWDACSkipped -ErrorAction Stop
+                Clear-AllWDACSkipped -ErrorAction Stop | Out-Null
             } catch {
                 Write-Verbose ($_ | Format-List * -Force | Out-String)
                 Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."
@@ -1726,7 +1881,7 @@ function Approve-WDACRules {
 
         try {
         #This clears all the "Skipped" properties on apps and msi_or_script so they are all 0 when Approve-WDACRules cmdlet is used again.
-            Clear-AllWDACSkipped -ErrorAction Stop
+            Clear-AllWDACSkipped -ErrorAction Stop | Out-Null
         } catch {
             Write-Verbose ($_ | Format-List * -Force | Out-String)
             Write-Warning "Could not clear all the `"Skipped`" properties on apps and scripts. Clear attribute manually before running Approve-WDACRules again."

@@ -119,7 +119,7 @@ When running this, you will see a pseudo-shell console that looks like this:
 ```
 Do you trust the app C:\Users\User1\Downloads\Firefox Installer.exe with SHA256 Flat Hash 93A2AD1E8FEA2402E3C94B18093045C7AB78B8D2067172A9D942031697F73254 ?: ([Y] 
 (Yes); [N] (NO); [S] (SKIP); [B] (BLOCK); [/ or COMM] (Add a comment about the app); [A or E] (Expand / View App Info); [C] (Expand / View Certificate + Publisher 
-Info); [T] (View Trust for this App for Respective Rule Levels); [V] (Change Specific FileName Level))
+Info); [T] (View Trust for this App for Respective Rule Levels); [L] (Change Level to Trust or Block at); [V] (Change Specific FileName Level))
 Option Selection:
 ```
 You can expand file information (such as the original file name, file version, and authenticode hash, and much more) using "A" or "E".
@@ -145,6 +145,9 @@ You can create block rules based on the `Get-WDACFiles` cmdlet. (You might try u
 ```
 Get-WDACFiles -RemoteMachine PC1 -NoShadowCopy -ScanPath "C:\Program Files (x86)\Some_Application_You_Want_To_Block" -UserPEs -NoScript -Verbose | Register-WDACEvents -Level FilePublisher -Fallback Publisher -Verbose | Approve-WDACRulesFilter -PolicyGUID "86b19455-6a4d-40dc-9dcb-8598e3c5eb1a" -Level FilePublisher -ApplyRuleEachSigner -Verbose
 ```
+
+When using Approve-WDACRules or Approve-WDACRulesFilter, the module will try and skip apps that you've already observed, or that are blocked or trusted at higher levels. It does this to be more helpful. To turn this off, you will need to make use of flags such as "DoNotCheckTrust" and/or "IgnoreCache."
+
 
 ## What even is Windows Defender Application Control?
 Windows Defender Application Control (or App Control for Business) is an application control solution which is meant to work with your ["enterprise antivirus solution for a well-rounded enterprise security portfolio"](https://learn.microsoft.com/en-us/windows/security/application-security/application-control/app-control-for-business/appcontrol).
