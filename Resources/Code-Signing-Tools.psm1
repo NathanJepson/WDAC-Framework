@@ -129,6 +129,40 @@ function Export-CodeSignerAsCER {
     }
 }
 function Invoke-SignTool {
+    <#
+    .SYNOPSIS
+    This will sign a WDAC policy and place it in your directory of choice.
+
+    .DESCRIPTION
+    Using the designated location of your Signtool.exe (pulled from your LocalStorage.json file), this will sign a WDAC policy file 
+    with a .CIP file extension, and will put the resulting .p7 file -- your signed policy -- in the destination directory you specify.
+    The signing certificate will also be pulled from your LocalStorage.json file.
+
+    Author: Nathan Jepson
+    License: MIT License
+
+    .EXAMPLE
+    Invoke-SignTool -CIPPolicyPath "C:\Path\to\{98D23B02-3B04-41F0-9ABA-3665D20C7706}.cip" -DestinationDirectory "C:\Path\to\Signed\"
+
+    .EXAMPLE
+    Invoke-SignTool -CIPPolicyPath "C:\Path\to\{98D23B02-3B04-41F0-9ABA-3665D20C7706}.cip" -DestinationDirectory "C:\Path\to\Signed\" -BinForIntune
+
+    .PARAMETER CIPPolicyPath
+    Where the unsigned WDAC policy is saved, the filepath in {GUID}.cip format
+
+    .PARAMETER DestinationDirectory
+    Where you want the signed WDAC policy to be placed.
+
+    .PARAMETER BinForIntune
+    Will copy the signed .p7 file, and rename that copy with a .bin file extension compatible with Microsoft Intune, and 
+    place it in the same directory as your .p7 file.
+
+    .PARAMETER CIP
+    Will copy the signed .p7 file and rename the copy with a .cip file extension and
+    place it in the same directory as your .p7 file.
+    WARNING: This can overwrite your unsigned policy if you're not careful. It's recommended to keep signed and unsigned
+    policies in separate directories.
+    #>
     [CmdletBinding()]
     Param (
         [ValidateNotNullOrEmpty()]
@@ -136,7 +170,11 @@ function Invoke-SignTool {
         [string]$CIPPolicyPath,
         [ValidateNotNullOrEmpty()]
         [Parameter(Mandatory=$true)]
-        [string]$DestinationDirectory
+        [string]$DestinationDirectory,
+        [Alias("Bin","BinFile")]
+        [switch]$BinForIntune,
+        [Alias("CipFile")]
+        [switch]$CIP
     )
     
     try {
@@ -176,6 +214,13 @@ function Invoke-SignTool {
         Start-Process $SignTool -ArgumentList 'sign', '/v' , '/n', "`"$cert_subject`"", '/fd', 'sha256', '/p7co', '1.3.6.1.4.1.311.79.1', '/p7', "`"$DestinationDirectory`"", '/sha1', $thumbprint, "`"$CIPPolicyPath`"" -Wait -NoNewWindow -ErrorAction Stop | Out-Null
         
         $ResultSignedPath = ( (Join-Path $DestinationDirectory -ChildPath (Split-Path $CIPPolicyPath -Leaf)) + ".p7")
+
+        if ($BinForIntune) {
+            Copy-Item -Path $ResultSignedPath -Destination ($ResultSignedPath -replace '\.cip\.p7$', '.bin') -ErrorAction Stop
+        }
+        if ($CIP) {
+            Copy-Item -Path $ResultSignedPath -Destination ($ResultSignedPath -replace '\.cip\.p7$', '.cip') -ErrorAction Stop
+        }
 
         if ( (Test-ValidP7SignedFile -Path $ResultSignedPath -SignTool $SignTool -ErrorAction Stop) -eq $true) {
             return $ResultSignedPath
